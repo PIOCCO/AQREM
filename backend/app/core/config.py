@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     secret_key: str = "dev-secret-change-me"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
+    serve_frontend: bool = False
+    frontend_dist_path: str | None = None
 
     database_url: str = "postgresql+psycopg://aqrem:aqrem@localhost:5432/aqrem"
     redis_url: str = "redis://localhost:6379/0"

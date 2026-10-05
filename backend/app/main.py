@@ -1,8 +1,11 @@
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from app.api.v1.router import api_router
@@ -58,7 +61,47 @@ def create_app() -> FastAPI:
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    if settings.serve_frontend or os.environ.get("SERVE_FRONTEND", "").strip() in {
+        "1",
+        "true",
+        "yes",
+    }:
+        _mount_frontend_app(app, settings)
+
     return app
+
+
+def _resolve_frontend_dist(settings) -> Path:
+    if settings.frontend_dist_path:
+        return Path(settings.frontend_dist_path).expanduser().resolve()
+    # backend/app/main.py -> repo root -> frontend/dist
+    return Path(__file__).resolve().parents[2] / "frontend" / "dist"
+
+
+def _mount_frontend_app(app: FastAPI, settings) -> None:
+    dist = _resolve_frontend_dist(settings)
+    index_html = dist / "index.html"
+    assets_dir = dist / "assets"
+    if not index_html.is_file():
+        raise RuntimeError(
+            f"SERVE_FRONTEND is enabled but {index_html} is missing. "
+            "Run: cd frontend && npm install && npm run build"
+        )
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="frontend-assets")
+
+    @app.get("/")
+    def frontend_index() -> FileResponse:
+        return FileResponse(index_html)
+
+    @app.get("/{full_path:path}")
+    def frontend_spa(full_path: str) -> FileResponse:
+        if full_path.startswith("api/") or full_path in {"docs", "openapi.json", "redoc"}:
+            raise HTTPException(status_code=404, detail="Not found")
+        candidate = dist / full_path
+        if candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(index_html)
 
 
 app = create_app()

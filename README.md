@@ -72,11 +72,22 @@ curl -s -X POST http://localhost:8000/api/v1/retrieval/preview \
 
 ### Frontend
 
+**Development (hot reload, port 5173):**
+
 ```bash
 cd frontend && npm install && npm run dev
 ```
 
 Vite binds to **`0.0.0.0:5173`**, so you can open the UI from other devices on your tailnet (not only `localhost`).
+
+**One port (UI + API on 8000)** — good for demos, Tailscale, or a simple lab:
+
+```bash
+chmod +x scripts/start-web-one-port.sh
+./scripts/start-web-one-port.sh
+```
+
+The script will run `npm install && npm run build` if `frontend/dist` is missing, create `backend/.env` from `.env.example` if needed, ensure a backend `.venv`, then start uvicorn with `SERVE_FRONTEND=1`. Open http://127.0.0.1:8000 (API docs remain at `/docs`).
 
 ### Access via Tailscale
 
