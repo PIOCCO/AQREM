@@ -7,12 +7,12 @@ from app.core.dependencies import get_tenant_context
 from app.core.tenant import TenantContext
 from app.db.session import get_db
 from app.models.evidence import EvidenceItem
-from app.schemas.evidence import EvidenceItemResponse
+from app.schemas.evidence import EvidenceItemResponse, EvidenceListResponse
 
 router = APIRouter()
 
 
-@router.get("", response_model=list[EvidenceItemResponse])
+@router.get("", response_model=EvidenceListResponse)
 def list_evidence(
     tenant: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
@@ -21,7 +21,7 @@ def list_evidence(
     search: str | None = Query(default=None),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
-) -> list[EvidenceItem]:
+) -> EvidenceListResponse:
     query = db.query(EvidenceItem).filter(EvidenceItem.organization_id == tenant.organization_id)
     if project_id:
         query = query.filter(
@@ -35,7 +35,14 @@ def list_evidence(
             | EvidenceItem.content.ilike(f"%{search}%")
             | EvidenceItem.file_name.ilike(f"%{search}%")
         )
-    return query.order_by(EvidenceItem.created_at.desc()).offset(offset).limit(limit).all()
+    total = query.count()
+    rows = query.order_by(EvidenceItem.created_at.desc()).offset(offset).limit(limit).all()
+    return EvidenceListResponse(
+        items=[EvidenceItemResponse.model_validate(row) for row in rows],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
 
 
 @router.get("/{evidence_id}", response_model=EvidenceItemResponse)

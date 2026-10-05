@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_tenant_context
@@ -53,9 +53,9 @@ def _entry_response(db: Session, entry: AnswerLibraryEntry) -> AnswerLibraryEntr
 def list_library_entries(
     tenant: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
-    project_id: UUID | None = None,
-    query: str | None = None,
-    limit: int = 50,
+    project_id: UUID | None = Query(default=None),
+    query: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
 ) -> list[AnswerLibraryEntryResponse]:
     entries = AnswerLibraryService(db).search_entries(
         organization_id=tenant.organization_id,

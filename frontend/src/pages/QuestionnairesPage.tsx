@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import { previewQuestionnaireFile } from "../lib/questionnairePreview";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "../components/ui/Toast";
 import { StatusBadge } from "../components/ui/Badges";
@@ -26,14 +27,15 @@ export default function QuestionnairesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
   const editable = user ? canEditContent(user.role) : false;
 
   async function load() {
     if (!session) return;
     setLoading(true);
     try {
-      const data = await fetchQuestionnaires(session);
-      setRows(projectId ? data.filter((q: Questionnaire) => q.project_id === projectId) : data);
+      const data = await fetchQuestionnaires(session, projectId);
+      setRows(data);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to load questionnaires");
@@ -146,8 +148,23 @@ export default function QuestionnairesPage() {
             <textarea name="description" placeholder="Description (optional)" className="aq-textarea min-h-16" />
             <label className="block text-sm text-slate-600">
               Upload questions (CSV/XLSX)
-              <input name="file" type="file" accept=".csv,.xlsx,.xls" className="mt-1 block w-full text-sm" />
+              <input
+                name="file"
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                className="mt-1 block w-full text-sm"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) {
+                    setFilePreview(null);
+                    return;
+                  }
+                  const p = await previewQuestionnaireFile(file);
+                  setFilePreview(p.note);
+                }}
+              />
             </label>
+            {filePreview && <p className="text-xs text-slate-600 aq-alert-info">{filePreview}</p>}
             <div className="flex gap-2 justify-end pt-2">
               <button type="button" className="aq-btn-ghost" onClick={() => setShowCreate(false)}>
                 Cancel

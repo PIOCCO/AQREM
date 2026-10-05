@@ -28,6 +28,7 @@ const navItems = [
   { to: "/questionnaires", label: "Questionnaires", Icon: IconClipboard },
   { to: "/answer-library", label: "Answer Library", Icon: IconLibrary },
   { to: "/review-queue", label: "Review Queue", Icon: IconCheckCircle },
+  { to: "/stale-answers", label: "Stale Answers", Icon: IconActivity },
   { to: "/audit", label: "Audit Log", Icon: IconActivity },
   { to: "/settings", label: "Settings", Icon: IconSettings },
 ];
@@ -75,7 +76,22 @@ export default function AppShell() {
           Menu
         </button>
         <Logo compact />
-        <UserAvatar name={user?.fullName} email={user?.email} />
+        <div className="flex items-center gap-2">
+          <select
+            className="aq-select max-w-[8rem] text-xs py-1 h-8"
+            value={projectId ?? ""}
+            onChange={(e) => setProjectId(e.target.value || null)}
+            aria-label="Project scope"
+          >
+            <option value="">All projects</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <UserAvatar name={user?.fullName} email={user?.email} />
+        </div>
       </header>
 
       <aside

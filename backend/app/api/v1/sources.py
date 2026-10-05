@@ -1,7 +1,7 @@
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.audit.service import record_audit
@@ -33,8 +33,14 @@ def _validate_extension(filename: str) -> None:
 def list_sources(
     tenant: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
+    project_id: UUID | None = Query(default=None),
 ) -> list[Source]:
-    return db.query(Source).filter(Source.organization_id == tenant.organization_id).all()
+    query = db.query(Source).filter(Source.organization_id == tenant.organization_id)
+    if project_id:
+        query = query.filter(
+            (Source.project_id == project_id) | (Source.project_id.is_(None))
+        )
+    return query.order_by(Source.created_at.desc()).all()
 
 
 @router.post("", response_model=SourceResponse)
@@ -164,6 +170,25 @@ def connect_github_repo(
     db.commit()
     db.refresh(source)
     return source
+
+
+@router.get("/{source_id}/jobs", response_model=list[SyncJobResponse])
+def list_source_jobs(
+    source_id: UUID,
+    tenant: TenantContext = Depends(get_tenant_context),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=10, ge=1, le=50),
+) -> list[SourceSyncJob]:
+    source = db.get(Source, source_id)
+    if source is None or source.organization_id != tenant.organization_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
+    return (
+        db.query(SourceSyncJob)
+        .filter(SourceSyncJob.source_id == source_id)
+        .order_by(SourceSyncJob.created_at.desc())
+        .limit(limit)
+        .all()
+    )
 
 
 @router.get("/jobs/{job_id}", response_model=SyncJobResponse)

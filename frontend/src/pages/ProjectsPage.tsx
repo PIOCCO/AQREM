@@ -83,13 +83,11 @@ export default function ProjectsPage() {
           title="No projects yet"
           description="Create your first project to start organizing questionnaires and evidence."
           action={
-            <button
-              type="button"
-              onClick={() => setShowCreate(true)}
-              className="aq-btn-primary"
-            >
-              Create project
-            </button>
+            editable ? (
+              <button type="button" onClick={() => setShowCreate(true)} className="aq-btn-primary">
+                Create project
+              </button>
+            ) : undefined
           }
         />
       )}

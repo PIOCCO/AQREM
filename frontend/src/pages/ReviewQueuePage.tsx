@@ -23,31 +23,37 @@ export default function ReviewQueuePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<Item[]>([]);
   const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const search = searchParams.get("search") ?? "";
 
-  async function load() {
+  async function load(append = false, nextOffset = 0) {
     if (!session) return;
-    setLoading(true);
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     setError(null);
     try {
       const data = await fetchReviewQueue(session, {
         project_id: projectId ?? undefined,
         search: search || undefined,
-        limit: 100,
+        limit: 50,
+        offset: nextOffset,
       });
-      setItems(data.items);
       setTotal(data.total);
+      setOffset(nextOffset);
+      setItems((prev) => (append ? [...prev, ...data.items] : data.items));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load review queue");
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }
 
   useEffect(() => {
-    load();
+    load(false, 0);
   }, [session?.organizationId, projectId, search]);
 
   const staleCount = items.filter((i) => i.potentially_stale).length;
@@ -80,7 +86,7 @@ export default function ReviewQueuePage() {
         }}
       />
       {loading && <LoadingState />}
-      {error && <ErrorState message={error} onRetry={load} />}
+      {error && <ErrorState message={error} onRetry={() => load(false, 0)} />}
       {!loading && !error && items.length === 0 && (
         <EmptyState
           title="Review queue is empty"
@@ -117,6 +123,16 @@ export default function ReviewQueuePage() {
           </article>
         ))}
       </div>
+      {items.length < total && !loading && (
+        <button
+          type="button"
+          className="aq-btn-secondary mt-4"
+          disabled={loadingMore}
+          onClick={() => load(true, offset + 50)}
+        >
+          {loadingMore ? "Loading…" : `Load more (${items.length} of ${total})`}
+        </button>
+      )}
     </div>
   );
 }

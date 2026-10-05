@@ -28,6 +28,13 @@ class EvidenceItemResponse(BaseModel):
     created_at: datetime
 
 
+class EvidenceListResponse(BaseModel):
+    items: list[EvidenceItemResponse]
+    total: int
+    offset: int
+    limit: int
+
+
 class EvidenceSearchRequest(BaseModel):
     query: str
     project_id: UUID | None = None

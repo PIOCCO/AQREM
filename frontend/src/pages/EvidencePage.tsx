@@ -16,45 +16,68 @@ type EvidenceRow = {
   line_end?: number;
 };
 
+const PAGE_SIZE = 50;
+
 export default function EvidencePage() {
-  const { session, projectId } = useProjectContext();
+  const { session, projectId, setProjectId } = useProjectContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<EvidenceRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [sources, setSources] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const search = searchParams.get("search") ?? "";
   const sourceId = searchParams.get("source") ?? "";
+  const projectParam = searchParams.get("project") ?? "";
 
-  async function load() {
+  useEffect(() => {
+    if (projectParam && projectParam !== projectId) {
+      setProjectId(projectParam);
+    }
+  }, [projectParam, projectId, setProjectId]);
+
+  async function load(append = false, nextOffset = 0) {
     if (!session) return;
-    setLoading(true);
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     try {
       const [evidence, src] = await Promise.all([
         fetchEvidence(session, {
           project_id: projectId ?? undefined,
           source_id: sourceId || undefined,
           search: search || undefined,
-          limit: 50,
+          limit: PAGE_SIZE,
+          offset: nextOffset,
         }),
-        fetchSources(session),
+        fetchSources(session, projectId),
       ]);
-      setItems(evidence);
+      setTotal(evidence.total);
+      setOffset(nextOffset);
+      setItems((prev) => (append ? [...prev, ...evidence.items] : evidence.items) as EvidenceRow[]);
       setSources(src.map((s: { id: string; name: string }) => ({ id: s.id, name: s.name })));
+      setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load evidence");
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }
 
   useEffect(() => {
-    load();
-  }, [session?.organizationId, projectId, search, sourceId]);
+    load(false, 0);
+  }, [session?.organizationId, session?.token, projectId, search, sourceId]);
+
+  const hasMore = items.length < total;
 
   return (
     <div>
-      <PageHeader title="Evidence" subtitle="Search indexed evidence used for answers and citations." />
+      <PageHeader
+        title="Evidence"
+        subtitle={`${total} indexed items${projectId ? " in project scope" : ""}`}
+      />
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <input
           className="aq-input flex-1"
@@ -86,7 +109,7 @@ export default function EvidencePage() {
         </select>
       </div>
       {loading && <LoadingState label="Loading evidence…" />}
-      {error && <ErrorState message={error} onRetry={load} />}
+      {error && <ErrorState message={error} onRetry={() => load(false, 0)} />}
       {!loading && !error && items.length === 0 && (
         <EmptyState
           title="No evidence indexed yet"
@@ -112,6 +135,16 @@ export default function EvidencePage() {
           </article>
         ))}
       </div>
+      {hasMore && !loading && (
+        <button
+          type="button"
+          className="aq-btn-secondary mt-4"
+          disabled={loadingMore}
+          onClick={() => load(true, offset + PAGE_SIZE)}
+        >
+          {loadingMore ? "Loading…" : `Load more (${items.length} of ${total})`}
+        </button>
+      )}
     </div>
   );
 }

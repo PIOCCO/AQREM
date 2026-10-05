@@ -87,8 +87,8 @@ export default function DashboardPage() {
       const [ov, queue, audit, library] = await Promise.all([
         fetchDashboardOverview(session, projectId),
         fetchReviewQueue(session, { project_id: projectId ?? undefined, limit: 1 }),
-        fetchAuditLog(session),
-        fetchAnswerLibrary(session),
+        fetchAuditLog(session, { limit: 5 }),
+        fetchAnswerLibrary(session, { projectId, limit: 4 }),
       ]);
       setOverview(ov);
       setReviewItem(queue.items[0] ?? null);
@@ -160,6 +160,24 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {(overview.metrics.sources_failed ?? 0) > 0 && (
+        <div className="aq-alert-error flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p>
+            <span className="font-medium">{overview.metrics.sources_failed}</span> source
+            {overview.metrics.sources_failed === 1 ? "" : "s"} in error — check indexing and retry sync.
+          </p>
+          <Link to="/sources" className="aq-btn-secondary shrink-0">
+            Open sources
+          </Link>
+        </div>
+      )}
+      {(overview.metrics.sources_indexing ?? 0) > 0 && (
+        <div className="aq-alert-info mb-2">
+          {overview.metrics.sources_indexing} source{overview.metrics.sources_indexing === 1 ? "" : "s"} currently
+          indexing…
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
         {metrics.map(([key, label]) => {
@@ -295,9 +313,11 @@ export default function DashboardPage() {
               <p className="text-label uppercase tracking-wide text-slate-500 mb-1">Confidence</p>
               <p className="text-sm font-medium text-success-text capitalize mb-4">{reviewItem.confidence || "—"}</p>
               <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
-                <span className="inline-flex items-center gap-1 rounded-full bg-success-bg text-success-text border border-success-border px-2.5 py-0.5 text-xs font-medium">
-                  ✓ Evidence-backed
-                </span>
+                {reviewItem.confidence && reviewItem.confidence !== "low" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-success-bg text-success-text border border-success-border px-2.5 py-0.5 text-xs font-medium">
+                    ✓ Evidence-backed
+                  </span>
+                )}
                 <Link to={reviewHref} className="aq-btn-primary ml-auto">
                   Open review
                 </Link>

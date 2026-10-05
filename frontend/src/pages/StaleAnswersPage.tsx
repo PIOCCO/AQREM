@@ -4,6 +4,7 @@ import { StatusBadge } from "../components/ui/Badges";
 import { EmptyState, LoadingState, PageHeader } from "../components/ui/States";
 import { fetchStaleAnswers } from "../lib/api";
 import { useAuth } from "../lib/authContext";
+import { useProjectContext } from "../lib/projectContext";
 
 type StaleItem = {
   answer_id: string;
@@ -16,6 +17,7 @@ type StaleItem = {
 
 export default function StaleAnswersPage() {
   const { session } = useAuth();
+  const { projectId } = useProjectContext();
   const [items, setItems] = useState<StaleItem[]>([]);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -31,7 +33,10 @@ export default function StaleAnswersPage() {
     if (!session) return;
     let cancelled = false;
     setLoading(true);
-    fetchStaleAnswers(session, { search: debouncedSearch || undefined })
+    fetchStaleAnswers(session, {
+      search: debouncedSearch || undefined,
+      project_id: projectId ?? undefined,
+    })
       .then((data) => {
         if (!cancelled) {
           setItems(data.items);
@@ -44,7 +49,7 @@ export default function StaleAnswersPage() {
     return () => {
       cancelled = true;
     };
-  }, [session?.organizationId, session?.token, debouncedSearch]);
+  }, [session?.organizationId, session?.token, debouncedSearch, projectId]);
 
   if (!session) return <p className="text-sm text-slate-600">Please sign in.</p>;
 

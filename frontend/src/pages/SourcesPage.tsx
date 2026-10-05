@@ -57,10 +57,7 @@ export default function SourcesPage() {
     setLoading(true);
     setError(null);
     try {
-      const rows = await fetchSources(session);
-      setSources(
-        projectId ? rows.filter((s: SourceRow) => s.project_id === projectId || !s.project_id) : rows,
-      );
+      setSources(await fetchSources(session, projectId));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load sources");
     } finally {

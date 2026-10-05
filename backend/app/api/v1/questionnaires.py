@@ -114,13 +114,12 @@ def _get_question(db: Session, tenant: TenantContext, question_id: UUID) -> Ques
 def list_questionnaires(
     tenant: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
+    project_id: UUID | None = Query(default=None),
 ) -> list[QuestionnaireResponse]:
-    rows = (
-        db.query(Questionnaire)
-        .filter(Questionnaire.organization_id == tenant.organization_id)
-        .order_by(Questionnaire.created_at.desc())
-        .all()
-    )
+    query = db.query(Questionnaire).filter(Questionnaire.organization_id == tenant.organization_id)
+    if project_id:
+        query = query.filter(Questionnaire.project_id == project_id)
+    rows = query.order_by(Questionnaire.created_at.desc()).all()
     return [_questionnaire_response(db, row) for row in rows]
 
 

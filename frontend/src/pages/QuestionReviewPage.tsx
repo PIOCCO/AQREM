@@ -205,9 +205,11 @@ export default function QuestionReviewPage() {
             )}
             {canReview && answer && (
               <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
-                <span className="inline-flex items-center gap-1 rounded-full bg-success-bg text-success-text border border-success-border px-2.5 py-0.5 text-xs font-medium">
-                  ✓ Evidence-backed
-                </span>
+                {!insufficient && (answer?.evidence?.length ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-success-bg text-success-text border border-success-border px-2.5 py-0.5 text-xs font-medium">
+                    ✓ Evidence-backed
+                  </span>
+                )}
                 <button
                   disabled={busy || insufficient}
                   onClick={() => act(() => approveAnswer(session, answer.id), "Answer approved.")}

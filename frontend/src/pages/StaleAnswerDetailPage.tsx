@@ -4,20 +4,24 @@ import { ErrorState, LoadingState } from "../components/ui/States";
 import {
   approveAnswer,
   fetchStaleAnswerDetail,
-  loadSession,
   regenerateStaleAnswer,
   rejectAnswer,
   revalidateStaleAnswer,
 } from "../lib/api";
+import { useAuth } from "../lib/authContext";
+import { canEditContent, canReviewAnswers } from "../lib/roles";
 
 export default function StaleAnswerDetailPage() {
   const { answerId } = useParams();
-  const session = loadSession();
+  const { session, user } = useAuth();
   const [detail, setDetail] = useState<any>(null);
   const [revalidateResult, setRevalidateResult] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const canEdit = user ? canEditContent(user.role) : false;
+  const canReview = user ? canReviewAnswers(user.role) : false;
 
   async function reload() {
     if (!session || !answerId) return;
@@ -26,7 +30,7 @@ export default function StaleAnswerDetailPage() {
 
   useEffect(() => {
     reload().catch(() => setError("Unable to load stale answer."));
-  }, [answerId, session]);
+  }, [answerId, session?.organizationId, session?.token]);
 
   if (!session) return <p className="text-sm text-slate-600">Please sign in.</p>;
   if (error && !detail) return <ErrorState message={error} onRetry={reload} />;
@@ -102,73 +106,84 @@ export default function StaleAnswerDetailPage() {
       {message && <div className="aq-alert-info">{message}</div>}
 
       <div className="flex flex-wrap gap-2">
-        <button
-          disabled={busy}
-          className="aq-btn-secondary"
-          onClick={async () => {
-            if (!session || !answerId) return;
-            setBusy(true);
-            try {
-              setRevalidateResult(await revalidateStaleAnswer(session, answerId));
-              await reload();
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          Revalidate
-        </button>
-        <button
-          disabled={busy}
-          className="aq-btn-primary"
-          onClick={async () => {
-            if (!session || !answerId) return;
-            setBusy(true);
-            try {
-              await regenerateStaleAnswer(session, answerId);
-              setMessage("Answer regenerated from current evidence.");
-              await reload();
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          Regenerate answer
-        </button>
-        <button
-          disabled={busy}
-          className="aq-btn-success"
-          onClick={async () => {
-            if (!session || !answerId) return;
-            setBusy(true);
-            try {
-              await approveAnswer(session, answerId);
-              setMessage("Answer approved and marked current.");
-              await reload();
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          Approve
-        </button>
-        <button
-          disabled={busy}
-          className="aq-btn-danger"
-          onClick={async () => {
-            if (!session || !answerId) return;
-            setBusy(true);
-            try {
-              await rejectAnswer(session, answerId);
-              setMessage("Regenerated draft rejected; previous approved answer preserved when available.");
-              await reload();
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          Reject
-        </button>
+        {canReview && (
+          <button
+            disabled={busy}
+            className="aq-btn-secondary"
+            onClick={async () => {
+              if (!session || !answerId) return;
+              setBusy(true);
+              try {
+                setRevalidateResult(await revalidateStaleAnswer(session, answerId));
+                await reload();
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Revalidate
+          </button>
+        )}
+        {canEdit && (
+          <button
+            disabled={busy}
+            className="aq-btn-primary"
+            onClick={async () => {
+              if (!session || !answerId) return;
+              setBusy(true);
+              try {
+                await regenerateStaleAnswer(session, answerId);
+                setMessage("Answer regenerated from current evidence.");
+                await reload();
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Regenerate answer
+          </button>
+        )}
+        {canReview && (
+          <>
+            <button
+              disabled={busy}
+              className="aq-btn-success"
+              onClick={async () => {
+                if (!session || !answerId) return;
+                setBusy(true);
+                try {
+                  await approveAnswer(session, answerId);
+                  setMessage("Answer approved and marked current.");
+                  await reload();
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Approve
+            </button>
+            <button
+              disabled={busy}
+              className="aq-btn-danger"
+              onClick={async () => {
+                if (!session || !answerId) return;
+                setBusy(true);
+                try {
+                  await rejectAnswer(session, answerId);
+                  setMessage("Regenerated draft rejected; previous approved answer preserved when available.");
+                  await reload();
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Reject
+            </button>
+          </>
+        )}
+        {!canReview && !canEdit && (
+          <p className="text-sm text-slate-500">You have read-only access to staleness review actions.</p>
+        )}
       </div>
     </div>
   );

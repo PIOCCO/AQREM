@@ -109,8 +109,9 @@ export async function fetchMetrics(session: AuthSession) {
   return res.json();
 }
 
-export async function fetchQuestionnaires(session: AuthSession) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires`);
+export async function fetchQuestionnaires(session: AuthSession, projectId?: string | null) {
+  const qs = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires${qs}`);
   if (!res.ok) throw new Error("Failed to load questionnaires");
   return res.json();
 }
@@ -189,8 +190,9 @@ export async function createProject(session: AuthSession, payload: { name: strin
   return res.json();
 }
 
-export async function fetchSources(session: AuthSession) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/sources`);
+export async function fetchSources(session: AuthSession, projectId?: string | null) {
+  const qs = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+  const res = await authedFetch(session, `${API_BASE}/api/v1/sources${qs}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load sources"));
   return res.json();
 }
@@ -207,7 +209,7 @@ export async function fetchEvidence(
   if (params?.limit != null) qs.set("limit", String(params.limit));
   const res = await authedFetch(session, `${API_BASE}/api/v1/evidence?${qs.toString()}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load evidence"));
-  return res.json();
+  return res.json() as Promise<{ items: unknown[]; total: number; offset: number; limit: number }>;
 }
 
 export async function fetchEvidenceDetail(session: AuthSession, evidenceId: string) {
@@ -237,8 +239,16 @@ export async function fetchReviewQueue(
   return res.json();
 }
 
-export async function fetchAuditLog(session: AuthSession, offset = 0, limit = 50) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/audit?offset=${offset}&limit=${limit}`);
+export async function fetchAuditLog(
+  session: AuthSession,
+  options?: { offset?: number; limit?: number; action?: string },
+) {
+  const qs = new URLSearchParams({
+    offset: String(options?.offset ?? 0),
+    limit: String(options?.limit ?? 50),
+  });
+  if (options?.action) qs.set("action", options.action);
+  const res = await authedFetch(session, `${API_BASE}/api/v1/audit?${qs.toString()}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load activity log"));
   return res.json();
 }
@@ -269,9 +279,13 @@ export async function downloadQuestionnaireExport(
   return { blob, filename };
 }
 
-export async function fetchAnswerLibrary(session: AuthSession, query?: string) {
-  const qs = new URLSearchParams({ limit: "50" });
-  if (query) qs.set("query", query);
+export async function fetchAnswerLibrary(
+  session: AuthSession,
+  options?: { query?: string; projectId?: string | null; limit?: number },
+) {
+  const qs = new URLSearchParams({ limit: String(options?.limit ?? 50) });
+  if (options?.query) qs.set("query", options.query);
+  if (options?.projectId) qs.set("project_id", options.projectId);
   const res = await authedFetch(session, `${API_BASE}/api/v1/answer-library?${qs}`);
   if (!res.ok) throw new Error("Failed to load answer library");
   return res.json();
@@ -359,6 +373,12 @@ export async function uploadSourceFiles(session: AuthSession, sourceId: string, 
   for (const file of files) form.append("files", file);
   const res = await authedFormFetch(session, `${API_BASE}/api/v1/sources/${sourceId}/files`, form);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to upload files"));
+  return res.json();
+}
+
+export async function fetchSourceJobs(session: AuthSession, sourceId: string, limit = 5) {
+  const res = await authedFetch(session, `${API_BASE}/api/v1/sources/${sourceId}/jobs?limit=${limit}`);
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to load sync history"));
   return res.json();
 }
 

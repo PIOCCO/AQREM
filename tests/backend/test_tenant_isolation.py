@@ -150,4 +150,6 @@ def test_api_evidence_requires_same_org(client: TestClient, db_session):
     token = create_access_token(str(user1.id), {"organization_id": str(org1.id), "role": Role.ORG_ADMIN.value})
     resp = client.get("/api/v1/evidence", headers=_auth_headers(token, str(org1.id)))
     assert resp.status_code == 200
-    assert all(item["content"] != "Org2 secret" for item in resp.json())
+    body = resp.json()
+    items = body["items"] if isinstance(body, dict) and "items" in body else body
+    assert all(item["content"] != "Org2 secret" for item in items)

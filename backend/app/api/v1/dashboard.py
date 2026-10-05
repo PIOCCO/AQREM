@@ -73,6 +73,10 @@ def _metrics_for_org(db: Session, org_id: UUID, project_id: UUID | None = None) 
         .filter(src_filter, Source.status == SourceStatus.INDEXING.value)
         .scalar()
         or 0,
+        "sources_failed": db.query(func.count(Source.id))
+        .filter(src_filter, Source.status == SourceStatus.ERROR.value)
+        .scalar()
+        or 0,
     }
 
 

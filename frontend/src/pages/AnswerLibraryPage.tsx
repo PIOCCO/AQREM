@@ -4,6 +4,7 @@ import { StatusBadge } from "../components/ui/Badges";
 import { EmptyState, LoadingState, PageHeader } from "../components/ui/States";
 import { fetchAnswerLibrary } from "../lib/api";
 import { useAuth } from "../lib/authContext";
+import { useProjectContext } from "../lib/projectContext";
 
 type Entry = {
   id: string;
@@ -16,6 +17,7 @@ type Entry = {
 
 export default function AnswerLibraryPage() {
   const { session } = useAuth();
+  const { projectId } = useProjectContext();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -30,7 +32,7 @@ export default function AnswerLibraryPage() {
     if (!session) return;
     let cancelled = false;
     setLoading(true);
-    fetchAnswerLibrary(session, debouncedQuery || undefined)
+    fetchAnswerLibrary(session, { query: debouncedQuery || undefined, projectId })
       .then((rows) => {
         if (!cancelled) setEntries(rows);
       })
@@ -43,7 +45,7 @@ export default function AnswerLibraryPage() {
     return () => {
       cancelled = true;
     };
-  }, [session?.organizationId, session?.token, debouncedQuery]);
+  }, [session?.organizationId, session?.token, debouncedQuery, projectId]);
 
   if (!session) return <p className="text-sm text-slate-600">Please sign in.</p>;
 
