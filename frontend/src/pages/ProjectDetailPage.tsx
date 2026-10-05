@@ -46,7 +46,7 @@ export default function ProjectDetailPage() {
         setSummary(match);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load project"));
-  }, [session, projectId]);
+  }, [session?.organizationId, session?.token, projectId]);
 
   if (!projectId) return null;
   if (error) return <ErrorState message={error} />;

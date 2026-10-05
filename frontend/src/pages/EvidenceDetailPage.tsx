@@ -19,7 +19,7 @@ export default function EvidenceDetailPage() {
       .then(setItem)
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load evidence"))
       .finally(() => setLoading(false));
-  }, [session, evidenceId]);
+  }, [session?.organizationId, session?.token, evidenceId]);
 
   if (loading) return <LoadingState label="Loading evidence…" />;
   if (error) return <ErrorState message={error} />;

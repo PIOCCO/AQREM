@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { StatusBadge } from "../components/ui/Badges";
 import { EmptyState, LoadingState, PageHeader } from "../components/ui/States";
-import { fetchStaleAnswers, loadSession } from "../lib/api";
+import { fetchStaleAnswers } from "../lib/api";
+import { useAuth } from "../lib/authContext";
 
 type StaleItem = {
   answer_id: string;
@@ -14,22 +15,36 @@ type StaleItem = {
 };
 
 export default function StaleAnswersPage() {
-  const session = loadSession();
+  const { session } = useAuth();
   const [items, setItems] = useState<StaleItem[]>([]);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [search]);
+
+  useEffect(() => {
     if (!session) return;
+    let cancelled = false;
     setLoading(true);
-    fetchStaleAnswers(session, { search: search || undefined })
+    fetchStaleAnswers(session, { search: debouncedSearch || undefined })
       .then((data) => {
-        setItems(data.items);
-        setTotal(data.total);
+        if (!cancelled) {
+          setItems(data.items);
+          setTotal(data.total);
+        }
       })
-      .finally(() => setLoading(false));
-  }, [session, search]);
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.organizationId, session?.token, debouncedSearch]);
 
   if (!session) return <p className="text-sm text-slate-600">Please sign in.</p>;
 

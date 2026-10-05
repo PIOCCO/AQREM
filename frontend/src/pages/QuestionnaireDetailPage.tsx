@@ -67,7 +67,7 @@ export default function QuestionnaireDetailPage() {
 
   useEffect(() => {
     load();
-  }, [session, questionnaireId, statusFilter, search]);
+  }, [session?.organizationId, session?.token, questionnaireId, statusFilter, search]);
 
   const approved = questions.filter((q) => q.answer?.status === "approved").length;
   const review = questions.filter((q) => q.answer?.status === "needs_review").length;

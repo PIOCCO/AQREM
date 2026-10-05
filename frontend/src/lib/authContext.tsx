@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { fetchAuthMe, loadSession, type AuthSession } from "./api";
 import type { UserRole } from "./roles";
 
@@ -19,7 +19,12 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const session = loadSession();
+  const token = localStorage.getItem("aqrem_token");
+  const organizationId = localStorage.getItem("aqrem_org");
+  const session = useMemo(
+    () => (token && organizationId ? { token, organizationId } : null),
+    [token, organizationId],
+  );
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(!!session);
 

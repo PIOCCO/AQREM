@@ -54,11 +54,13 @@ def list_library_entries(
     tenant: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
     project_id: UUID | None = None,
+    query: str | None = None,
     limit: int = 50,
 ) -> list[AnswerLibraryEntryResponse]:
     entries = AnswerLibraryService(db).search_entries(
         organization_id=tenant.organization_id,
         project_id=project_id,
+        query=query,
         limit=limit,
     )
     return [_entry_response(db, entry) for entry in entries]

@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { StatusBadge } from "../components/ui/Badges";
 import { EmptyState, LoadingState, PageHeader } from "../components/ui/States";
-import { fetchAnswerLibrary, loadSession } from "../lib/api";
+import { fetchAnswerLibrary } from "../lib/api";
+import { useAuth } from "../lib/authContext";
 
 type Entry = {
   id: string;
@@ -14,18 +15,35 @@ type Entry = {
 };
 
 export default function AnswerLibraryPage() {
-  const session = loadSession();
+  const { session } = useAuth();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [query]);
+
+  useEffect(() => {
     if (!session) return;
+    let cancelled = false;
     setLoading(true);
-    fetchAnswerLibrary(session, query || undefined)
-      .then(setEntries)
-      .finally(() => setLoading(false));
-  }, [session, query]);
+    fetchAnswerLibrary(session, debouncedQuery || undefined)
+      .then((rows) => {
+        if (!cancelled) setEntries(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setEntries([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.organizationId, session?.token, debouncedQuery]);
 
   if (!session) return <p className="text-sm text-slate-600">Please sign in.</p>;
 

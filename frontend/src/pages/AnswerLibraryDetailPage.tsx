@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { StatusBadge } from "../components/ui/Badges";
 import { ErrorState, LoadingState, PageHeader } from "../components/ui/States";
-import { fetchAnswerLibraryEntry, loadSession, validateLibraryEntry } from "../lib/api";
+import { fetchAnswerLibraryEntry, validateLibraryEntry } from "../lib/api";
+import { useAuth } from "../lib/authContext";
 
 export default function AnswerLibraryDetailPage() {
   const { entryId } = useParams();
-  const session = loadSession();
+  const { session } = useAuth();
   const [entry, setEntry] = useState<any>(null);
   const [validation, setValidation] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +20,7 @@ export default function AnswerLibraryDetailPage() {
         setValidation(v);
       })
       .catch(() => setError("Unable to load library entry."));
-  }, [session, entryId]);
+  }, [session?.organizationId, session?.token, entryId]);
 
   if (!session) return <p className="text-sm text-slate-600">Please sign in.</p>;
   if (error) return <ErrorState message={error} />;

@@ -66,7 +66,7 @@ export default function SourcesPage() {
     } finally {
       setLoading(false);
     }
-  }, [session, projectId]);
+  }, [session?.organizationId, session?.token, projectId]);
 
   useEffect(() => {
     load();

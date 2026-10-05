@@ -270,10 +270,9 @@ export async function downloadQuestionnaireExport(
 }
 
 export async function fetchAnswerLibrary(session: AuthSession, query?: string) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/answer-library/search`, {
-    method: "POST",
-    body: JSON.stringify({ query, limit: 50 }),
-  });
+  const qs = new URLSearchParams({ limit: "50" });
+  if (query) qs.set("query", query);
+  const res = await authedFetch(session, `${API_BASE}/api/v1/answer-library?${qs}`);
   if (!res.ok) throw new Error("Failed to load answer library");
   return res.json();
 }
