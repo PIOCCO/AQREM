@@ -4,7 +4,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.audit.service import record_audit
 from app.core.config import get_settings
 from app.core.dependencies import get_tenant_context, require_role
 from app.core.roles import Role

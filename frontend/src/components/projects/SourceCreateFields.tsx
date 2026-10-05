@@ -1,10 +1,8 @@
 type Props = {
-  idPrefix?: string;
   defaultSourceName?: string;
 };
 
-export function SourceCreateFields({ idPrefix = "", defaultSourceName = "" }: Props) {
-  const p = idPrefix ? `${idPrefix}-` : "";
+export function SourceCreateFields({ defaultSourceName = "" }: Props) {
   return (
     <fieldset className="space-y-3 border border-border rounded-control p-4">
       <legend className="text-sm font-medium text-slate-900 px-1">Source code</legend>
