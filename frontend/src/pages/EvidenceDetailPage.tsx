@@ -6,7 +6,7 @@ import { fetchEvidenceDetail } from "../lib/api";
 import { splitLinesLimited } from "../lib/textPreview";
 import { useProjectContext } from "../lib/projectContext";
 
-const MAX_LINES = 500;
+const MAX_LINES = 200;
 
 export default function EvidenceDetailPage() {
   const { evidenceId } = useParams();

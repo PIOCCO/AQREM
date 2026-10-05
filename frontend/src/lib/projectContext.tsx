@@ -17,7 +17,7 @@ const ProjectContext = createContext<ProjectContextValue | null>(null);
 const STORAGE_KEY = "aqrem_project_id";
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
-  const session = loadSession();
+  const session = useMemo(() => loadSession(), []);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [projectId, setProjectIdState] = useState<string | null>(() =>
     localStorage.getItem(STORAGE_KEY),
@@ -45,14 +45,17 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     return projects.find((p) => p.id === projectId)?.name ?? null;
   }, [projectId, projects]);
 
-  const value: ProjectContextValue = {
-    session,
-    projects,
-    projectId,
-    setProjectId,
-    projectName,
-    reloadProjects,
-  };
+  const value = useMemo<ProjectContextValue>(
+    () => ({
+      session,
+      projects,
+      projectId,
+      setProjectId,
+      projectName,
+      reloadProjects,
+    }),
+    [session, projects, projectId, projectName],
+  );
 
   return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;
 }

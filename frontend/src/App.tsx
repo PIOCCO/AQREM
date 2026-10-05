@@ -22,6 +22,39 @@ import QuestionnairesPage from "./pages/QuestionnairesPage";
 import SourcesPage from "./pages/SourcesPage";
 import { loadSession } from "./lib/api";
 
+function AuthenticatedApp() {
+  return (
+    <ToastProvider>
+      <ProjectProvider>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="projects" element={<ProjectsPage />} />
+            <Route path="projects/:projectId" element={<ProjectDetailPage />} />
+            <Route path="sources" element={<SourcesPage />} />
+            <Route path="evidence" element={<EvidencePage />} />
+            <Route path="evidence/:evidenceId" element={<EvidenceDetailPage />} />
+            <Route path="questionnaires" element={<QuestionnairesPage />} />
+            <Route path="questionnaires/:questionnaireId" element={<QuestionnaireDetailPage />} />
+            <Route
+              path="questionnaires/:questionnaireId/questions/:questionId/review"
+              element={<QuestionReviewPage />}
+            />
+            <Route path="review-queue" element={<ReviewQueuePage />} />
+            <Route path="answer-library" element={<AnswerLibraryPage />} />
+            <Route path="answer-library/:entryId" element={<AnswerLibraryDetailPage />} />
+            <Route path="stale-answers" element={<StaleAnswersPage />} />
+            <Route path="stale-answers/:answerId" element={<StaleAnswerDetailPage />} />
+            <Route path="audit" element={<AuditLogPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </ProjectProvider>
+    </ToastProvider>
+  );
+}
+
 export default function App() {
   const session = loadSession();
   return (
@@ -31,33 +64,7 @@ export default function App() {
         path="/*"
         element={
           <RequireAuth>
-            <ToastProvider>
-              <ProjectProvider>
-                <Routes>
-                  <Route element={<AppShell />}>
-                    <Route path="/" element={<DashboardPage />} />
-                    <Route path="/projects" element={<ProjectsPage />} />
-                    <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
-                  <Route path="/sources" element={<SourcesPage />} />
-                  <Route path="/evidence" element={<EvidencePage />} />
-                  <Route path="/evidence/:evidenceId" element={<EvidenceDetailPage />} />
-                  <Route path="/questionnaires" element={<QuestionnairesPage />} />
-                  <Route path="/questionnaires/:questionnaireId" element={<QuestionnaireDetailPage />} />
-                  <Route
-                    path="/questionnaires/:questionnaireId/questions/:questionId/review"
-                    element={<QuestionReviewPage />}
-                  />
-                  <Route path="/review-queue" element={<ReviewQueuePage />} />
-                  <Route path="/answer-library" element={<AnswerLibraryPage />} />
-                  <Route path="/answer-library/:entryId" element={<AnswerLibraryDetailPage />} />
-                  <Route path="/stale-answers" element={<StaleAnswersPage />} />
-                  <Route path="/stale-answers/:answerId" element={<StaleAnswerDetailPage />} />
-                    <Route path="/audit" element={<AuditLogPage />} />
-                    <Route path="/settings" element={<SettingsPage />} />
-                  </Route>
-                </Routes>
-              </ProjectProvider>
-            </ToastProvider>
+            <AuthenticatedApp />
           </RequireAuth>
         }
       />

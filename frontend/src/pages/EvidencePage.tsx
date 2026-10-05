@@ -3,8 +3,9 @@ import { Link, useSearchParams } from "react-router-dom";
 import { EvidenceStrengthBadge } from "../components/ui/Badges";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "../components/ui/States";
 import { fetchEvidence, fetchSources } from "../lib/api";
-import { capEvidenceListContent, truncateText } from "../lib/textPreview";
 import { useProjectContext } from "../lib/projectContext";
+import { capEvidenceListContent, truncateText } from "../lib/textPreview";
+import { isUuid } from "../lib/uuid";
 
 type EvidenceRow = {
   id: string;
@@ -18,12 +19,17 @@ type EvidenceRow = {
   line_end?: number;
 };
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 25;
 
-function sanitizeRow(row: EvidenceRow): EvidenceRow {
+function sanitizeRow(raw: unknown): EvidenceRow | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as EvidenceRow;
+  const id = row.id != null ? String(row.id) : "";
+  if (!id) return null;
   const capped = capEvidenceListContent(row.content);
   return {
     ...row,
+    id,
     content: capped.text,
     content_truncated: Boolean(row.content_truncated || capped.truncated),
   };
@@ -31,15 +37,23 @@ function sanitizeRow(row: EvidenceRow): EvidenceRow {
 
 function normalizeEvidencePayload(data: unknown): { items: EvidenceRow[]; total: number } {
   if (Array.isArray(data)) {
-    const items = (data as EvidenceRow[]).map(sanitizeRow);
+    const items = data.map(sanitizeRow).filter((r): r is EvidenceRow => r != null);
     return { items, total: items.length };
   }
   if (data && typeof data === "object" && "items" in data) {
-    const obj = data as { items?: EvidenceRow[]; total?: number };
-    const items = Array.isArray(obj.items) ? obj.items.map(sanitizeRow) : [];
+    const obj = data as { items?: unknown[]; total?: number };
+    const items = Array.isArray(obj.items)
+      ? obj.items.map(sanitizeRow).filter((r): r is EvidenceRow => r != null)
+      : [];
     return { items, total: typeof obj.total === "number" ? obj.total : items.length };
   }
   return { items: [], total: 0 };
+}
+
+function scopedProjectId(projectFromUrl: string, projectId: string | null): string | undefined {
+  if (projectFromUrl && isUuid(projectFromUrl)) return projectFromUrl;
+  if (projectId && isUuid(projectId)) return projectId;
+  return undefined;
 }
 
 export default function EvidencePage() {
@@ -54,9 +68,10 @@ export default function EvidencePage() {
   const [error, setError] = useState<string | null>(null);
 
   const search = searchParams.get("search") ?? "";
-  const sourceId = searchParams.get("source") ?? "";
+  const sourceParam = searchParams.get("source") ?? "";
+  const sourceId = isUuid(sourceParam) ? sourceParam : "";
   const projectFromUrl = searchParams.get("project") ?? "";
-  const scopeProjectId = projectFromUrl || projectId;
+  const scopeProjectId = scopedProjectId(projectFromUrl, projectId);
 
   const load = useCallback(
     async (append = false, nextOffset = 0) => {
@@ -67,21 +82,17 @@ export default function EvidencePage() {
       if (append) setLoadingMore(true);
       else setLoading(true);
       try {
-        const [evidenceRaw, src] = await Promise.all([
-          fetchEvidence(session, {
-            project_id: scopeProjectId || undefined,
-            source_id: sourceId || undefined,
-            search: search || undefined,
-            limit: PAGE_SIZE,
-            offset: nextOffset,
-          }),
-          fetchSources(session, scopeProjectId),
-        ]);
+        const evidenceRaw = await fetchEvidence(session, {
+          project_id: scopeProjectId,
+          source_id: sourceId || undefined,
+          search: search || undefined,
+          limit: PAGE_SIZE,
+          offset: nextOffset,
+        });
         const evidence = normalizeEvidencePayload(evidenceRaw);
         setTotal(evidence.total);
         setOffset(nextOffset);
         setItems((prev) => (append ? [...prev, ...evidence.items] : evidence.items));
-        setSources(Array.isArray(src) ? src.map((s: { id: string; name: string }) => ({ id: s.id, name: s.name })) : []);
         setError(null);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load evidence");
@@ -90,6 +101,14 @@ export default function EvidencePage() {
         setLoading(false);
         setLoadingMore(false);
       }
+
+      fetchSources(session, scopeProjectId ?? null)
+        .then((src) => {
+          setSources(
+            Array.isArray(src) ? src.map((s: { id: string; name: string }) => ({ id: s.id, name: s.name })) : [],
+          );
+        })
+        .catch(() => setSources([]));
     },
     [session, scopeProjectId, sourceId, search],
   );
@@ -149,7 +168,7 @@ export default function EvidencePage() {
       <div className="space-y-3">
         {items.map((item) => {
           const path = item.file_path ?? "Evidence item";
-          const preview = truncateText(item.content ?? "", 1200);
+          const preview = truncateText(item.content ?? "", 800);
           const hash =
             item.commit_hash != null && item.commit_hash !== ""
               ? String(item.commit_hash)
@@ -167,7 +186,7 @@ export default function EvidencePage() {
                   ? `lines ${item.line_start}${item.line_end != null ? `–${item.line_end}` : ""}`
                   : null}
               </p>
-              <p className="text-sm text-slate-700 line-clamp-4 whitespace-pre-wrap font-mono">{preview}</p>
+              <p className="text-sm text-slate-700 line-clamp-4 whitespace-pre-wrap break-all font-mono">{preview}</p>
               {item.content_truncated && (
                 <p className="text-xs text-slate-500 mt-1">Preview truncated — open detail for full text.</p>
               )}
