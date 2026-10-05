@@ -53,9 +53,10 @@ export default function EvidencePage() {
         }),
         fetchSources(session, projectId),
       ]);
-      setTotal(evidence.total);
+      const rows = Array.isArray(evidence.items) ? evidence.items : [];
+      setTotal(typeof evidence.total === "number" ? evidence.total : rows.length);
       setOffset(nextOffset);
-      setItems((prev) => (append ? [...prev, ...evidence.items] : evidence.items) as EvidenceRow[]);
+      setItems((prev) => (append ? [...prev, ...rows] : rows) as EvidenceRow[]);
       setSources(src.map((s: { id: string; name: string }) => ({ id: s.id, name: s.name })));
       setError(null);
     } catch (e) {

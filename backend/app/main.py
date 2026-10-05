@@ -11,6 +11,7 @@ from sqlalchemy import text
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.db.base import Base
+from app.db.schema_patches import apply_schema_patches
 from app.db.session import engine
 import app.models  # noqa: F401
 
@@ -20,6 +21,7 @@ async def lifespan(_: FastAPI):
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         Base.metadata.create_all(bind=conn)
+        apply_schema_patches(conn)
     yield
 
 
