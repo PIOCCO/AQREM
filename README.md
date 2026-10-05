@@ -89,7 +89,15 @@ chmod +x scripts/start-web-one-port.sh
 
 Optional: `AQREM_WEB_PORT=4173 ./scripts/start-web-one-port.sh` (4173 is already the default).
 
-The script builds the frontend if needed, syncs repo-root `.env` into `backend/.env` (same `SECRET_KEY` as Docker), ensures `.venv`, then serves UI + API together. On Tailscale, open **`http://<tailscale-ip>:4173`** and **sign in on that URL** (browser storage is per host; tokens from `:5173` or `:8000` do not apply). If you see “Invalid token”, use **Sign out** or open `/login?expired=1` and log in again. API docs: `/docs` on the same port.
+The script builds the frontend if needed, syncs repo-root `.env` into `backend/.env` (same `SECRET_KEY` as Docker), ensures `.venv`, **starts Postgres/Redis/Azurite via Docker Compose if port 5432 is down** (disable with `AQREM_AUTO_DOCKER=0`), then serves UI + API together.
+
+If startup still fails with `Connection refused` on `127.0.0.1:5432`, run manually from the repo root:
+
+```bash
+docker compose up -d postgres redis azurite
+```
+
+Use `DATABASE_URL=...@localhost:5432/...` in `.env` for host-run uvicorn (not `@postgres:5432`, which is only valid inside Docker). On Tailscale, open **`http://<tailscale-ip>:4173`** and **sign in on that URL** (browser storage is per host; tokens from `:5173` or `:8000` do not apply). If you see “Invalid token”, use **Sign out** or open `/login?expired=1` and log in again. API docs: `/docs` on the same port.
 
 ### Access via Tailscale
 
