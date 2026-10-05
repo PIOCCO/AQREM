@@ -131,7 +131,7 @@ If the page loads but API calls fail, confirm the API is running and reachable o
 | 5 — Evidence staleness workflow | Implemented |
 | 6 — Questionnaire export (XLSX/CSV) | Implemented |
 | 7 — Production hardening & MVP UX | Implemented (core) |
-| Azure deployment | Terraform skeleton (if present) |
+| Azure OpenAI (Terraform) | `infra/terraform/` — account + chat/embedding deployments |
 
 ## Security notes
 

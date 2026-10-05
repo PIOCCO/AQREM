@@ -136,7 +136,11 @@
   }
 
   .ref-header-search {
-    @apply h-10 w-full rounded-control border border-border bg-surface-subtle/80 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15 outline-none;
+    @apply h-10 w-full min-w-0 rounded-control border border-border bg-surface-subtle/80 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15 outline-none;
+  }
+
+  .ref-header-user-btn {
+    @apply inline-flex h-10 shrink-0 items-center gap-2.5 rounded-control border border-border bg-surface px-2.5 hover:bg-surface-subtle transition-colors;
   }
 
   .ref-workspace-switcher {

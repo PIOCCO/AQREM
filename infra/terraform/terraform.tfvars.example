@@ -1,0 +1,36 @@
+# Copy to terraform.tfvars (never commit terraform.tfvars or secrets).
+# Replace placeholders with values valid for your subscription and region.
+
+subscription_id     = "<subscription-id>"
+environment         = "dev"
+location            = "<azure-region>"
+resource_group_name = "<existing-resource-group>"
+
+# Optional override; default is aoai-aqrem-<environment>
+# openai_account_name = "aoai-aqrem-dev"
+
+public_network_access_enabled = true
+
+chat_model_name      = "<chat-model>"
+chat_model_version   = "<model-version>"
+chat_deployment_name = "aqrem-chat"
+chat_capacity        = 1
+
+embedding_model_name      = "<embedding-model>"
+embedding_model_version   = "<model-version>"
+embedding_deployment_name = "aqrem-embeddings"
+embedding_capacity        = 1
+
+# Must match the embedding model output and PostgreSQL pgvector (see README).
+embedding_dimensions = 1536
+
+azure_openai_api_version = "2024-10-21"
+
+# Production: prefer managed identity (Container Apps / App Service principal ID).
+# managed_identity_principal_id = "<principal-object-id>"
+
+# Optional: existing Key Vault — store API key only if MI is not used yet.
+# key_vault_id               = "/subscriptions/.../resourceGroups/.../providers/Microsoft.KeyVault/vaults/..."
+# store_api_key_in_key_vault = false
+
+tags = {}
