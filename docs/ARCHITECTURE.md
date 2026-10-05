@@ -266,7 +266,7 @@ No cross-tenant joins without explicit super-admin mode (not in V1).
 | 1 | Repo layout, Docker, config, auth abstraction, models skeleton | **This PR** |
 | 2 | Ingestion: upload, GitHub architecture, chunk, embed, index | **This PR** |
 | 3 | Questionnaires, retrieval, LLM answers, review UI | Next |
-| 4 | Answer library + similarity reuse | Next |
+| 4 | Answer library + similarity reuse | **Implemented** |
 | 5 | Freshness / staleness detection | Next |
 | 6 | Export XLSX/CSV | Next |
 | 7 | Terraform/Azure deployment hardening | Parallel |
