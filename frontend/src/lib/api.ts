@@ -135,6 +135,48 @@ export async function fetchAnswerLibraryEntry(session: AuthSession, entryId: str
   return res.json();
 }
 
+export async function fetchStaleAnswers(
+  session: AuthSession,
+  params?: { search?: string; project_id?: string; offset?: number; limit?: number },
+) {
+  const qs = new URLSearchParams();
+  if (params?.search) qs.set("search", params.search);
+  if (params?.project_id) qs.set("project_id", params.project_id);
+  if (params?.offset != null) qs.set("offset", String(params.offset));
+  if (params?.limit != null) qs.set("limit", String(params.limit));
+  const res = await fetch(`${API_BASE}/api/v1/stale-answers?${qs.toString()}`, {
+    headers: authHeaders(session),
+  });
+  if (!res.ok) throw new Error("Failed to load stale answers");
+  return res.json();
+}
+
+export async function fetchStaleAnswerDetail(session: AuthSession, answerId: string) {
+  const res = await fetch(`${API_BASE}/api/v1/stale-answers/${answerId}`, {
+    headers: authHeaders(session),
+  });
+  if (!res.ok) throw new Error("Failed to load stale answer detail");
+  return res.json();
+}
+
+export async function revalidateStaleAnswer(session: AuthSession, answerId: string) {
+  const res = await fetch(`${API_BASE}/api/v1/stale-answers/${answerId}/revalidate`, {
+    method: "POST",
+    headers: authHeaders(session),
+  });
+  if (!res.ok) throw new Error("Revalidation failed");
+  return res.json();
+}
+
+export async function regenerateStaleAnswer(session: AuthSession, answerId: string) {
+  const res = await fetch(`${API_BASE}/api/v1/stale-answers/${answerId}/regenerate`, {
+    method: "POST",
+    headers: authHeaders(session),
+  });
+  if (!res.ok) throw new Error("Regeneration failed");
+  return res.json();
+}
+
 export async function validateLibraryEntry(session: AuthSession, entryId: string) {
   const res = await fetch(`${API_BASE}/api/v1/answer-library/${entryId}/validation`, {
     headers: authHeaders(session),

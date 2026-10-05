@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { fetchMetrics, loadSession } from "../lib/api";
 
 const cards = [
@@ -32,12 +33,30 @@ export default function DashboardPage() {
       </p>
       {error && <p className="text-sm text-amber-700 mb-4">{error}</p>}
       <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-4">
-        {cards.map(([key, label]) => (
-          <div key={key} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="text-2xl font-semibold">{metrics?.[key] ?? "—"}</div>
-            <div className="text-sm text-slate-500">{label}</div>
-          </div>
-        ))}
+        {cards.map(([key, label]) => {
+          const content = (
+            <>
+              <div className="text-2xl font-semibold">{metrics?.[key] ?? "—"}</div>
+              <div className="text-sm text-slate-500">{label}</div>
+            </>
+          );
+          if (key === "potentially_stale") {
+            return (
+              <Link
+                key={key}
+                to="/stale-answers"
+                className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-amber-300"
+              >
+                {content}
+              </Link>
+            );
+          }
+          return (
+            <div key={key} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              {content}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

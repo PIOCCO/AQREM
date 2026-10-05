@@ -47,18 +47,35 @@ class AnsweringService:
         question: Question,
         user_id: UUID | None = None,
         top_k: int = 6,
+        skip_library_reuse: bool = False,
+        stale_regeneration: bool = False,
     ) -> Answer:
         questionnaire = self.db.get(Questionnaire, question.questionnaire_id)
         if questionnaire is None:
             raise ValueError("Questionnaire not found")
 
-        reused = await AnswerLibraryService(self.db).try_reuse_for_question(
-            question=question,
-            questionnaire=questionnaire,
-            user_id=user_id,
-        )
-        if reused is not None:
-            return reused
+        answer = question.answer
+        if answer is None:
+            answer = (
+                self.db.query(Answer).filter(Answer.question_id == question.id).first()
+            )
+        preserved_approved = answer.approved_text if answer else None
+
+        if stale_regeneration and answer is not None:
+            answer.regeneration_backup = {
+                "approved_text": answer.approved_text,
+                "draft_text": answer.draft_text,
+                "status": answer.status,
+            }
+
+        if not skip_library_reuse:
+            reused = await AnswerLibraryService(self.db).try_reuse_for_question(
+                question=question,
+                questionnaire=questionnaire,
+                user_id=user_id,
+            )
+            if reused is not None:
+                return reused
 
         evidence_items = await RetrievalService(self.db).retrieve(
             organization_id=question.organization_id,
@@ -75,7 +92,6 @@ class AnsweringService:
             )
         )
 
-        answer = question.answer
         if answer is None:
             answer = Answer(
                 organization_id=question.organization_id,
@@ -88,14 +104,29 @@ class AnsweringService:
         answer.draft_text = structured.answer
         answer.confidence = structured.confidence
         answer.evidence_sufficiency = structured.evidence_sufficiency
-        answer.reasoning_summary = structured.reasoning_summary
-        answer.generation_source = AnswerGenerationSource.RETRIEVAL_LLM.value
+        if stale_regeneration:
+            answer.generation_source = AnswerGenerationSource.STALE_REGENERATION.value
+            answer.reasoning_summary = (
+                "Regenerated because supporting evidence changed. "
+                + (structured.reasoning_summary or "")
+            ).strip()
+            answer.status = AnswerStatus.NEEDS_REVIEW.value
+            answer.approved_text = preserved_approved
+            answer.potentially_stale = True
+        else:
+            answer.generation_source = AnswerGenerationSource.RETRIEVAL_LLM.value
+            answer.reasoning_summary = structured.reasoning_summary
+            answer.status = _status_for_result(structured.evidence_sufficiency)
+            answer.reviewer_id = None
+            answer.approved_at = None
+            answer.approved_text = None
+            answer.potentially_stale = False
+            answer.stale_detected_at = None
+            answer.stale_reason = None
         answer.library_entry_id = None
-        answer.status = _status_for_result(structured.evidence_sufficiency)
-        answer.reviewer_id = None
-        answer.approved_at = None
-        answer.approved_text = None
-        answer.potentially_stale = False
+        if not stale_regeneration:
+            answer.reviewer_id = None
+            answer.approved_at = None
         self.db.flush()
 
         self.db.query(AnswerEvidenceLink).filter(AnswerEvidenceLink.answer_id == answer.id).delete(
@@ -119,32 +150,38 @@ class AnsweringService:
         if questionnaire.status == QuestionnaireStatus.DRAFT.value:
             questionnaire.status = QuestionnaireStatus.IN_PROGRESS.value
 
+        action = "answer_regenerated" if stale_regeneration else "answer_generated"
         record_audit(
             self.db,
             organization_id=question.organization_id,
             user_id=user_id,
-            action="answer_generated",
+            action=action,
             resource_type="question",
             resource_id=str(question.id),
             metadata={
                 "confidence": answer.confidence,
                 "evidence_sufficiency": answer.evidence_sufficiency,
                 "evidence_count": len(selected_ids),
+                "stale_regeneration": stale_regeneration,
             },
         )
         self.db.flush()
         return answer
 
     async def approve_answer(self, answer: Answer, reviewer_id: UUID) -> Answer:
+        was_stale = answer.potentially_stale
         answer.approved_text = answer.draft_text
         answer.status = AnswerStatus.APPROVED.value
         answer.reviewer_id = reviewer_id
         answer.approved_at = datetime.now(UTC)
+        from app.services.staleness.service import StalenessService
+
+        StalenessService(self.db).clear_stale_after_approval(answer)
         record_audit(
             self.db,
             organization_id=answer.organization_id,
             user_id=reviewer_id,
-            action="answer_approved",
+            action="stale_answer_approved" if was_stale else "answer_approved",
             resource_type="answer",
             resource_id=str(answer.id),
         )
@@ -172,13 +209,22 @@ class AnsweringService:
         return answer
 
     def reject_answer(self, answer: Answer, reviewer_id: UUID) -> Answer:
-        answer.status = AnswerStatus.REJECTED.value
+        backup = answer.regeneration_backup or {}
+        if backup:
+            answer.draft_text = backup.get("draft_text") or answer.draft_text
+            answer.approved_text = backup.get("approved_text")
+            answer.status = backup.get("status") or AnswerStatus.APPROVED.value
+            answer.regeneration_backup = None
+            action = "stale_answer_rejected"
+        else:
+            answer.status = AnswerStatus.REJECTED.value
+            action = "answer_rejected"
         answer.reviewer_id = reviewer_id
         record_audit(
             self.db,
             organization_id=answer.organization_id,
             user_id=reviewer_id,
-            action="answer_rejected",
+            action=action,
             resource_type="answer",
             resource_id=str(answer.id),
         )

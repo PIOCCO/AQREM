@@ -4,6 +4,7 @@ from app.models.evidence import EvidenceItem, EvidenceItemVersion
 from app.models.organization import Organization, OrganizationMembership, User
 from app.models.project import Project
 from app.models.questionnaire import Answer, AnswerEvidenceLink, Question, Questionnaire
+from app.models.staleness import AnswerStalenessEvent
 from app.models.source import (
     GitHubConnection,
     GitHubRepoConfig,
@@ -15,6 +16,7 @@ from app.models.source import (
 __all__ = [
     "AnswerLibraryEntry",
     "AnswerLibraryEvidenceLink",
+    "AnswerStalenessEvent",
     "AuditEvent",
     "EvidenceItem",
     "EvidenceItemVersion",

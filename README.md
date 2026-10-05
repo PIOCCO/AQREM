@@ -107,7 +107,7 @@ If the page loads but API calls fail, confirm the API is running and reachable o
 | 2 — Evidence ingestion & indexing | Implemented |
 | 3 — Questionnaires, LLM answers, review UI | Implemented (core flow) |
 | 4 — Answer library reuse | Implemented |
-| 5 — Freshness / staleness | Basic version model |
+| 5 — Evidence staleness workflow | Implemented |
 | 6 — Export | Planned |
 | 7 — Azure deployment | Terraform skeleton |
 

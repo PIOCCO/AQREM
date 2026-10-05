@@ -58,3 +58,9 @@ class AnswerGenerationSource(StrEnum):
     RETRIEVAL_LLM = "retrieval_llm"
     LIBRARY_REUSE = "library_reuse"
     LIBRARY_ADAPTED = "library_adapted"
+    STALE_REGENERATION = "stale_regeneration"
+
+
+class StalenessEventStatus(StrEnum):
+    OPEN = "open"
+    RESOLVED = "resolved"

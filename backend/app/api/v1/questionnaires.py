@@ -81,6 +81,8 @@ def _build_answer_response(db: Session, answer: Answer | None) -> AnswerResponse
         potentially_stale=answer.potentially_stale,
         generation_source=answer.generation_source,
         library_entry_id=answer.library_entry_id,
+        stale_detected_at=answer.stale_detected_at,
+        stale_reason=answer.stale_reason,
         evidence=evidence,
     )
 

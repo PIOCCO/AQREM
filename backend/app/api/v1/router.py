@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     answer_library,
     auth,
+    stale_answers,
     dashboard,
     evidence,
     organizations,
@@ -22,3 +23,4 @@ api_router.include_router(retrieval.router, prefix="/retrieval", tags=["retrieva
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(questionnaires.router, prefix="/questionnaires", tags=["questionnaires"])
 api_router.include_router(answer_library.router, prefix="/answer-library", tags=["answer-library"])
+api_router.include_router(stale_answers.router, prefix="/stale-answers", tags=["stale-answers"])

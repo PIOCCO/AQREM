@@ -57,6 +57,8 @@ class AnswerResponse(BaseModel):
     potentially_stale: bool
     generation_source: str | None = None
     library_entry_id: UUID | None = None
+    stale_detected_at: datetime | None = None
+    stale_reason: str | None = None
     evidence: list[EvidenceCitation] = Field(default_factory=list)
 
 

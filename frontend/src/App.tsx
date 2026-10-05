@@ -5,6 +5,8 @@ import EvidencePage from "./pages/EvidencePage";
 import LoginPage from "./pages/LoginPage";
 import AnswerLibraryDetailPage from "./pages/AnswerLibraryDetailPage";
 import AnswerLibraryPage from "./pages/AnswerLibraryPage";
+import StaleAnswerDetailPage from "./pages/StaleAnswerDetailPage";
+import StaleAnswersPage from "./pages/StaleAnswersPage";
 import QuestionReviewPage from "./pages/QuestionReviewPage";
 import QuestionnaireDetailPage from "./pages/QuestionnaireDetailPage";
 import QuestionnairesPage from "./pages/QuestionnairesPage";
@@ -17,6 +19,7 @@ const nav = [
   { to: "/evidence", label: "Evidence" },
   { to: "/questionnaires", label: "Questionnaires" },
   { to: "/answer-library", label: "Answer Library" },
+  { to: "/stale-answers", label: "Stale Answers" },
 ];
 
 function AppShell() {
@@ -49,6 +52,8 @@ function AppShell() {
           />
           <Route path="/answer-library" element={<AnswerLibraryPage />} />
           <Route path="/answer-library/:entryId" element={<AnswerLibraryDetailPage />} />
+          <Route path="/stale-answers" element={<StaleAnswersPage />} />
+          <Route path="/stale-answers/:answerId" element={<StaleAnswerDetailPage />} />
         </Routes>
       </main>
     </div>

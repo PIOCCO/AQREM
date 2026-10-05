@@ -13,7 +13,7 @@ from app.services.ingestion.code_metadata import detect_language, extract_symbol
 from app.services.ingestion.ignore import build_pathspec, should_ignore
 from app.services.ingestion.parsers import parse_bytes
 from app.services.ingestion.strength import classify_evidence_strength
-from app.services.library.invalidate import mark_entries_stale_for_evidence
+from app.services.library.invalidate import mark_evidence_changed
 from app.services.llm.factory import get_llm_provider
 
 
@@ -94,7 +94,19 @@ async def index_files(
                 continue
 
             if existing and existing.content_hash != c_hash:
-                mark_entries_stale_for_evidence(db, existing.id)
+                mark_evidence_changed(
+                    db,
+                    organization_id=source.organization_id,
+                    evidence_item_id=existing.id,
+                    file_path=rel,
+                    snapshot_content_hash=existing.content_hash,
+                    current_content_hash=c_hash,
+                    previous_commit_hash=existing.commit_hash,
+                    current_commit_hash=file.commit_hash,
+                    previous_content_excerpt=existing.content[:500],
+                    current_content_excerpt=chunk.content[:500],
+                    evidence_strength=existing.evidence_strength or strength,
+                )
                 db.add(
                     EvidenceItemVersion(
                         evidence_item_id=existing.id,
