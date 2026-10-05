@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import ProjectSourcesSection from "../components/projects/ProjectSourcesSection";
 import { PageHeader, LoadingState, ErrorState } from "../components/ui/States";
 import { fetchProjectSummaries } from "../lib/api";
 import { useAuth } from "../lib/authContext";
 import { useProjectContext } from "../lib/projectContext";
+import { canEditContent } from "../lib/roles";
 
 type Summary = {
   id: string;
@@ -16,8 +18,7 @@ type Summary = {
   potentially_stale_count: number;
 };
 
-const links = (projectId: string) => [
-  { to: `/sources`, label: "Sources" },
+const workspaceLinks = (projectId: string) => [
   { to: `/evidence?project=${projectId}`, label: "Evidence" },
   { to: `/questionnaires`, label: "Questionnaires" },
   { to: `/review-queue`, label: "Review queue" },
@@ -28,10 +29,11 @@ const links = (projectId: string) => [
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const { setProjectId } = useProjectContext();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const editable = user ? canEditContent(user.role) : false;
 
   useEffect(() => {
     if (projectId) setProjectId(projectId);
@@ -48,7 +50,7 @@ export default function ProjectDetailPage() {
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load project"));
   }, [session?.organizationId, session?.token, projectId]);
 
-  if (!projectId) return null;
+  if (!projectId || !session) return null;
   if (error) return <ErrorState message={error} />;
   if (!summary) return <LoadingState label="Loading project…" />;
 
@@ -57,8 +59,8 @@ export default function ProjectDetailPage() {
       <PageHeader title={summary.name} subtitle={summary.description ?? "Project workspace"} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {[
-          ["Questionnaires", summary.questionnaire_count],
           ["Sources", summary.source_count],
+          ["Questionnaires", summary.questionnaire_count],
           ["Evidence items", summary.evidence_item_count],
           ["Pending review", summary.pending_review_count],
         ].map(([label, value]) => (
@@ -83,8 +85,12 @@ export default function ProjectDetailPage() {
           </Link>
         </div>
       )}
-      <nav className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {links(projectId).map((item) => (
+
+      <ProjectSourcesSection session={session} projectId={projectId} editable={editable} />
+
+      <nav className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-10">
+        <p className="sm:col-span-2 lg:col-span-3 text-sm font-medium text-slate-700">Workspace</p>
+        {workspaceLinks(projectId).map((item) => (
           <Link key={item.to} to={item.to} className="aq-card aq-card-p aq-card-hover text-sm font-medium text-slate-800">
             {item.label}
           </Link>

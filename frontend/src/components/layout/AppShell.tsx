@@ -7,7 +7,6 @@ import {
   IconChevronDown,
   IconClipboard,
   IconDashboard,
-  IconDatabase,
   IconFileText,
   IconFolder,
   IconLibrary,
@@ -24,7 +23,6 @@ import { pageTitleForPath } from "../../lib/routeMeta";
 const navItems = [
   { to: "/", label: "Dashboard", end: true, Icon: IconDashboard },
   { to: "/projects", label: "Projects", Icon: IconFolder },
-  { to: "/sources", label: "Sources", Icon: IconDatabase },
   { to: "/evidence", label: "Evidence", Icon: IconFileText },
   { to: "/questionnaires", label: "Questionnaires", Icon: IconClipboard },
   { to: "/answer-library", label: "Answer Library", Icon: IconLibrary },

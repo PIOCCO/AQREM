@@ -1,11 +1,13 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { SourceCreateFields } from "../components/projects/SourceCreateFields";
 import { PageHeader, EmptyState, LoadingState, ErrorState, Modal } from "../components/ui/States";
 import { useToast } from "../components/ui/Toast";
 import { createProject, fetchProjectSummaries } from "../lib/api";
 import { useAuth } from "../lib/authContext";
 import { useProjectContext } from "../lib/projectContext";
 import { canEditContent } from "../lib/roles";
+import { buildInitialSourcePayload, readSourceForm } from "../lib/sourceForm";
 
 type Summary = {
   id: string;
@@ -21,12 +23,14 @@ type Summary = {
 export default function ProjectsPage() {
   const { session, reloadProjects } = useProjectContext();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const toast = useToast();
   const editable = user ? canEditContent(user.role) : false;
   const [rows, setRows] = useState<Summary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   async function load() {
     if (!session) return;
@@ -48,29 +52,35 @@ export default function ProjectsPage() {
   async function onCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!session) return;
+    setCreating(true);
     const form = new FormData(e.currentTarget);
-    await createProject(session, {
-      name: String(form.get("name")),
-      description: String(form.get("description") || "") || undefined,
-    });
-    toast.push("Project created.");
-    setShowCreate(false);
-    await reloadProjects();
-    await load();
+    const sourceValues = readSourceForm(form);
+    const initial_source = buildInitialSourcePayload(sourceValues);
+    try {
+      const project = await createProject(session, {
+        name: String(form.get("name")),
+        description: String(form.get("description") || "") || undefined,
+        initial_source,
+      });
+      toast.push(initial_source ? "Project and source created." : "Project created.");
+      setShowCreate(false);
+      await reloadProjects();
+      navigate(`/projects/${project.id}`);
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : "Failed to create project", "err");
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
     <div>
       <PageHeader
         title="Projects"
-        subtitle="Organize questionnaires, sources, and evidence by initiative or product."
+        subtitle="Create a project with its source code, then run questionnaires and evidence-backed answers."
         actions={
           editable ? (
-            <button
-              type="button"
-              onClick={() => setShowCreate(true)}
-              className="aq-btn-primary"
-            >
+            <button type="button" onClick={() => setShowCreate(true)} className="aq-btn-primary">
               Create project
             </button>
           ) : undefined
@@ -81,7 +91,7 @@ export default function ProjectsPage() {
       {!loading && !error && rows.length === 0 && (
         <EmptyState
           title="No projects yet"
-          description="Create your first project to start organizing questionnaires and evidence."
+          description="Create a project with name, description, and source code in one step."
           action={
             editable ? (
               <button type="button" onClick={() => setShowCreate(true)} className="aq-btn-primary">
@@ -97,8 +107,8 @@ export default function ProjectsPage() {
             <thead>
               <tr>
                 <th>Project</th>
-                <th>Questionnaires</th>
                 <th>Sources</th>
+                <th>Questionnaires</th>
                 <th>Evidence</th>
                 <th>Review</th>
                 <th>Stale</th>
@@ -113,8 +123,8 @@ export default function ProjectsPage() {
                     </Link>
                     {p.description && <div className="text-xs text-slate-500">{p.description}</div>}
                   </td>
-                  <td className="tabular-nums">{p.questionnaire_count}</td>
                   <td className="tabular-nums">{p.source_count}</td>
+                  <td className="tabular-nums">{p.questionnaire_count}</td>
                   <td className="tabular-nums">{p.evidence_item_count}</td>
                   <td className="tabular-nums">{p.pending_review_count}</td>
                   <td className="tabular-nums">{p.potentially_stale_count}</td>
@@ -126,16 +136,29 @@ export default function ProjectsPage() {
       )}
 
       {showCreate && (
-        <Modal title="New project" onClose={() => setShowCreate(false)}>
-          <form onSubmit={onCreate} className="space-y-3">
-            <input name="name" required placeholder="Project name" className="aq-input" />
-            <textarea name="description" placeholder="Description (optional)" className="aq-textarea min-h-20" />
+        <Modal title="Create project" onClose={() => setShowCreate(false)} wide>
+          <form onSubmit={onCreate} className="space-y-4">
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-slate-800">
+                Project name
+                <input name="name" required placeholder="Project name" className="aq-input mt-1" />
+              </label>
+              <label className="block text-sm font-medium text-slate-800">
+                Description
+                <textarea
+                  name="description"
+                  placeholder="Description (optional)"
+                  className="aq-textarea min-h-20 mt-1"
+                />
+              </label>
+            </div>
+            <SourceCreateFields defaultSourceName="" />
             <div className="flex gap-2 justify-end pt-2">
-              <button type="button" className="aq-btn-ghost" onClick={() => setShowCreate(false)}>
+              <button type="button" className="aq-btn-ghost" onClick={() => setShowCreate(false)} disabled={creating}>
                 Cancel
               </button>
-              <button type="submit" className="aq-btn-primary">
-                Create
+              <button type="submit" className="aq-btn-primary" disabled={creating}>
+                {creating ? "Creating…" : "Create project"}
               </button>
             </div>
           </form>

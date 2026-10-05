@@ -11,8 +11,9 @@ from app.core.roles import Role
 from app.core.tenant import TenantContext
 from app.db.session import get_db
 from app.models.enums import SourceType, SyncJobStatus
-from app.models.source import GitHubRepoConfig, Source, SourceSyncJob
+from app.models.source import Source, SourceSyncJob
 from app.schemas.source import GitHubRepoConnectRequest, SourceCreate, SourceResponse, SyncJobResponse
+from app.services.sources.service import connect_github_to_source, create_source_record
 from app.services.storage.factory import get_blob_storage
 
 router = APIRouter()
@@ -49,27 +50,7 @@ def create_source(
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
     db: Session = Depends(get_db),
 ) -> Source:
-    source = Source(
-        organization_id=tenant.organization_id,
-        project_id=payload.project_id,
-        name=payload.name,
-        source_type=payload.source_type.value,
-        scope=payload.scope.value,
-        config=payload.config,
-    )
-    db.add(source)
-    db.commit()
-    db.refresh(source)
-    record_audit(
-        db,
-        organization_id=tenant.organization_id,
-        user_id=tenant.user_id,
-        action="source_connected",
-        resource_type="source",
-        resource_id=str(source.id),
-    )
-    db.commit()
-    return source
+    return create_source_record(db, tenant, payload)
 
 
 @router.post("/{source_id}/files", response_model=SyncJobResponse)
@@ -147,29 +128,10 @@ def connect_github_repo(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
     if source.source_type != SourceType.GITHUB.value:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Source is not GitHub type")
-
-    config = dict(source.config)
-    if payload.access_token:
-        config["github_token_ref"] = "inline-dev-token"
-        config["github_token"] = payload.access_token
-
-    source.config = config
-    existing = db.query(GitHubRepoConfig).filter(GitHubRepoConfig.source_id == source.id).first()
-    if existing:
-        existing.repository_full_name = payload.repository_full_name
-        existing.default_branch = payload.branch
-    else:
-        db.add(
-            GitHubRepoConfig(
-                organization_id=tenant.organization_id,
-                source_id=source.id,
-                repository_full_name=payload.repository_full_name,
-                default_branch=payload.branch,
-            )
-        )
-    db.commit()
-    db.refresh(source)
-    return source
+    try:
+        return connect_github_to_source(db, tenant, source, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.get("/{source_id}/jobs", response_model=list[SyncJobResponse])

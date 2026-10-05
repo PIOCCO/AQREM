@@ -167,8 +167,8 @@ export default function DashboardPage() {
             <span className="font-medium">{overview.metrics.sources_failed}</span> source
             {overview.metrics.sources_failed === 1 ? "" : "s"} in error — check indexing and retry sync.
           </p>
-          <Link to="/sources" className="aq-btn-secondary shrink-0">
-            Open sources
+          <Link to="/projects" className="aq-btn-secondary shrink-0">
+            Open projects
           </Link>
         </div>
       )}

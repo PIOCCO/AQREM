@@ -181,7 +181,23 @@ export async function fetchProjectSummaries(session: AuthSession) {
   return res.json();
 }
 
-export async function createProject(session: AuthSession, payload: { name: string; description?: string }) {
+export type ProjectInitialSourcePayload = {
+  name: string;
+  source_type: string;
+  config?: Record<string, unknown>;
+  repository_full_name?: string;
+  branch?: string;
+  access_token?: string;
+};
+
+export async function createProject(
+  session: AuthSession,
+  payload: {
+    name: string;
+    description?: string;
+    initial_source?: ProjectInitialSourcePayload;
+  },
+) {
   const res = await authedFetch(session, `${API_BASE}/api/v1/projects`, {
     method: "POST",
     body: JSON.stringify(payload),

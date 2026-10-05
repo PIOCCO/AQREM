@@ -13,7 +13,10 @@ from app.models.evidence import EvidenceItem
 from app.models.project import Project
 from app.models.questionnaire import Answer, Question, Questionnaire
 from app.models.source import Source
+from app.models.enums import SourceType
 from app.schemas.organization import ProjectCreate, ProjectResponse, ProjectSummaryResponse
+from app.schemas.source import GitHubRepoConnectRequest, SourceCreate
+from app.services.sources.service import connect_github_to_source, create_source_record
 
 router = APIRouter()
 
@@ -40,6 +43,29 @@ def create_project(
     db.add(project)
     db.commit()
     db.refresh(project)
+
+    if payload.initial_source:
+        src_payload = SourceCreate(
+            name=payload.initial_source.name,
+            source_type=payload.initial_source.source_type,
+            project_id=project.id,
+            scope=payload.initial_source.scope,
+            config=payload.initial_source.config,
+        )
+        source = create_source_record(db, tenant, src_payload)
+        if payload.initial_source.source_type == SourceType.GITHUB and payload.initial_source.repository_full_name:
+            connect_github_to_source(
+                db,
+                tenant,
+                source,
+                GitHubRepoConnectRequest(
+                    source_id=source.id,
+                    repository_full_name=payload.initial_source.repository_full_name,
+                    branch=payload.initial_source.branch,
+                    access_token=payload.initial_source.access_token,
+                ),
+            )
+
     return project
 
 
