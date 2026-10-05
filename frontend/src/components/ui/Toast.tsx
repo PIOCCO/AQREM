@@ -24,14 +24,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="fixed bottom-4 right-4 z-[100] space-y-2 max-w-sm" aria-live="polite">
+      <div className="fixed bottom-4 right-4 z-[100] space-y-2 max-w-sm pointer-events-none" aria-live="polite">
         {items.map((t) => (
           <div
             key={t.id}
-            className={`rounded-lg px-4 py-3 text-sm shadow-lg border ${
+            className={`pointer-events-auto rounded-lg border px-4 py-3 text-sm shadow-card ${
               t.tone === "ok"
-                ? "bg-emerald-50 border-emerald-200 text-emerald-900"
-                : "bg-red-50 border-red-200 text-red-900"
+                ? "aq-alert-success"
+                : "aq-alert-error"
             }`}
           >
             {t.message}

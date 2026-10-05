@@ -44,12 +44,14 @@ export default function AuditLogPage() {
       )}
       <ul className="space-y-2">
         {items.map((item) => (
-          <li key={item.id} className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm">
+          <li key={item.id} className="aq-card px-4 py-3 text-sm">
             <div className="flex flex-wrap justify-between gap-2">
-              <span className="font-medium capitalize">{item.action.replaceAll("_", " ")}</span>
-              <span className="text-xs text-slate-500">{new Date(item.created_at).toLocaleString()}</span>
+              <span className="font-medium capitalize text-slate-900">{item.action.replaceAll("_", " ")}</span>
+              <time className="text-xs text-slate-500" dateTime={item.created_at}>
+                {new Date(item.created_at).toLocaleString()}
+              </time>
             </div>
-            <p className="text-xs text-slate-600 mt-1">
+            <p className="text-xs text-slate-600 mt-1 font-mono">
               {item.resource_type}
               {item.resource_id ? ` · ${item.resource_id.slice(0, 8)}…` : ""}
             </p>

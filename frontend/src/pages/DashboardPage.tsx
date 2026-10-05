@@ -47,6 +47,7 @@ export default function DashboardPage() {
   }, [session?.organizationId, projectId]);
 
   const title = projectName ? projectName : "All projects";
+  const pendingReview = overview?.metrics.pending_review ?? 0;
 
   return (
     <div>
@@ -56,45 +57,54 @@ export default function DashboardPage() {
       {overview && (
         <>
           <div className="flex flex-wrap gap-2 mb-6">
-            <Link to="/projects" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm hover:bg-slate-50">
+            <Link to="/projects" className="aq-btn-secondary">
               Create project
             </Link>
-            <Link to="/sources" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm hover:bg-slate-50">
+            <Link to="/sources" className="aq-btn-secondary">
               Add source
             </Link>
-            <Link to="/questionnaires" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm hover:bg-slate-50">
+            <Link to="/questionnaires" className="aq-btn-secondary">
               Upload questionnaire
             </Link>
-            <Link to="/review-queue" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm hover:bg-slate-50">
+            <Link to="/review-queue" className="aq-btn-secondary">
               Review answers
             </Link>
             {(overview.metrics.potentially_stale ?? 0) > 0 && (
-              <Link to="/stale-answers" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <Link to="/stale-answers" className="aq-btn-secondary border-warning-border bg-warning-bg text-warning-text">
                 Review stale ({overview.metrics.potentially_stale})
               </Link>
             )}
           </div>
+
+          {pendingReview > 0 && (
+            <div className="aq-alert-info mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <p>
+                <span className="font-medium">{pendingReview}</span> answer{pendingReview === 1 ? "" : "s"} need
+                review
+              </p>
+              <Link to="/review-queue" className="aq-btn-primary shrink-0">
+                Review now
+              </Link>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {metricCards.map(([key, label, href]) => {
               const body = (
                 <>
-                  <div className="text-2xl font-semibold">{overview.metrics[key] ?? 0}</div>
-                  <div className="text-sm text-slate-500">{label}</div>
+                  <div className="aq-metric-value">{overview.metrics[key] ?? 0}</div>
+                  <div className="aq-metric-label">{label}</div>
                 </>
               );
               if (href) {
                 return (
-                  <Link
-                    key={key}
-                    to={href}
-                    className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300"
-                  >
+                  <Link key={key} to={href} className="aq-metric block">
                     {body}
                   </Link>
                 );
               }
               return (
-                <div key={key} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div key={key} className="aq-metric">
                   {body}
                 </div>
               );
@@ -102,12 +112,12 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid lg:grid-cols-2 gap-6">
-            <section className="rounded-xl border border-slate-200 bg-white p-5">
-              <h2 className="font-medium mb-4">Recent questionnaires</h2>
+            <section className="aq-card aq-card-p">
+              <h2 className="aq-section-title mb-4">Recent questionnaires</h2>
               {overview.recent_questionnaires.length === 0 ? (
                 <p className="text-sm text-slate-600">
                   No questionnaires yet.{" "}
-                  <Link to="/questionnaires" className="text-blue-600 hover:underline">
+                  <Link to="/questionnaires" className="aq-link">
                     Create one
                   </Link>
                 </p>
@@ -117,16 +127,13 @@ export default function DashboardPage() {
                     <li key={qn.id}>
                       <Link
                         to={`/questionnaires/${qn.id}`}
-                        className="flex items-center justify-between gap-3 hover:bg-slate-50 rounded-lg px-2 py-2 -mx-2"
+                        className="flex items-center justify-between gap-3 rounded-md px-2 py-2 -mx-2 hover:bg-surface-subtle transition-colors"
                       >
-                        <span className="font-medium text-slate-900">{qn.name}</span>
-                        <span className="text-sm text-slate-600">{qn.progress_percent}% complete</span>
+                        <span className="font-medium text-slate-900 truncate">{qn.name}</span>
+                        <span className="text-sm text-slate-600 shrink-0">{qn.progress_percent}% complete</span>
                       </Link>
-                      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1">
-                        <div
-                          className="h-full bg-emerald-500"
-                          style={{ width: `${qn.progress_percent}%` }}
-                        />
+                      <div className="aq-progress-track mt-1">
+                        <div className="aq-progress-fill" style={{ width: `${qn.progress_percent}%` }} />
                       </div>
                     </li>
                   ))}
@@ -134,27 +141,27 @@ export default function DashboardPage() {
               )}
             </section>
 
-            <section className="rounded-xl border border-slate-200 bg-white p-5">
-              <h2 className="font-medium mb-4">Evidence & sources</h2>
+            <section className="aq-card aq-card-p">
+              <h2 className="aq-section-title mb-4">Evidence & sources</h2>
               <dl className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <dt className="text-slate-500">Sources</dt>
-                  <dd className="text-xl font-semibold">{overview.metrics.sources ?? 0}</dd>
+                  <dd className="text-xl font-semibold tabular-nums">{overview.metrics.sources ?? 0}</dd>
                 </div>
                 <div>
                   <dt className="text-slate-500">Evidence items</dt>
-                  <dd className="text-xl font-semibold">{overview.metrics.evidence_items ?? 0}</dd>
+                  <dd className="text-xl font-semibold tabular-nums">{overview.metrics.evidence_items ?? 0}</dd>
                 </div>
                 <div>
                   <dt className="text-slate-500">Indexing</dt>
-                  <dd className="text-xl font-semibold">{overview.metrics.sources_indexing ?? 0}</dd>
+                  <dd className="text-xl font-semibold tabular-nums">{overview.metrics.sources_indexing ?? 0}</dd>
                 </div>
                 <div>
                   <dt className="text-slate-500">Insufficient evidence</dt>
-                  <dd className="text-xl font-semibold">{overview.metrics.insufficient_evidence ?? 0}</dd>
+                  <dd className="text-xl font-semibold tabular-nums">{overview.metrics.insufficient_evidence ?? 0}</dd>
                 </div>
               </dl>
-              <Link to="/sources" className="inline-block mt-4 text-sm text-blue-600 hover:underline">
+              <Link to="/sources" className="aq-link inline-block mt-4 text-sm">
                 Manage sources
               </Link>
             </section>

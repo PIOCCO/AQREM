@@ -49,21 +49,21 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
-      <div className="w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-sm p-8">
-        <h1 className="text-2xl font-semibold mb-1">AQREM</h1>
+    <div className="min-h-screen flex items-center justify-center bg-surface-muted p-6">
+      <div className="w-full max-w-md aq-card shadow-card aq-card-p">
+        <h1 className="aq-page-title mb-1">AQREM</h1>
         <p className="text-slate-600 mb-6">Evidence-backed questionnaire responses</p>
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2 mb-6 p-1 rounded-md bg-surface-subtle">
           <button
             type="button"
-            className={`flex-1 rounded-lg py-2 text-sm ${mode === "login" ? "bg-slate-900 text-white" : "bg-slate-100"}`}
+            className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${mode === "login" ? "bg-primary text-primary-foreground" : "text-slate-700 hover:bg-surface"}`}
             onClick={() => setMode("login")}
           >
             Sign in
           </button>
           <button
             type="button"
-            className={`flex-1 rounded-lg py-2 text-sm ${mode === "register" ? "bg-slate-900 text-white" : "bg-slate-100"}`}
+            className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${mode === "register" ? "bg-primary text-primary-foreground" : "text-slate-700 hover:bg-surface"}`}
             onClick={() => setMode("register")}
           >
             Register
@@ -72,41 +72,24 @@ export default function LoginPage() {
         <form className="space-y-3" onSubmit={onSubmit}>
           {mode === "register" && (
             <>
-              <input
-                name="full_name"
-                placeholder="Full name"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                required
-              />
-              <input
-                name="organization_name"
-                placeholder="Organization name"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                required
-              />
+              <input name="full_name" placeholder="Full name" className="aq-input" required />
+              <input name="organization_name" placeholder="Organization name" className="aq-input" required />
             </>
           )}
-          <input
-            name="email"
-            type="email"
-            placeholder="Email"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
-            required
-          />
-          <input
-            name="password"
-            type="password"
-            placeholder="Password"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
-            required
-          />
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-slate-900 text-white py-2.5 font-medium disabled:opacity-60"
-          >
-            {loading ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
+          <input name="email" type="email" placeholder="Email" className="aq-input" required />
+          <input name="password" type="password" placeholder="Password" className="aq-input" required />
+          {error && <div className="aq-alert-error">{error}</div>}
+          <button type="submit" disabled={loading} className="aq-btn-primary w-full">
+            {loading ? (
+              <>
+                <span className="aq-spinner border-t-primary-foreground border-slate-600/30" aria-hidden />
+                Please wait…
+              </>
+            ) : mode === "login" ? (
+              "Sign in"
+            ) : (
+              "Create account"
+            )}
           </button>
         </form>
       </div>

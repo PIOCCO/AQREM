@@ -1,7 +1,8 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useToast } from "../components/ui/Toast";
-import { PageHeader, EmptyState, LoadingState, ErrorState } from "../components/ui/States";
+import { StatusBadge } from "../components/ui/Badges";
+import { PageHeader, EmptyState, LoadingState, ErrorState, Modal } from "../components/ui/States";
 import {
   createSource,
   fetchSources,
@@ -157,7 +158,7 @@ export default function SourcesPage() {
             <button
               type="button"
               onClick={() => setShowCreate(true)}
-              className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium"
+              className="aq-btn-primary"
             >
               Add source
             </button>
@@ -178,7 +179,7 @@ export default function SourcesPage() {
               <button
                 type="button"
                 onClick={() => setShowCreate(true)}
-                className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm"
+                className="aq-btn-primary"
               >
                 Add source
               </button>
@@ -190,7 +191,7 @@ export default function SourcesPage() {
         {sources.map((source) => {
           const projectName = projects.find((p) => p.id === source.project_id)?.name;
           return (
-            <article key={source.id} className="rounded-xl border border-slate-200 bg-white p-5">
+            <article key={source.id} className="aq-card aq-card-p aq-card-hover">
               <div className="flex items-start justify-between gap-2 mb-2">
                 <h2 className="font-semibold text-slate-900">{source.name}</h2>
                 <span className="text-xs uppercase tracking-wide text-slate-500">
@@ -198,10 +199,9 @@ export default function SourcesPage() {
                 </span>
               </div>
               {projectName && <p className="text-xs text-slate-500 mb-2">Project: {projectName}</p>}
-              <p className="text-sm mb-3">
-                Status:{" "}
-                <span className="font-medium capitalize">{source.status.replaceAll("_", " ")}</span>
-              </p>
+              <div className="mb-3">
+                <StatusBadge status={source.status} />
+              </div>
               {typeof source.config?.demo_path === "string" && (
                 <p className="text-xs font-mono text-slate-600 mb-2">Path: {source.config.demo_path}</p>
               )}
@@ -215,12 +215,12 @@ export default function SourcesPage() {
                       type="button"
                       disabled={syncingId === source.id}
                       onClick={() => onSync(source.id)}
-                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-50"
+                      className="aq-btn-secondary text-sm py-1.5 disabled:opacity-50"
                     >
                       {syncingId === source.id ? "Syncing…" : "Sync / re-index"}
                     </button>
                     {source.source_type === "file_upload" && (
-                      <label className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm cursor-pointer">
+                      <label className="aq-btn-secondary text-sm py-1.5 cursor-pointer">
                         Upload files
                         <input
                           type="file"
@@ -234,7 +234,7 @@ export default function SourcesPage() {
                 )}
                 <Link
                   to={`/evidence?source=${source.id}`}
-                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50"
+                  className="aq-btn-secondary text-sm py-1.5"
                 >
                   View evidence
                 </Link>
@@ -245,14 +245,10 @@ export default function SourcesPage() {
       </div>
 
       {showCreate && editable && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <form
-            onSubmit={onCreate}
-            className="w-full max-w-lg rounded-xl bg-white p-6 shadow-lg space-y-3 my-8"
-          >
-            <h2 className="text-lg font-semibold">Add source</h2>
-            <input name="name" required placeholder="Source name" className="w-full rounded-lg border px-3 py-2 text-sm" />
-            <select name="project_id" className="w-full rounded-lg border px-3 py-2 text-sm" defaultValue={projectId ?? ""}>
+        <Modal title="Add source" onClose={() => setShowCreate(false)} wide>
+          <form onSubmit={onCreate} className="space-y-3">
+            <input name="name" required placeholder="Source name" className="aq-input" />
+            <select name="project_id" className="aq-select" defaultValue={projectId ?? ""}>
               <option value="">No project</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -260,7 +256,7 @@ export default function SourcesPage() {
                 </option>
               ))}
             </select>
-            <select name="source_type" className="w-full rounded-lg border px-3 py-2 text-sm" defaultValue="folder_archive">
+            <select name="source_type" className="aq-select" defaultValue="folder_archive">
               <option value="folder_archive">Folder archive (demo path)</option>
               <option value="file_upload">Document upload</option>
               <option value="github">GitHub repository</option>
@@ -268,21 +264,21 @@ export default function SourcesPage() {
             <input
               name="demo_path"
               placeholder="Folder path on server (folder_archive), e.g. /workspace/tests/fixtures/demo_saas_repo"
-              className="w-full rounded-lg border px-3 py-2 text-sm"
+              className="aq-input"
             />
-            <input name="repository" placeholder="GitHub owner/repo (github only)" className="w-full rounded-lg border px-3 py-2 text-sm" />
-            <input name="branch" placeholder="Branch (default main)" className="w-full rounded-lg border px-3 py-2 text-sm" />
-            <input name="github_token" type="password" placeholder="GitHub token (dev only, optional)" className="w-full rounded-lg border px-3 py-2 text-sm" />
+            <input name="repository" placeholder="GitHub owner/repo (github only)" className="aq-input" />
+            <input name="branch" placeholder="Branch (default main)" className="aq-input" />
+            <input name="github_token" type="password" placeholder="GitHub token (dev only, optional)" className="aq-input" />
             <div className="flex gap-2 justify-end pt-2">
-              <button type="button" onClick={() => setShowCreate(false)}>
+              <button type="button" className="aq-btn-ghost" onClick={() => setShowCreate(false)}>
                 Cancel
               </button>
-              <button type="submit" className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm">
+              <button type="submit" className="aq-btn-primary">
                 Create & connect
               </button>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
     </div>
   );

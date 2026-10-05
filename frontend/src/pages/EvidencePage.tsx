@@ -57,7 +57,7 @@ export default function EvidencePage() {
       <PageHeader title="Evidence" subtitle="Search indexed evidence used for answers and citations." />
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <input
-          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="aq-input flex-1"
           placeholder="Search evidence…"
           value={search}
           onChange={(e) => {
@@ -68,7 +68,7 @@ export default function EvidencePage() {
           }}
         />
         <select
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="aq-select sm:max-w-xs"
           value={sourceId}
           onChange={(e) => {
             const next = new URLSearchParams(searchParams);
@@ -95,18 +95,18 @@ export default function EvidencePage() {
       )}
       <div className="space-y-3">
         {items.map((item) => (
-          <article key={item.id} className="rounded-xl border border-slate-200 bg-white p-4">
+          <article key={item.id} className="aq-card aq-card-p">
             <div className="flex flex-wrap items-center gap-2 mb-2">
-              <h2 className="font-medium text-slate-900">{item.file_path}</h2>
+              <h2 className="font-medium text-slate-900 font-mono text-sm break-all">{item.file_path}</h2>
               <EvidenceStrengthBadge strength={item.evidence_strength} />
             </div>
-            <p className="text-xs text-slate-500 mb-2">
+            <p className="text-xs text-slate-500 mb-2 font-mono">
               {item.repository && `${item.repository} · `}
               {item.commit_hash && `commit ${item.commit_hash.slice(0, 8)} · `}
               {item.line_start != null && `lines ${item.line_start}${item.line_end ? `–${item.line_end}` : ""}`}
             </p>
-            <p className="text-sm text-slate-700 line-clamp-3 whitespace-pre-wrap">{item.content}</p>
-            <Link to={`/evidence/${item.id}`} className="inline-block mt-3 text-sm text-blue-600 hover:underline">
+            <p className="text-sm text-slate-700 line-clamp-3 whitespace-pre-wrap font-mono">{item.content}</p>
+            <Link to={`/evidence/${item.id}`} className="aq-link inline-block mt-3 text-sm">
               View evidence
             </Link>
           </article>

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { StatusBadge } from "../components/ui/Badges";
+import { EmptyState, LoadingState, PageHeader } from "../components/ui/States";
 import { fetchStaleAnswers, loadSession } from "../lib/api";
 
 type StaleItem = {
@@ -16,44 +18,52 @@ export default function StaleAnswersPage() {
   const [items, setItems] = useState<StaleItem[]>([]);
   const [search, setSearch] = useState("");
   const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!session) return;
-    fetchStaleAnswers(session, { search: search || undefined }).then((data) => {
-      setItems(data.items);
-      setTotal(data.total);
-    });
+    setLoading(true);
+    fetchStaleAnswers(session, { search: search || undefined })
+      .then((data) => {
+        setItems(data.items);
+        setTotal(data.total);
+      })
+      .finally(() => setLoading(false));
   }, [session, search]);
 
-  if (!session) return <p>Please sign in.</p>;
+  if (!session) return <p className="text-sm text-slate-600">Please sign in.</p>;
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-2">Potentially Stale Answers</h1>
-      <p className="text-slate-600 mb-4">{total} answers require review</p>
+      <PageHeader title="Potentially stale answers" subtitle={`${total} answers may need re-review after evidence changes`} />
       <input
-        className="mb-6 w-full max-w-md rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        className="aq-input mb-6 max-w-md"
         placeholder="Search questions…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
+      {loading && <LoadingState label="Loading stale answers…" />}
+      {!loading && items.length === 0 && (
+        <EmptyState
+          title="No stale answers"
+          description="When approved answers are linked to evidence that later changes, they will appear here for review."
+        />
+      )}
       <div className="space-y-3">
         {items.map((item) => (
-          <div key={item.answer_id} className="rounded-xl border border-amber-200 bg-white p-4">
-            <p className="font-medium">{item.question_text}</p>
+          <article key={item.answer_id} className="aq-card aq-card-p border-warning-border">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <StatusBadge status={item.status || "potentially_stale"} />
+            </div>
+            <p className="font-medium text-slate-900 line-clamp-2">{item.question_text}</p>
             <p className="text-sm text-slate-500 mt-1">
               Project: {item.project_name ?? "—"} · Evidence changes: {item.changed_evidence_count}
             </p>
-            <p className="text-xs text-amber-700 mt-2">Status: Potentially Stale</p>
-            <Link
-              to={`/stale-answers/${item.answer_id}`}
-              className="inline-block mt-3 text-sm text-blue-600 hover:underline"
-            >
+            <Link to={`/stale-answers/${item.answer_id}`} className="aq-link inline-block mt-3 text-sm">
               Review
             </Link>
-          </div>
+          </article>
         ))}
-        {!items.length && <p className="text-slate-500">No stale answers right now.</p>}
       </div>
     </div>
   );

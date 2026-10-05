@@ -99,53 +99,48 @@ export default function QuestionReviewPage() {
   return (
     <div className="max-w-6xl">
       {genPhase && (
-        <p className="mb-4 text-sm text-slate-600" role="status">
+        <p className="mb-4 text-sm text-slate-600 flex items-center gap-2" role="status">
+          <span className="aq-spinner" aria-hidden />
           {genPhase}
         </p>
       )}
-      {error && <p className="mb-4 text-sm text-red-700">{error}</p>}
+      {error && <div className="aq-alert-error mb-4">{error}</div>}
 
       {answer?.potentially_stale && (
-        <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm">
+        <div className="aq-alert-warning mb-4">
           Potentially stale — evidence may have changed.{" "}
-          <Link to={`/stale-answers/${answer.id}`} className="text-amber-900 underline font-medium">
+          <Link to={`/stale-answers/${answer.id}`} className="aq-link text-warning-text">
             Open staleness review
           </Link>
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <span className="text-sm font-mono text-slate-500">{detail?.question.external_id}</span>
-        {answer && <StatusBadge status={answer.status} />}
-        {answer && <ConfidenceBadge confidence={answer.confidence} />}
-      </div>
-      <h1 className="text-2xl font-semibold mb-6">{detail?.question.text}</h1>
-
-      {!answer && canEdit && (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onGenerate}
-          className="mb-6 rounded-lg bg-slate-900 text-white px-4 py-2 text-sm disabled:opacity-50"
-        >
-          Generate answer
-        </button>
-      )}
+      <section className="aq-workspace-section mb-6">
+        <p className="aq-panel-label">Question</p>
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <span className="text-sm font-mono text-slate-500">{detail?.question.external_id}</span>
+          {detail?.question.section && (
+            <span className="text-xs text-slate-500">{detail.question.section}</span>
+          )}
+          {answer && <StatusBadge status={answer.status} />}
+        </div>
+        <h1 className="text-page-title text-slate-900 leading-snug">{detail?.question.text}</h1>
+        {!answer && canEdit && (
+          <button type="button" disabled={busy} onClick={onGenerate} className="aq-btn-primary mt-4">
+            Generate answer
+          </button>
+        )}
+      </section>
 
       {insufficient && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-950 mb-6">
-          <h2 className="font-medium mb-2">Insufficient evidence</h2>
-          <p className="text-sm">
+        <div className="aq-alert-warning mb-6">
+          <p className="font-medium mb-2">Insufficient evidence</p>
+          <p className="text-sm mb-3">
             The system could not find enough company evidence to produce a reliable answer. Connect sources,
             run indexing, then regenerate.
           </p>
           {canEdit && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={onGenerate}
-              className="mt-3 rounded-lg border border-amber-400 px-3 py-1.5 text-sm"
-            >
+            <button type="button" disabled={busy} onClick={onGenerate} className="aq-btn-secondary">
               Retry generation
             </button>
           )}
@@ -154,15 +149,18 @@ export default function QuestionReviewPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
-          <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="font-medium mb-3">AI answer</h2>
+          <section className="aq-workspace-section">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <h2 className="aq-section-title">AI answer</h2>
+              {answer && <ConfidenceBadge confidence={answer.confidence} />}
+            </div>
             <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">
               {answer?.draft_text ?? "No draft yet."}
             </p>
             {answer?.approved_text && answer.approved_text !== answer.draft_text && (
-              <div className="mt-4 pt-4 border-t border-slate-100">
-                <h3 className="text-xs font-medium text-slate-500 mb-1">Last approved</h3>
-                <p className="text-sm whitespace-pre-wrap">{answer.approved_text}</p>
+              <div className="mt-4 pt-4 border-t border-border">
+                <h3 className="aq-panel-label mb-1">Last approved</h3>
+                <p className="text-sm whitespace-pre-wrap text-slate-700">{answer.approved_text}</p>
               </div>
             )}
             {answer?.generation_source && (
@@ -172,7 +170,7 @@ export default function QuestionReviewPage() {
                   <>
                     {" "}
                     ·{" "}
-                    <Link to={`/answer-library/${answer.library_entry_id}`} className="text-blue-600 hover:underline">
+                    <Link to={`/answer-library/${answer.library_entry_id}`} className="aq-link text-xs">
                       library entry
                     </Link>
                   </>
@@ -180,65 +178,27 @@ export default function QuestionReviewPage() {
               </p>
             )}
             {answer?.reasoning_summary && (
-              <p className="text-sm text-slate-500 mt-2">{answer.reasoning_summary}</p>
+              <p className="text-sm text-slate-600 mt-2 border-l-2 border-border pl-3">{answer.reasoning_summary}</p>
             )}
           </section>
 
           {canReview && answer && (
-            <section className="rounded-xl border border-slate-200 bg-white p-5">
-              <h2 className="font-medium mb-3">Edit answer</h2>
-              <textarea
-                className="w-full min-h-28 rounded-lg border border-slate-300 p-3 text-sm"
-                value={editText}
-                onChange={(e) => setEditText(e.target.value)}
-              />
+            <section className="aq-workspace-section">
+              <h2 className="aq-section-title mb-3">Edit answer</h2>
+              <textarea className="aq-textarea" value={editText} onChange={(e) => setEditText(e.target.value)} />
               <button
                 disabled={busy}
                 onClick={() => act(() => editAnswer(session, answer.id, editText), "Answer saved and approved.")}
-                className="mt-3 rounded-lg border border-slate-300 px-4 py-2 text-sm"
+                className="aq-btn-secondary mt-3"
               >
                 Save edit & approve
               </button>
             </section>
           )}
-        </div>
-
-        <div className="space-y-4">
-          <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="font-medium mb-3">Evidence citations</h2>
-            <div className="space-y-3">
-              {(answer?.evidence ?? []).map((item, idx) => (
-                <div key={item.id} className="rounded-lg bg-slate-50 p-3 text-sm">
-                  <span className="text-xs text-slate-500 mr-2">[{idx + 1}]</span>
-                  <Link to={`/evidence/${item.id}`} className="font-medium text-blue-700 hover:underline">
-                    {item.file_path}
-                  </Link>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {item.line_start != null && (
-                      <span className="text-xs text-slate-500">
-                        lines {item.line_start}
-                        {item.line_end ? `–${item.line_end}` : ""}
-                      </span>
-                    )}
-                    {item.repository && <span className="text-xs text-slate-500">{item.repository}</span>}
-                    <EvidenceStrengthBadge strength={item.evidence_strength} />
-                  </div>
-                  <p className="mt-2 text-slate-700 line-clamp-4 whitespace-pre-wrap">{item.content_preview}</p>
-                </div>
-              ))}
-              {!answer?.evidence?.length && (
-                <p className="text-sm text-slate-500">No supporting evidence linked.</p>
-              )}
-            </div>
-          </section>
 
           <div className="flex flex-col gap-2">
             {canEdit && answer && (
-              <button
-                disabled={busy}
-                onClick={onGenerate}
-                className="rounded-lg border border-slate-300 py-2.5 text-sm disabled:opacity-50"
-              >
+              <button disabled={busy} onClick={onGenerate} className="aq-btn-secondary disabled:opacity-50">
                 Regenerate answer
               </button>
             )}
@@ -247,14 +207,14 @@ export default function QuestionReviewPage() {
                 <button
                   disabled={busy || insufficient}
                   onClick={() => act(() => approveAnswer(session, answer.id), "Answer approved.")}
-                  className="rounded-lg bg-slate-900 text-white py-2.5 text-sm font-medium disabled:opacity-50"
+                  className="aq-btn-primary disabled:opacity-50"
                 >
                   Approve
                 </button>
                 <button
                   disabled={busy}
                   onClick={() => act(() => rejectAnswer(session, answer.id), "Answer rejected.")}
-                  className="rounded-lg border border-red-200 text-red-700 py-2.5 text-sm disabled:opacity-50"
+                  className="aq-btn-danger disabled:opacity-50"
                 >
                   Reject
                 </button>
@@ -264,6 +224,41 @@ export default function QuestionReviewPage() {
               <p className="text-sm text-slate-500">You have read-only access to this workspace.</p>
             )}
           </div>
+        </div>
+
+        <div className="space-y-4">
+          <section className="aq-workspace-section lg:min-h-[20rem]">
+            <h2 className="aq-panel-label">Evidence</h2>
+            <div className="space-y-3">
+              {(answer?.evidence ?? []).map((item, idx) => (
+                <div key={item.id} className="aq-evidence-citation">
+                  <span className="text-xs font-medium text-slate-500 mr-2">[{idx + 1}]</span>
+                  <Link to={`/evidence/${item.id}`} className="aq-link font-medium break-all">
+                    {item.file_path}
+                  </Link>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {item.line_start != null && (
+                      <span className="text-xs text-slate-500 font-mono">
+                        lines {item.line_start}
+                        {item.line_end ? `–${item.line_end}` : ""}
+                      </span>
+                    )}
+                    {item.repository && <span className="text-xs text-slate-500">{item.repository}</span>}
+                    <EvidenceStrengthBadge strength={item.evidence_strength} />
+                  </div>
+                  <pre className="mt-2 text-slate-700 line-clamp-4 whitespace-pre-wrap font-mono text-xs leading-relaxed">
+                    {item.content_preview}
+                  </pre>
+                  <Link to={`/evidence/${item.id}`} className="aq-btn-ghost mt-2 px-0 text-xs">
+                    View evidence →
+                  </Link>
+                </div>
+              ))}
+              {!answer?.evidence?.length && (
+                <p className="text-sm text-slate-500">No supporting evidence linked.</p>
+              )}
+            </div>
+          </section>
         </div>
       </div>
     </div>

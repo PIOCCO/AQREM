@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { StatusBadge } from "../components/ui/Badges";
+import { ErrorState, LoadingState, PageHeader } from "../components/ui/States";
 import { fetchAnswerLibraryEntry, loadSession, validateLibraryEntry } from "../lib/api";
 
 export default function AnswerLibraryDetailPage() {
@@ -7,42 +9,46 @@ export default function AnswerLibraryDetailPage() {
   const session = loadSession();
   const [entry, setEntry] = useState<any>(null);
   const [validation, setValidation] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session || !entryId) return;
-    fetchAnswerLibraryEntry(session, entryId).then(setEntry);
-    validateLibraryEntry(session, entryId).then(setValidation);
+    Promise.all([fetchAnswerLibraryEntry(session, entryId), validateLibraryEntry(session, entryId)])
+      .then(([e, v]) => {
+        setEntry(e);
+        setValidation(v);
+      })
+      .catch(() => setError("Unable to load library entry."));
   }, [session, entryId]);
 
-  if (!entry) return <p>Loading…</p>;
+  if (!session) return <p className="text-sm text-slate-600">Please sign in.</p>;
+  if (error) return <ErrorState message={error} />;
+  if (!entry) return <LoadingState label="Loading entry…" />;
 
   return (
     <div className="max-w-4xl space-y-6">
-      <h1 className="text-2xl font-semibold">Answer details</h1>
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="font-medium mb-2">Question</h2>
-        <p>{entry.question_text}</p>
+      <PageHeader title="Answer details" subtitle="Library entry with evidence snapshots." />
+      <section className="aq-workspace-section">
+        <h2 className="aq-panel-label">Question</h2>
+        <p className="text-slate-900">{entry.question_text}</p>
       </section>
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="font-medium mb-2">Approved answer</h2>
-        <p className="whitespace-pre-wrap">{entry.answer_text}</p>
+      <section className="aq-workspace-section">
+        <h2 className="aq-panel-label">Approved answer</h2>
+        <p className="whitespace-pre-wrap text-slate-800 leading-relaxed">{entry.answer_text}</p>
       </section>
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-medium">Evidence validation</h2>
-          <span
-            className={`text-xs px-2 py-1 rounded-full ${
-              validation?.valid ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
-            }`}
-          >
-            {validation?.valid ? "Evidence valid" : "Needs review"}
-          </span>
+      <section className="aq-workspace-section">
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          <h2 className="aq-section-title">Evidence validation</h2>
+          <StatusBadge status={validation?.valid ? "approved" : "needs_review"} />
         </div>
+        <p className="text-sm text-slate-600 mb-3">
+          {validation?.valid ? "Snapshot hashes match current indexed evidence." : "One or more snapshots may be outdated."}
+        </p>
         <ul className="space-y-2 text-sm">
           {(entry.evidence ?? []).map((ev: any, idx: number) => (
-            <li key={idx} className="rounded-lg bg-slate-50 p-3">
-              <div className="font-medium">{ev.file_path}</div>
-              <div className="text-xs text-slate-500">hash {ev.snapshot_content_hash.slice(0, 12)}…</div>
+            <li key={idx} className="aq-evidence-citation">
+              <div className="font-medium font-mono text-sm break-all">{ev.file_path}</div>
+              <div className="text-xs text-slate-500 font-mono mt-1">hash {ev.snapshot_content_hash.slice(0, 12)}…</div>
             </li>
           ))}
         </ul>

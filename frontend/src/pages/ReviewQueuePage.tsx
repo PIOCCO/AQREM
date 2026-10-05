@@ -61,7 +61,7 @@ export default function ReviewQueuePage() {
           staleCount > 0 ? (
             <Link
               to="/stale-answers"
-              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+              className="aq-btn-secondary border-warning-border bg-warning-bg text-warning-text"
             >
               {staleCount} evidence changes
             </Link>
@@ -69,7 +69,7 @@ export default function ReviewQueuePage() {
         }
       />
       <input
-        className="mb-4 w-full max-w-md rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        className="aq-input mb-4 max-w-md"
         placeholder="Search questions…"
         value={search}
         onChange={(e) => {
@@ -89,37 +89,32 @@ export default function ReviewQueuePage() {
       )}
       <div className="space-y-3">
         {items.map((item) => (
-          <div key={item.answer_id} className="rounded-xl border border-slate-200 bg-white p-4">
+          <article key={item.answer_id} className="aq-card aq-card-p aq-card-hover">
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="text-xs font-mono text-slate-500">{item.question_external_id}</span>
               <StatusBadge status={item.status} />
               <ConfidenceBadge confidence={item.confidence} />
-              <span className="text-xs rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">
+              <span className="text-xs rounded-md border border-border bg-surface-subtle px-2 py-0.5 text-slate-700">
                 {item.reason}
               </span>
             </div>
-            <p className="font-medium text-slate-900 mb-1">{item.question_text}</p>
-            {item.questionnaire_name && (
-              <p className="text-xs text-slate-500 mb-3">{item.questionnaire_name}</p>
-            )}
+            <p className="font-medium text-slate-900 mb-1 line-clamp-2">{item.question_text}</p>
+            {item.questionnaire_name && <p className="text-xs text-slate-500 mb-3">{item.questionnaire_name}</p>}
             {item.potentially_stale ? (
-              <Link
-                to={`/stale-answers/${item.answer_id}`}
-                className="text-sm text-amber-800 hover:underline"
-              >
+              <Link to={`/stale-answers/${item.answer_id}`} className="aq-link text-sm text-warning-text">
                 Review evidence change
               </Link>
             ) : (
               item.questionnaire_id && (
                 <Link
                   to={`/questionnaires/${item.questionnaire_id}/questions/${item.question_id}/review`}
-                  className="text-sm text-blue-600 hover:underline"
+                  className="aq-link text-sm"
                 >
                   Open review workspace
                 </Link>
               )
             )}
-          </div>
+          </article>
         ))}
       </div>
     </div>

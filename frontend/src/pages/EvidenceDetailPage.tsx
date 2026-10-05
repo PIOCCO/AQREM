@@ -27,6 +27,7 @@ export default function EvidenceDetailPage() {
 
   const path = String(item.file_path ?? "");
   const content = String(item.content ?? "");
+  const lines = content.split("\n");
 
   return (
     <div>
@@ -38,27 +39,41 @@ export default function EvidenceDetailPage() {
             : undefined) as string | undefined
         }
         actions={
-          <Link to="/evidence" className="text-sm text-blue-600 hover:underline">
+          <Link to="/evidence" className="aq-btn-secondary text-sm">
             Back to evidence
           </Link>
         }
       />
-      <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
-        <div className="flex flex-wrap gap-2 text-sm text-slate-600">
+      <div className="aq-card aq-card-p space-y-4">
+        <div className="flex flex-wrap gap-2 text-sm text-slate-600 items-center">
           {item.line_start != null && (
-            <span>
+            <span className="font-mono text-xs">
               Lines {String(item.line_start)}
               {item.line_end != null ? `–${String(item.line_end)}` : ""}
             </span>
           )}
           <EvidenceStrengthBadge strength={String(item.evidence_strength ?? "")} />
           {item.content_hash != null && item.content_hash !== "" ? (
-            <span className="font-mono text-xs">hash {String(item.content_hash).slice(0, 12)}…</span>
+            <span className="font-mono text-xs text-slate-500">hash {String(item.content_hash).slice(0, 12)}…</span>
           ) : null}
         </div>
-        <pre className="whitespace-pre-wrap text-sm bg-slate-50 rounded-lg p-4 border border-slate-100 overflow-x-auto">
-          {content}
-        </pre>
+        <div className="aq-code-block p-0 overflow-hidden">
+          <table className="w-full text-xs">
+            <tbody>
+              {lines.map((line, i) => {
+                const lineNo = item.line_start != null ? Number(item.line_start) + i : i + 1;
+                return (
+                  <tr key={i} className="align-top">
+                    <td className="select-none text-slate-400 text-right pr-3 py-0.5 w-12 border-r border-border bg-surface-subtle/80">
+                      {lineNo}
+                    </td>
+                    <td className="py-0.5 pl-3 whitespace-pre-wrap break-all">{line || " "}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

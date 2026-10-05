@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { ConfidenceBadge, EvidenceStrengthBadge, StatusBadge } from "../components/ui/Badges";
+import { ConfidenceBadge, EvidenceStrengthBadge, InsufficientEvidenceBadge, StatusBadge } from "../components/ui/Badges";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "../components/ui/States";
 import { useToast } from "../components/ui/Toast";
 import {
@@ -133,11 +133,11 @@ export default function QuestionnaireDetailPage() {
                   type="button"
                   disabled={generating}
                   onClick={onGenerateAll}
-                  className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium disabled:opacity-60"
+                  className="aq-btn-primary disabled:opacity-60"
                 >
                   {generating ? "Generating…" : "Generate answers"}
                 </button>
-                <label className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium cursor-pointer">
+                <label className="aq-btn-secondary cursor-pointer">
                   Upload questions
                   <input
                     type="file"
@@ -158,43 +158,21 @@ export default function QuestionnaireDetailPage() {
                 </label>
               </>
             )}
-            <Link
-              to="/review-queue"
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium"
-            >
+            <Link to="/review-queue" className="aq-btn-secondary">
               Review queue
             </Link>
-            <button
-              type="button"
-              onClick={() => setExportOpen((v) => !v)}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium"
-            >
+            <button type="button" onClick={() => setExportOpen((v) => !v)} className="aq-btn-secondary">
               Export ▾
             </button>
             {exportOpen && (
-              <div className="absolute right-0 top-full mt-1 z-10 w-52 rounded-lg border border-slate-200 bg-white shadow-lg py-1 text-sm">
-                <button
-                  type="button"
-                  disabled={exporting}
-                  className="block w-full text-left px-3 py-2 hover:bg-slate-50"
-                  onClick={() => runExport("xlsx", false)}
-                >
+              <div className="aq-dropdown">
+                <button type="button" disabled={exporting} className="aq-dropdown-item" onClick={() => runExport("xlsx", false)}>
                   Export XLSX
                 </button>
-                <button
-                  type="button"
-                  disabled={exporting}
-                  className="block w-full text-left px-3 py-2 hover:bg-slate-50"
-                  onClick={() => runExport("csv", false)}
-                >
+                <button type="button" disabled={exporting} className="aq-dropdown-item" onClick={() => runExport("csv", false)}>
                   Export CSV
                 </button>
-                <button
-                  type="button"
-                  disabled={exporting}
-                  className="block w-full text-left px-3 py-2 hover:bg-slate-50"
-                  onClick={() => runExport("xlsx", true)}
-                >
+                <button type="button" disabled={exporting} className="aq-dropdown-item" onClick={() => runExport("xlsx", true)}>
                   Export approved (XLSX)
                 </button>
               </div>
@@ -204,17 +182,17 @@ export default function QuestionnaireDetailPage() {
       />
 
       {message && (
-        <p
-          className={`mb-4 text-sm ${message.tone === "err" ? "text-red-700" : "text-emerald-800"}`}
+        <div
+          className={`mb-4 ${message.tone === "err" ? "aq-alert-error" : "aq-alert-success"}`}
           role="status"
         >
           {message.text}
-        </p>
+        </div>
       )}
 
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <input
-          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="aq-input flex-1"
           placeholder="Search questions…"
           value={search}
           onChange={(e) => {
@@ -225,7 +203,7 @@ export default function QuestionnaireDetailPage() {
           }}
         />
         <select
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="aq-select sm:max-w-xs"
           value={statusFilter}
           onChange={(e) => {
             const next = new URLSearchParams(searchParams);
@@ -252,23 +230,19 @@ export default function QuestionnaireDetailPage() {
 
       <div className="space-y-3">
         {questions.map((q) => (
-          <div key={q.id} className="rounded-xl border border-slate-200 bg-white p-4">
+          <div key={q.id} className="aq-card aq-card-p">
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="text-xs font-mono text-slate-500">{q.external_id}</span>
               {q.section && <span className="text-xs text-slate-500">{q.section}</span>}
               {q.answer?.status && <StatusBadge status={q.answer.status} />}
               <ConfidenceBadge confidence={q.answer?.confidence} />
               <EvidenceStrengthBadge strength={q.answer?.evidence_strength} />
-              {q.answer?.evidence_sufficiency === "insufficient" && (
-                <span className="text-xs text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full">
-                  Insufficient evidence
-                </span>
-              )}
+              {q.answer?.evidence_sufficiency === "insufficient" && <InsufficientEvidenceBadge />}
             </div>
-            <p className="font-medium mb-3">{q.text}</p>
+            <p className="font-medium mb-3 line-clamp-3">{q.text}</p>
             <Link
               to={`/questionnaires/${questionnaireId}/questions/${q.id}/review`}
-              className="text-sm text-blue-600 hover:underline"
+              className="aq-link text-sm"
             >
               Open review workspace
             </Link>

@@ -62,27 +62,30 @@ export default function ProjectDetailPage() {
           ["Evidence items", summary.evidence_item_count],
           ["Pending review", summary.pending_review_count],
         ].map(([label, value]) => (
-          <div key={label as string} className="rounded-xl border bg-white p-4">
-            <div className="text-2xl font-semibold">{value}</div>
-            <div className="text-sm text-slate-500">{label}</div>
+          <div key={label as string} className="aq-metric">
+            <div className="aq-metric-value">{value}</div>
+            <div className="aq-metric-label">{label}</div>
           </div>
         ))}
       </div>
       {summary.potentially_stale_count > 0 && (
-        <Link
-          to="/stale-answers"
-          className="block mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-        >
+        <Link to="/stale-answers" className="aq-alert-warning block mb-6 hover:border-warning-border">
           {summary.potentially_stale_count} potentially stale answers — review now
         </Link>
       )}
+      {summary.pending_review_count > 0 && (
+        <div className="aq-alert-info mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p>
+            <span className="font-medium">{summary.pending_review_count}</span> answers awaiting review
+          </p>
+          <Link to="/review-queue" className="aq-btn-primary shrink-0">
+            Open review queue
+          </Link>
+        </div>
+      )}
       <nav className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {links(projectId).map((item) => (
-          <Link
-            key={item.to}
-            to={item.to}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium hover:border-slate-400"
-          >
+          <Link key={item.to} to={item.to} className="aq-card aq-card-p aq-card-hover text-sm font-medium text-slate-800">
             {item.label}
           </Link>
         ))}

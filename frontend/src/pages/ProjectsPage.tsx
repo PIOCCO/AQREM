@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { PageHeader, EmptyState, LoadingState, ErrorState } from "../components/ui/States";
+import { PageHeader, EmptyState, LoadingState, ErrorState, Modal } from "../components/ui/States";
 import { useToast } from "../components/ui/Toast";
 import { createProject, fetchProjectSummaries } from "../lib/api";
 import { useAuth } from "../lib/authContext";
@@ -69,7 +69,7 @@ export default function ProjectsPage() {
             <button
               type="button"
               onClick={() => setShowCreate(true)}
-              className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium"
+              className="aq-btn-primary"
             >
               Create project
             </button>
@@ -86,7 +86,7 @@ export default function ProjectsPage() {
             <button
               type="button"
               onClick={() => setShowCreate(true)}
-              className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm"
+              className="aq-btn-primary"
             >
               Create project
             </button>
@@ -94,32 +94,32 @@ export default function ProjectsPage() {
         />
       )}
       {!loading && rows.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-600">
+        <div className="aq-table-wrap">
+          <table className="aq-table">
+            <thead>
               <tr>
-                <th className="px-4 py-3 font-medium">Project</th>
-                <th className="px-4 py-3 font-medium">Questionnaires</th>
-                <th className="px-4 py-3 font-medium">Sources</th>
-                <th className="px-4 py-3 font-medium">Evidence</th>
-                <th className="px-4 py-3 font-medium">Review</th>
-                <th className="px-4 py-3 font-medium">Stale</th>
+                <th>Project</th>
+                <th>Questionnaires</th>
+                <th>Sources</th>
+                <th>Evidence</th>
+                <th>Review</th>
+                <th>Stale</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((p) => (
-                <tr key={p.id} className="border-t border-slate-100">
-                  <td className="px-4 py-3">
-                    <Link to={`/projects/${p.id}`} className="font-medium text-slate-900 hover:text-blue-700">
+                <tr key={p.id}>
+                  <td>
+                    <Link to={`/projects/${p.id}`} className="font-medium text-slate-900 hover:text-info-text">
                       {p.name}
                     </Link>
                     {p.description && <div className="text-xs text-slate-500">{p.description}</div>}
                   </td>
-                  <td className="px-4 py-3">{p.questionnaire_count}</td>
-                  <td className="px-4 py-3">{p.source_count}</td>
-                  <td className="px-4 py-3">{p.evidence_item_count}</td>
-                  <td className="px-4 py-3">{p.pending_review_count}</td>
-                  <td className="px-4 py-3">{p.potentially_stale_count}</td>
+                  <td className="tabular-nums">{p.questionnaire_count}</td>
+                  <td className="tabular-nums">{p.source_count}</td>
+                  <td className="tabular-nums">{p.evidence_item_count}</td>
+                  <td className="tabular-nums">{p.pending_review_count}</td>
+                  <td className="tabular-nums">{p.potentially_stale_count}</td>
                 </tr>
               ))}
             </tbody>
@@ -128,38 +128,25 @@ export default function ProjectsPage() {
       )}
 
       {showCreate && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-          <form
-            onSubmit={onCreate}
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg space-y-3"
-          >
-            <h2 className="text-lg font-semibold">New project</h2>
-            <input
-              name="name"
-              required
-              placeholder="Project name"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            />
-            <textarea
-              name="description"
-              placeholder="Description (optional)"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-20"
-            />
-            <div className="flex gap-2 justify-end">
-              <button type="button" className="px-3 py-2 text-sm" onClick={() => setShowCreate(false)}>
+        <Modal title="New project" onClose={() => setShowCreate(false)}>
+          <form onSubmit={onCreate} className="space-y-3">
+            <input name="name" required placeholder="Project name" className="aq-input" />
+            <textarea name="description" placeholder="Description (optional)" className="aq-textarea min-h-20" />
+            <div className="flex gap-2 justify-end pt-2">
+              <button type="button" className="aq-btn-ghost" onClick={() => setShowCreate(false)}>
                 Cancel
               </button>
-              <button type="submit" className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm">
+              <button type="submit" className="aq-btn-primary">
                 Create
               </button>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
 
       <p className="text-xs text-slate-500 mt-4">
         Tip: use the project selector in the sidebar to filter dashboard and list views.{" "}
-        <Link to="/questionnaires" className="text-blue-600 hover:underline">
+        <Link to="/questionnaires" className="aq-link text-xs">
           Open questionnaires
         </Link>
       </p>

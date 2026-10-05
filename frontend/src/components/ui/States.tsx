@@ -2,10 +2,15 @@ import type { ReactNode } from "react";
 
 export function LoadingState({ label = "Loading…" }: { label?: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600">
-      {label}
+    <div className="aq-card aq-card-p flex flex-col items-center justify-center gap-3 text-center" role="status">
+      <span className="aq-spinner" aria-hidden />
+      <p className="text-sm text-slate-600">{label}</p>
     </div>
   );
+}
+
+export function SkeletonBlock({ className = "h-24 w-full" }: { className?: string }) {
+  return <div className={`aq-skeleton ${className}`} aria-hidden />;
 }
 
 export function ErrorState({
@@ -16,14 +21,11 @@ export function ErrorState({
   onRetry?: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-800">
-      <p className="font-medium mb-2">{message}</p>
+    <div className="aq-alert-error" role="alert">
+      <p className="font-medium mb-1">Something went wrong</p>
+      <p className="mb-3 opacity-90">{message}</p>
       {onRetry && (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-red-800 hover:bg-red-50"
-        >
+        <button type="button" onClick={onRetry} className="aq-btn-secondary">
           Retry
         </button>
       )}
@@ -41,10 +43,10 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
-      <h2 className="text-lg font-semibold text-slate-900 mb-2">{title}</h2>
+    <div className="aq-card border-dashed aq-card-p text-center">
+      <h2 className="text-base font-semibold text-slate-900 mb-2">{title}</h2>
       <p className="text-sm text-slate-600 max-w-md mx-auto mb-4">{description}</p>
-      {action}
+      {action && <div className="flex justify-center">{action}</div>}
     </div>
   );
 }
@@ -59,12 +61,40 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
-        {subtitle && <p className="text-sm text-slate-600 mt-1">{subtitle}</p>}
+    <header className="aq-page-header">
+      <div className="min-w-0">
+        <h1 className="aq-page-title">{title}</h1>
+        {subtitle && <p className="aq-page-subtitle">{subtitle}</p>}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap gap-2 shrink-0">{actions}</div>}
+    </header>
+  );
+}
+
+export function Modal({
+  title,
+  children,
+  onClose,
+  wide,
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+  wide?: boolean;
+}) {
+  return (
+    <div className="aq-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="aq-modal-title">
+      <div className={`aq-modal ${wide ? "max-w-xl" : ""}`}>
+        <div className="flex items-start justify-between gap-4 mb-2">
+          <h2 id="aq-modal-title" className="aq-modal-title mb-0">
+            {title}
+          </h2>
+          <button type="button" onClick={onClose} className="aq-btn-ghost px-2 py-1 text-slate-500" aria-label="Close">
+            ✕
+          </button>
+        </div>
+        {children}
+      </div>
     </div>
   );
 }
