@@ -76,6 +76,29 @@ curl -s -X POST http://localhost:8000/api/v1/retrieval/preview \
 cd frontend && npm install && npm run dev
 ```
 
+Vite binds to **`0.0.0.0:5173`**, so you can open the UI from other devices on your tailnet (not only `localhost`).
+
+### Access via Tailscale
+
+On the machine running AQREM:
+
+1. Ensure Tailscale is connected: `tailscale status`
+2. Note your Tailscale IPv4: `tailscale ip -4` (example: `100.64.0.12`)
+3. Start the **API** on all interfaces (Docker Compose already publishes `8000`; for local uvicorn use `--host 0.0.0.0`)
+4. Start the **frontend**: `cd frontend && npm run dev`
+
+From any device on the same tailnet, open:
+
+```text
+http://<your-tailscale-ip>:5173
+```
+
+The dev server proxies `/api` to `127.0.0.1:8000` on the host, so you do **not** need to set `VITE_API_BASE` for remote browsers.
+
+Optional: call the API directly (Swagger, curl) at `http://<your-tailscale-ip>:8000/docs`.
+
+If the page loads but API calls fail, confirm the API is running and reachable on port `8000`, and that your OS firewall allows inbound `5173` / `8000` on the Tailscale interface (`tailscale0`).
+
 ## Phase status (this repo)
 
 | Phase | Status |
