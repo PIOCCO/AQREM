@@ -34,10 +34,13 @@ const navItems = [
   { to: "/settings", label: "Settings", Icon: IconSettings },
 ];
 
-function UserAvatar({ name, email }: { name?: string; email?: string }) {
+function UserAvatar({ name, email, className = "" }: { name?: string; email?: string; className?: string }) {
   const initial = (name?.trim()?.[0] || email?.[0] || "?").toUpperCase();
   return (
-    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-violet/20 to-brand-blue/30 text-sm font-semibold text-slate-700 border border-border">
+    <span
+      className={`inline-flex h-9 w-9 shrink-0 flex-none items-center justify-center rounded-full bg-gradient-to-br from-brand-violet/20 to-brand-blue/30 text-sm font-semibold text-slate-700 border border-border ${className}`}
+      aria-hidden
+    >
       {initial}
     </span>
   );
@@ -147,11 +150,11 @@ export default function AppShell() {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="hidden lg:flex h-header shrink-0 items-center justify-between gap-4 border-b border-border bg-surface px-8">
-          <p className="text-sm font-medium text-slate-900">{breadcrumb}</p>
-          <div className="flex items-center gap-3">
-            <form onSubmit={onHeaderSearchSubmit} className="relative w-64 xl:w-72">
-              <IconSearch className="absolute left-3 top-1/2 -h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        <header className="hidden lg:flex h-header shrink-0 items-center gap-6 border-b border-border bg-surface px-6 xl:px-8">
+          <p className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">{breadcrumb}</p>
+          <div className="flex shrink-0 items-center gap-4">
+            <form onSubmit={onHeaderSearchSubmit} className="relative w-52 xl:w-64">
+              <IconSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <input
                 className="ref-header-search"
                 placeholder="Search"
@@ -159,23 +162,25 @@ export default function AppShell() {
                 onChange={(e) => setHeaderSearch(e.target.value)}
               />
             </form>
-            <Link
-              to="/audit"
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-control border border-border text-slate-600 hover:bg-surface-subtle transition-colors"
-              aria-label="Activity and notifications"
-            >
-              <IconBell className="h-5 w-5" />
-              <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-error" aria-hidden />
-            </Link>
-            <div className="relative">
+            <div className="flex items-center gap-2 border-l border-border pl-4">
+              <Link
+                to="/audit"
+                className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-control border border-border text-slate-600 hover:bg-surface-subtle transition-colors"
+                aria-label="Activity and notifications"
+              >
+                <IconBell className="h-5 w-5" />
+                <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-error" aria-hidden />
+              </Link>
+              <div className="relative">
               <button
                 type="button"
-                className="flex items-center gap-2 rounded-control pl-1 pr-2 py-1 hover:bg-surface-subtle transition-colors"
+                className="ref-header-user-btn"
                 onClick={() => setMenuOpen((v) => !v)}
                 aria-expanded={menuOpen}
+                aria-label="Account menu"
               >
                 <UserAvatar name={user?.fullName} email={user?.email} />
-                <IconChevronDown className="text-slate-500" />
+                <IconChevronDown className="h-4 w-4 shrink-0 text-slate-500" />
               </button>
               {menuOpen && (
                 <>
@@ -191,6 +196,7 @@ export default function AppShell() {
                   </div>
                 </>
               )}
+              </div>
             </div>
           </div>
         </header>
