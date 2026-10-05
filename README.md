@@ -80,14 +80,16 @@ cd frontend && npm install && npm run dev
 
 Vite binds to **`0.0.0.0:5173`**, so you can open the UI from other devices on your tailnet (not only `localhost`).
 
-**One port (UI + API on 8000)** — good for demos, Tailscale, or a simple lab:
+**One port (UI + API)** — good for demos and Tailscale (default **4173**, so Docker can keep **8000**):
 
 ```bash
 chmod +x scripts/start-web-one-port.sh
 ./scripts/start-web-one-port.sh
 ```
 
-The script will run `npm install && npm run build` if `frontend/dist` is missing, create `backend/.env` from `.env.example` if needed, ensure a backend `.venv`, then start uvicorn with `SERVE_FRONTEND=1`. Open http://127.0.0.1:8000 (API docs remain at `/docs`).
+Optional: `AQREM_WEB_PORT=4173 ./scripts/start-web-one-port.sh` (4173 is already the default).
+
+The script builds the frontend if needed, bootstraps `backend/.env` / `.venv`, checks the port is free (or picks another), then serves UI + API together. On Tailscale, use `http://<tailscale-ip>:4173` (the script prints your Tailscale IP when `tailscale` is installed). API docs: `/docs` on the same port.
 
 ### Access via Tailscale
 
