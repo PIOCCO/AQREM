@@ -1,8 +1,11 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader, EmptyState, LoadingState, ErrorState } from "../components/ui/States";
+import { useToast } from "../components/ui/Toast";
 import { createProject, fetchProjectSummaries } from "../lib/api";
+import { useAuth } from "../lib/authContext";
 import { useProjectContext } from "../lib/projectContext";
+import { canEditContent } from "../lib/roles";
 
 type Summary = {
   id: string;
@@ -17,6 +20,9 @@ type Summary = {
 
 export default function ProjectsPage() {
   const { session, reloadProjects } = useProjectContext();
+  const { user } = useAuth();
+  const toast = useToast();
+  const editable = user ? canEditContent(user.role) : false;
   const [rows, setRows] = useState<Summary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +53,7 @@ export default function ProjectsPage() {
       name: String(form.get("name")),
       description: String(form.get("description") || "") || undefined,
     });
+    toast.push("Project created.");
     setShowCreate(false);
     await reloadProjects();
     await load();
@@ -58,13 +65,15 @@ export default function ProjectsPage() {
         title="Projects"
         subtitle="Organize questionnaires, sources, and evidence by initiative or product."
         actions={
-          <button
-            type="button"
-            onClick={() => setShowCreate(true)}
-            className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium"
-          >
-            Create project
-          </button>
+          editable ? (
+            <button
+              type="button"
+              onClick={() => setShowCreate(true)}
+              className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium"
+            >
+              Create project
+            </button>
+          ) : undefined
         }
       />
       {loading && <LoadingState label="Loading projects…" />}
@@ -101,7 +110,9 @@ export default function ProjectsPage() {
               {rows.map((p) => (
                 <tr key={p.id} className="border-t border-slate-100">
                   <td className="px-4 py-3">
-                    <div className="font-medium text-slate-900">{p.name}</div>
+                    <Link to={`/projects/${p.id}`} className="font-medium text-slate-900 hover:text-blue-700">
+                      {p.name}
+                    </Link>
                     {p.description && <div className="text-xs text-slate-500">{p.description}</div>}
                   </td>
                   <td className="px-4 py-3">{p.questionnaire_count}</td>

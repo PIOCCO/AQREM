@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
+import { AuthProvider } from "../lib/authContext";
 import { LoadingState } from "./ui/States";
 import { clearSession, fetchAuthMe, loadSession } from "../lib/api";
 
@@ -34,5 +35,5 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
     );
   }
   if (!valid) return <Navigate to="/login" replace />;
-  return <>{children}</>;
+  return <AuthProvider>{children}</AuthProvider>;
 }

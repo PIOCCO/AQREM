@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { clearSession } from "../../lib/api";
+import { useAuth } from "../../lib/authContext";
 import { useProjectContext } from "../../lib/projectContext";
 
 const nav = [
@@ -12,9 +13,11 @@ const nav = [
   { to: "/review-queue", label: "Review Queue" },
   { to: "/answer-library", label: "Answer Library" },
   { to: "/audit", label: "Activity" },
+  { to: "/settings", label: "Settings" },
 ];
 
 export default function AppShell() {
+  const { user } = useAuth();
   const { projects, projectId, setProjectId, projectName } = useProjectContext();
   const [navOpen, setNavOpen] = useState(false);
   const navigate = useNavigate();
@@ -39,7 +42,10 @@ export default function AppShell() {
       <aside
         className={`${navOpen ? "block" : "hidden"} lg:block w-full lg:w-64 shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 p-4 lg:p-6`}
       >
-        <div className="text-xl font-semibold mb-6 hidden lg:block">AQREM</div>
+        <div className="hidden lg:flex items-start justify-between gap-2 mb-6">
+          <div className="text-xl font-semibold">AQREM</div>
+          {user && <span className="text-xs text-slate-500 truncate max-w-[8rem]" title={user.email}>{user.email}</span>}
+        </div>
         <div className="mb-6 space-y-2">
           <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Project</label>
           <select

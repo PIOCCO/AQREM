@@ -1,7 +1,18 @@
-import { useEffect, useState } from "react";
-import { EmptyState, ErrorState, LoadingState, PageHeader } from "../components/ui/States";
-import { fetchSources } from "../lib/api";
+import { FormEvent, useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { useToast } from "../components/ui/Toast";
+import { PageHeader, EmptyState, LoadingState, ErrorState } from "../components/ui/States";
+import {
+  createSource,
+  fetchSources,
+  fetchSyncJob,
+  triggerSourceSync,
+  uploadSourceFiles,
+  connectGithubRepo,
+} from "../lib/api";
+import { useAuth } from "../lib/authContext";
 import { useProjectContext } from "../lib/projectContext";
+import { canEditContent } from "../lib/roles";
 
 type SourceRow = {
   id: string;
@@ -10,21 +21,40 @@ type SourceRow = {
   status: string;
   project_id?: string;
   config: Record<string, unknown>;
+  created_at: string;
 };
 
-function sourceTypeLabel(type: string) {
-  return type.replaceAll("_", " ");
+async function pollJob(
+  session: NonNullable<ReturnType<typeof useAuth>["session"]>,
+  jobId: string,
+  onUpdate: (status: string) => void,
+) {
+  for (let i = 0; i < 120; i++) {
+    const job = await fetchSyncJob(session, jobId);
+    onUpdate(job.status);
+    if (job.status === "completed" || job.status === "failed") return job;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  throw new Error("Sync timed out. Check Activity or retry.");
 }
 
 export default function SourcesPage() {
-  const { session, projectId, projects } = useProjectContext();
+  const { session, user } = useAuth();
+  const { projectId, projects } = useProjectContext();
+  const toast = useToast();
   const [sources, setSources] = useState<SourceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [jobStatus, setJobStatus] = useState<string | null>(null);
 
-  async function load() {
+  const editable = user ? canEditContent(user.role) : false;
+
+  const load = useCallback(async () => {
     if (!session) return;
     setLoading(true);
+    setError(null);
     try {
       const rows = await fetchSources(session);
       setSources(
@@ -35,24 +65,125 @@ export default function SourcesPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [session, projectId]);
 
   useEffect(() => {
     load();
-  }, [session?.organizationId, projectId]);
+  }, [load]);
+
+  async function onCreate(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!session || !editable) return;
+    const form = new FormData(e.currentTarget);
+    const sourceType = String(form.get("source_type"));
+    const config: Record<string, unknown> = {};
+    const demoPath = String(form.get("demo_path") || "").trim();
+    if (demoPath) config.demo_path = demoPath;
+
+    try {
+      const created = await createSource(session, {
+        name: String(form.get("name")),
+        source_type: sourceType,
+        project_id: (form.get("project_id") as string) || projectId || undefined,
+        config,
+      });
+
+      if (sourceType === "github") {
+        const repo = String(form.get("repository") || "").trim();
+        if (repo) {
+          await connectGithubRepo(session, {
+            source_id: created.id,
+            repository_full_name: repo,
+            branch: String(form.get("branch") || "main"),
+            access_token: String(form.get("github_token") || "") || undefined,
+          });
+        }
+      }
+
+      toast.push("Source connected.");
+      setShowCreate(false);
+      await load();
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : "Failed to create source", "err");
+    }
+  }
+
+  async function onSync(sourceId: string) {
+    if (!session || !editable) return;
+    setSyncingId(sourceId);
+    setJobStatus("queued");
+    try {
+      const job = await triggerSourceSync(session, sourceId);
+      toast.push("Indexing started…");
+      const final = await pollJob(session, job.id, setJobStatus);
+      if (final.status === "failed") {
+        toast.push(final.error_message || "Indexing failed.", "err");
+      } else {
+        toast.push("Indexing completed.");
+      }
+      await load();
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : "Sync failed", "err");
+    } finally {
+      setSyncingId(null);
+      setJobStatus(null);
+    }
+  }
+
+  async function onUploadFiles(sourceId: string, files: FileList | null) {
+    if (!session || !editable || !files?.length) return;
+    setSyncingId(sourceId);
+    try {
+      const job = await uploadSourceFiles(session, sourceId, Array.from(files));
+      toast.push("Upload queued; indexing…");
+      await pollJob(session, job.id, setJobStatus);
+      toast.push("Files indexed.");
+      await load();
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : "Upload failed", "err");
+    } finally {
+      setSyncingId(null);
+      setJobStatus(null);
+    }
+  }
 
   return (
     <div>
       <PageHeader
         title="Sources"
-        subtitle="Connect repositories, upload documents, or folder archives to build your evidence base."
+        subtitle="Connect repositories or document uploads, then index evidence for questionnaires."
+        actions={
+          editable ? (
+            <button
+              type="button"
+              onClick={() => setShowCreate(true)}
+              className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium"
+            >
+              Add source
+            </button>
+          ) : undefined
+        }
       />
+      {syncingId && jobStatus && (
+        <p className="mb-4 text-sm text-slate-600">Indexing status: {jobStatus.replaceAll("_", " ")}…</p>
+      )}
       {loading && <LoadingState />}
       {error && <ErrorState message={error} onRetry={load} />}
       {!loading && !error && sources.length === 0 && (
         <EmptyState
           title="No evidence sources connected"
-          description="Connect GitHub or upload company documents to index evidence for questionnaires."
+          description="Add a folder archive, file upload source, or GitHub repository to build your knowledge base."
+          action={
+            editable ? (
+              <button
+                type="button"
+                onClick={() => setShowCreate(true)}
+                className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm"
+              >
+                Add source
+              </button>
+            ) : undefined
+          }
         />
       )}
       <div className="grid gap-4 md:grid-cols-2">
@@ -63,28 +194,96 @@ export default function SourcesPage() {
               <div className="flex items-start justify-between gap-2 mb-2">
                 <h2 className="font-semibold text-slate-900">{source.name}</h2>
                 <span className="text-xs uppercase tracking-wide text-slate-500">
-                  {sourceTypeLabel(source.source_type)}
+                  {source.source_type.replaceAll("_", " ")}
                 </span>
               </div>
               {projectName && <p className="text-xs text-slate-500 mb-2">Project: {projectName}</p>}
-              <p className="text-sm text-slate-700 mb-3">
+              <p className="text-sm mb-3">
                 Status:{" "}
                 <span className="font-medium capitalize">{source.status.replaceAll("_", " ")}</span>
               </p>
-              {source.source_type === "github" &&
-              typeof source.config?.repository_full_name === "string" ? (
-                <p className="text-xs text-slate-600 font-mono mb-2">
-                  {source.config.repository_full_name} · branch{" "}
-                  {typeof source.config.branch === "string" ? source.config.branch : "main"}
-                </p>
-              ) : null}
-              <p className="text-xs text-slate-500">
-                Manage indexing via API or worker sync jobs for this source type.
-              </p>
+              {typeof source.config?.demo_path === "string" && (
+                <p className="text-xs font-mono text-slate-600 mb-2">Path: {source.config.demo_path}</p>
+              )}
+              {source.source_type === "github" && typeof source.config?.repository_full_name === "string" && (
+                <p className="text-xs font-mono text-slate-600 mb-2">{source.config.repository_full_name}</p>
+              )}
+              <div className="flex flex-wrap gap-2 mt-3">
+                {editable && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={syncingId === source.id}
+                      onClick={() => onSync(source.id)}
+                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-50"
+                    >
+                      {syncingId === source.id ? "Syncing…" : "Sync / re-index"}
+                    </button>
+                    {source.source_type === "file_upload" && (
+                      <label className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm cursor-pointer">
+                        Upload files
+                        <input
+                          type="file"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => onUploadFiles(source.id, e.target.files)}
+                        />
+                      </label>
+                    )}
+                  </>
+                )}
+                <Link
+                  to={`/evidence?source=${source.id}`}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50"
+                >
+                  View evidence
+                </Link>
+              </div>
             </article>
           );
         })}
       </div>
+
+      {showCreate && editable && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <form
+            onSubmit={onCreate}
+            className="w-full max-w-lg rounded-xl bg-white p-6 shadow-lg space-y-3 my-8"
+          >
+            <h2 className="text-lg font-semibold">Add source</h2>
+            <input name="name" required placeholder="Source name" className="w-full rounded-lg border px-3 py-2 text-sm" />
+            <select name="project_id" className="w-full rounded-lg border px-3 py-2 text-sm" defaultValue={projectId ?? ""}>
+              <option value="">No project</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <select name="source_type" className="w-full rounded-lg border px-3 py-2 text-sm" defaultValue="folder_archive">
+              <option value="folder_archive">Folder archive (demo path)</option>
+              <option value="file_upload">Document upload</option>
+              <option value="github">GitHub repository</option>
+            </select>
+            <input
+              name="demo_path"
+              placeholder="Folder path on server (folder_archive), e.g. /workspace/tests/fixtures/demo_saas_repo"
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+            />
+            <input name="repository" placeholder="GitHub owner/repo (github only)" className="w-full rounded-lg border px-3 py-2 text-sm" />
+            <input name="branch" placeholder="Branch (default main)" className="w-full rounded-lg border px-3 py-2 text-sm" />
+            <input name="github_token" type="password" placeholder="GitHub token (dev only, optional)" className="w-full rounded-lg border px-3 py-2 text-sm" />
+            <div className="flex gap-2 justify-end pt-2">
+              <button type="button" onClick={() => setShowCreate(false)}>
+                Cancel
+              </button>
+              <button type="submit" className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm">
+                Create & connect
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

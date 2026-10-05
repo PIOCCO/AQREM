@@ -1,7 +1,10 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import AppShell from "./components/layout/AppShell";
 import RequireAuth from "./components/RequireAuth";
+import { ToastProvider } from "./components/ui/Toast";
 import { ProjectProvider } from "./lib/projectContext";
+import ProjectDetailPage from "./pages/ProjectDetailPage";
+import SettingsPage from "./pages/SettingsPage";
 import AuditLogPage from "./pages/AuditLogPage";
 import DashboardPage from "./pages/DashboardPage";
 import EvidenceDetailPage from "./pages/EvidenceDetailPage";
@@ -28,11 +31,13 @@ export default function App() {
         path="/*"
         element={
           <RequireAuth>
-            <ProjectProvider>
-              <Routes>
-                <Route element={<AppShell />}>
-                  <Route path="/" element={<DashboardPage />} />
-                  <Route path="/projects" element={<ProjectsPage />} />
+            <ToastProvider>
+              <ProjectProvider>
+                <Routes>
+                  <Route element={<AppShell />}>
+                    <Route path="/" element={<DashboardPage />} />
+                    <Route path="/projects" element={<ProjectsPage />} />
+                    <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
                   <Route path="/sources" element={<SourcesPage />} />
                   <Route path="/evidence" element={<EvidencePage />} />
                   <Route path="/evidence/:evidenceId" element={<EvidenceDetailPage />} />
@@ -47,10 +52,12 @@ export default function App() {
                   <Route path="/answer-library/:entryId" element={<AnswerLibraryDetailPage />} />
                   <Route path="/stale-answers" element={<StaleAnswersPage />} />
                   <Route path="/stale-answers/:answerId" element={<StaleAnswerDetailPage />} />
-                  <Route path="/audit" element={<AuditLogPage />} />
-                </Route>
-              </Routes>
-            </ProjectProvider>
+                    <Route path="/audit" element={<AuditLogPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                  </Route>
+                </Routes>
+              </ProjectProvider>
+            </ToastProvider>
           </RequireAuth>
         }
       />

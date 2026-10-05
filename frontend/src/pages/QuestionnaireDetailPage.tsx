@@ -2,13 +2,17 @@ import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ConfidenceBadge, EvidenceStrengthBadge, StatusBadge } from "../components/ui/Badges";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "../components/ui/States";
+import { useToast } from "../components/ui/Toast";
 import {
   downloadQuestionnaireExport,
   fetchQuestionnaire,
   fetchQuestionnaireQuestions,
   generateQuestionnaireAnswers,
+  uploadQuestionnaireFile,
 } from "../lib/api";
+import { useAuth } from "../lib/authContext";
 import { useProjectContext } from "../lib/projectContext";
+import { canEditContent } from "../lib/roles";
 
 type QuestionRow = {
   id: string;
@@ -27,6 +31,9 @@ type QuestionRow = {
 export default function QuestionnaireDetailPage() {
   const { questionnaireId } = useParams();
   const { session } = useProjectContext();
+  const { user } = useAuth();
+  const toast = useToast();
+  const editable = user ? canEditContent(user.role) : false;
   const [searchParams, setSearchParams] = useSearchParams();
   const [meta, setMeta] = useState<{ name: string; status: string } | null>(null);
   const [questions, setQuestions] = useState<QuestionRow[]>([]);
@@ -120,14 +127,37 @@ export default function QuestionnaireDetailPage() {
         subtitle={`Progress ${progress}% · ${questions.length} questions · ${approved} approved · ${review} in review`}
         actions={
           <div className="flex flex-wrap gap-2 relative">
-            <button
-              type="button"
-              disabled={generating}
-              onClick={onGenerateAll}
-              className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium disabled:opacity-60"
-            >
-              {generating ? "Generating…" : "Generate answers"}
-            </button>
+            {editable && (
+              <>
+                <button
+                  type="button"
+                  disabled={generating}
+                  onClick={onGenerateAll}
+                  className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium disabled:opacity-60"
+                >
+                  {generating ? "Generating…" : "Generate answers"}
+                </button>
+                <label className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium cursor-pointer">
+                  Upload questions
+                  <input
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!session || !questionnaireId || !file) return;
+                      try {
+                        const r = await uploadQuestionnaireFile(session, questionnaireId, file);
+                        toast.push(`Uploaded ${r.questions_extracted} questions.`);
+                        await load();
+                      } catch (err) {
+                        toast.push(err instanceof Error ? err.message : "Upload failed", "err");
+                      }
+                    }}
+                  />
+                </label>
+              </>
+            )}
             <Link
               to="/review-queue"
               className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium"

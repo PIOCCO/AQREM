@@ -50,11 +50,27 @@ export async function fetchAuthMe(session: AuthSession) {
   return res.json();
 }
 
+function authOnlyHeaders(session: AuthSession): HeadersInit {
+  return {
+    Authorization: `Bearer ${session.token}`,
+    "X-Organization-Id": session.organizationId,
+  };
+}
+
 async function authedFetch(session: AuthSession, url: string, init?: RequestInit): Promise<Response> {
   const res = await fetch(url, {
     ...init,
     headers: { ...authHeaders(session), ...(init?.headers as Record<string, string> | undefined) },
   });
+  if (res.status === 401) {
+    handleUnauthorized();
+    throw new Error("Session expired");
+  }
+  return res;
+}
+
+async function authedFormFetch(session: AuthSession, url: string, form: FormData, method = "POST") {
+  const res = await fetch(url, { method, headers: authOnlyHeaders(session), body: form });
   if (res.status === 401) {
     handleUnauthorized();
     throw new Error("Session expired");
@@ -307,5 +323,108 @@ export async function regenerateStaleAnswer(session: AuthSession, answerId: stri
 export async function validateLibraryEntry(session: AuthSession, entryId: string) {
   const res = await authedFetch(session, `${API_BASE}/api/v1/answer-library/${entryId}/validation`);
   if (!res.ok) throw new Error("Failed to validate library entry");
+  return res.json();
+}
+
+export async function createSource(
+  session: AuthSession,
+  payload: {
+    name: string;
+    source_type: string;
+    project_id?: string;
+    scope?: string;
+    config?: Record<string, unknown>;
+  },
+) {
+  const res = await authedFetch(session, `${API_BASE}/api/v1/sources`, {
+    method: "POST",
+    body: JSON.stringify({
+      scope: "project",
+      ...payload,
+    }),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to create source"));
+  return res.json();
+}
+
+export async function triggerSourceSync(session: AuthSession, sourceId: string) {
+  const res = await authedFetch(session, `${API_BASE}/api/v1/sources/${sourceId}/sync`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to start sync"));
+  return res.json();
+}
+
+export async function uploadSourceFiles(session: AuthSession, sourceId: string, files: File[]) {
+  const form = new FormData();
+  for (const file of files) form.append("files", file);
+  const res = await authedFormFetch(session, `${API_BASE}/api/v1/sources/${sourceId}/files`, form);
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to upload files"));
+  return res.json();
+}
+
+export async function fetchSyncJob(session: AuthSession, jobId: string) {
+  const res = await authedFetch(session, `${API_BASE}/api/v1/sources/jobs/${jobId}`);
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to load sync job"));
+  return res.json();
+}
+
+export async function connectGithubRepo(
+  session: AuthSession,
+  payload: {
+    source_id: string;
+    repository_full_name: string;
+    branch?: string;
+    access_token?: string;
+  },
+) {
+  const res = await authedFetch(session, `${API_BASE}/api/v1/sources/github/connect-repo`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to connect repository"));
+  return res.json();
+}
+
+export async function createQuestionnaire(
+  session: AuthSession,
+  payload: {
+    name: string;
+    project_id?: string;
+    recipient?: string;
+    description?: string;
+  },
+) {
+  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to create questionnaire"));
+  return res.json();
+}
+
+export async function uploadQuestionnaireFile(
+  session: AuthSession,
+  questionnaireId: string,
+  file: File,
+) {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await authedFormFetch(
+    session,
+    `${API_BASE}/api/v1/questionnaires/${questionnaireId}/upload`,
+    form,
+  );
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to upload questionnaire"));
+  return res.json();
+}
+
+export async function regenerateQuestionAnswer(session: AuthSession, questionId: string) {
+  const res = await authedFetch(
+    session,
+    `${API_BASE}/api/v1/questionnaires/questions/${questionId}/regenerate`,
+    { method: "POST" },
+  );
+  if (!res.ok) throw new Error(await readApiError(res, "Unable to generate answer. Please try again."));
   return res.json();
 }
