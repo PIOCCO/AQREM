@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { Logo } from "../components/ui/Logo";
 import { clearSession } from "../lib/api";
 import { loginUser, registerUser, saveSession } from "../lib/api";
 
@@ -49,21 +50,23 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface-muted p-6">
-      <div className="w-full max-w-md aq-card shadow-card aq-card-p">
-        <h1 className="aq-page-title mb-1">AQREM</h1>
-        <p className="text-slate-600 mb-6">Evidence-backed questionnaire responses</p>
-        <div className="flex gap-2 mb-6 p-1 rounded-md bg-surface-subtle">
+    <div className="min-h-screen flex items-center justify-center bg-surface-canvas p-6 font-sans">
+      <div className="w-full max-w-md aq-card shadow-panel aq-card-p">
+        <div className="mb-6">
+          <Logo />
+          <p className="text-slate-600 mt-3 text-sm">Evidence-backed questionnaire responses</p>
+        </div>
+        <div className="flex gap-2 mb-6 p-1 rounded-control bg-surface-subtle">
           <button
             type="button"
-            className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${mode === "login" ? "bg-primary text-primary-foreground" : "text-slate-700 hover:bg-surface"}`}
+            className={`flex-1 rounded-control py-2 text-sm font-medium transition-colors ${mode === "login" ? "bg-primary text-primary-foreground" : "text-slate-700 hover:bg-surface"}`}
             onClick={() => setMode("login")}
           >
             Sign in
           </button>
           <button
             type="button"
-            className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${mode === "register" ? "bg-primary text-primary-foreground" : "text-slate-700 hover:bg-surface"}`}
+            className={`flex-1 rounded-control py-2 text-sm font-medium transition-colors ${mode === "register" ? "bg-primary text-primary-foreground" : "text-slate-700 hover:bg-surface"}`}
             onClick={() => setMode("register")}
           >
             Register

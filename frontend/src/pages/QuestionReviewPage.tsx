@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useToast } from "../components/ui/Toast";
+import { IconCopy } from "../components/icons/Icons";
 import { ConfidenceBadge, EvidenceStrengthBadge, StatusBadge } from "../components/ui/Badges";
 import { ErrorState, LoadingState } from "../components/ui/States";
 import {
@@ -62,7 +63,7 @@ export default function QuestionReviewPage() {
 
   useEffect(() => {
     reload().catch(() => setError("Unable to load question."));
-  }, [questionId, session]);
+  }, [questionId, session?.organizationId, session?.token]);
 
   async function act(fn: () => Promise<unknown>, successMsg?: string) {
     setBusy(true);
@@ -149,7 +150,7 @@ export default function QuestionReviewPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
-          <section className="aq-workspace-section">
+          <section className="aq-workspace-section shadow-panel">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <h2 className="aq-section-title">AI answer</h2>
               {answer && <ConfidenceBadge confidence={answer.confidence} />}
@@ -183,7 +184,7 @@ export default function QuestionReviewPage() {
           </section>
 
           {canReview && answer && (
-            <section className="aq-workspace-section">
+            <section id="aq-edit-answer" className="aq-workspace-section shadow-panel">
               <h2 className="aq-section-title mb-3">Edit answer</h2>
               <textarea className="aq-textarea" value={editText} onChange={(e) => setEditText(e.target.value)} />
               <button
@@ -203,14 +204,26 @@ export default function QuestionReviewPage() {
               </button>
             )}
             {canReview && answer && (
-              <>
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
+                <span className="inline-flex items-center gap-1 rounded-full bg-success-bg text-success-text border border-success-border px-2.5 py-0.5 text-xs font-medium">
+                  ✓ Evidence-backed
+                </span>
                 <button
                   disabled={busy || insufficient}
                   onClick={() => act(() => approveAnswer(session, answer.id), "Answer approved.")}
-                  className="aq-btn-primary disabled:opacity-50"
+                  className="aq-btn-primary disabled:opacity-50 ml-auto"
                 >
                   Approve
                 </button>
+                {canEdit && (
+                  <button
+                    type="button"
+                    className="aq-btn-secondary"
+                    onClick={() => document.getElementById("aq-edit-answer")?.scrollIntoView({ behavior: "smooth" })}
+                  >
+                    Edit
+                  </button>
+                )}
                 <button
                   disabled={busy}
                   onClick={() => act(() => rejectAnswer(session, answer.id), "Answer rejected.")}
@@ -218,7 +231,7 @@ export default function QuestionReviewPage() {
                 >
                   Reject
                 </button>
-              </>
+              </div>
             )}
             {!canReview && !canEdit && (
               <p className="text-sm text-slate-500">You have read-only access to this workspace.</p>
@@ -227,15 +240,27 @@ export default function QuestionReviewPage() {
         </div>
 
         <div className="space-y-4">
-          <section className="aq-workspace-section lg:min-h-[20rem]">
+          <section className="aq-workspace-section shadow-panel lg:min-h-[20rem]">
             <h2 className="aq-panel-label">Evidence</h2>
             <div className="space-y-3">
               {(answer?.evidence ?? []).map((item, idx) => (
                 <div key={item.id} className="aq-evidence-citation">
-                  <span className="text-xs font-medium text-slate-500 mr-2">[{idx + 1}]</span>
-                  <Link to={`/evidence/${item.id}`} className="aq-link font-medium break-all">
-                    {item.file_path}
-                  </Link>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="text-xs font-medium text-slate-500 mr-2">[{idx + 1}]</span>
+                      <Link to={`/evidence/${item.id}`} className="aq-link font-medium break-all font-mono text-xs">
+                        {item.file_path}
+                      </Link>
+                    </div>
+                    <button
+                      type="button"
+                      className="shrink-0 p-1.5 rounded-control text-slate-500 hover:bg-surface hover:text-slate-800"
+                      aria-label="Copy file path"
+                      onClick={() => navigator.clipboard.writeText(item.file_path)}
+                    >
+                      <IconCopy />
+                    </button>
+                  </div>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {item.line_start != null && (
                       <span className="text-xs text-slate-500 font-mono">

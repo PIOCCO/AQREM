@@ -5,6 +5,7 @@ import type { UserRole } from "./roles";
 type AuthUser = {
   id: string;
   email: string;
+  fullName: string;
   organizationId: string;
   role: UserRole;
 };
@@ -41,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser({
         id: me.id,
         email: me.email,
+        fullName: me.full_name,
         organizationId: me.organization_id,
         role: me.role as UserRole,
       });

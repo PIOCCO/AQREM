@@ -36,7 +36,7 @@ export default function AuditLogPage() {
 
   return (
     <div>
-      <PageHeader title="Activity" subtitle="Recent organization events (secrets are never logged)." />
+      <PageHeader title="Audit Log" subtitle="Recent organization events (secrets are never logged)." />
       {loading && <LoadingState label="Loading activity…" />}
       {error && <ErrorState message={error} onRetry={load} />}
       {!loading && !error && items.length === 0 && (

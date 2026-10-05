@@ -14,7 +14,7 @@
   }
 
   body {
-    @apply bg-surface-muted text-slate-900 antialiased text-sm leading-relaxed;
+    @apply bg-surface-canvas text-slate-900 antialiased text-sm leading-relaxed font-sans;
   }
 
   :focus-visible {
@@ -44,7 +44,7 @@
   }
 
   .aq-card {
-    @apply rounded-lg border border-border bg-surface shadow-sm;
+    @apply rounded-card border border-border bg-surface shadow-card;
   }
 
   .aq-card-p {
@@ -60,7 +60,7 @@
   }
 
   .aq-btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 h-10 rounded-control px-4 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50;
   }
 
   .aq-btn-primary {
@@ -92,7 +92,7 @@
   }
 
   .aq-input {
-    @apply w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-info focus:ring-2 focus:ring-info/20;
+    @apply w-full h-10 rounded-control border border-border-strong bg-surface px-3 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15;
   }
 
   .aq-select {
@@ -127,12 +127,32 @@
     @apply border-t border-border transition-colors hover:bg-surface-muted/80;
   }
 
-  .aq-nav-link {
-    @apply flex items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-surface-subtle;
+  .ref-nav-link {
+    @apply flex items-center gap-3 rounded-control py-2.5 pr-3 pl-[9px] text-sm text-slate-600 border-l-[3px] border-transparent transition-colors hover:bg-surface-subtle hover:text-slate-900;
   }
 
-  .aq-nav-link-active {
-    @apply bg-primary text-primary-foreground hover:bg-primary-hover;
+  .ref-nav-link-active {
+    @apply bg-surface-subtle text-slate-900 font-medium border-brand-violet hover:bg-surface-subtle;
+  }
+
+  .ref-header-search {
+    @apply h-10 w-full rounded-control border border-border bg-surface-subtle/80 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15 outline-none;
+  }
+
+  .ref-workspace-switcher {
+    @apply flex items-center gap-3 rounded-card border border-border bg-surface-subtle/50 p-3;
+  }
+
+  .ref-metric-card {
+    @apply rounded-card border border-border bg-surface px-5 py-4 shadow-card min-w-0;
+  }
+
+  .ref-metric-value {
+    @apply text-[2rem] leading-none font-semibold tabular-nums text-slate-900 tracking-tight;
+  }
+
+  .ref-metric-label {
+    @apply mt-2 text-sm text-slate-500;
   }
 
   .aq-metric {
@@ -140,7 +160,7 @@
   }
 
   .aq-metric-value {
-    @apply text-2xl font-semibold tabular-nums text-slate-900;
+    @apply text-[2rem] leading-none font-semibold tabular-nums text-slate-900;
   }
 
   .aq-metric-label {
@@ -188,7 +208,7 @@
   }
 
   .aq-link {
-    @apply text-info-text font-medium hover:underline underline-offset-2;
+    @apply text-brand-blue font-medium hover:underline underline-offset-2;
   }
 
   .aq-field-label {

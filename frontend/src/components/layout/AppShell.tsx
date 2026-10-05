@@ -1,47 +1,43 @@
-import { useState } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useMemo, useState, type FormEvent } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import {
+  IconActivity,
+  IconBell,
+  IconCheckCircle,
+  IconChevronDown,
+  IconClipboard,
+  IconDashboard,
+  IconDatabase,
+  IconFileText,
+  IconFolder,
+  IconLibrary,
+  IconSearch,
+  IconSettings,
+} from "../icons/Icons";
+import { Logo, LogoMark } from "../ui/Logo";
 import { clearSession } from "../../lib/api";
 import { useAuth } from "../../lib/authContext";
 import { useProjectContext } from "../../lib/projectContext";
+import { pageTitleForPath } from "../../lib/routeMeta";
 
-const navMain = [
-  { to: "/", label: "Dashboard", end: true },
-  { to: "/projects", label: "Projects" },
+const navItems = [
+  { to: "/", label: "Dashboard", end: true, Icon: IconDashboard },
+  { to: "/projects", label: "Projects", Icon: IconFolder },
+  { to: "/sources", label: "Sources", Icon: IconDatabase },
+  { to: "/evidence", label: "Evidence", Icon: IconFileText },
+  { to: "/questionnaires", label: "Questionnaires", Icon: IconClipboard },
+  { to: "/answer-library", label: "Answer Library", Icon: IconLibrary },
+  { to: "/review-queue", label: "Review Queue", Icon: IconCheckCircle },
+  { to: "/audit", label: "Audit Log", Icon: IconActivity },
+  { to: "/settings", label: "Settings", Icon: IconSettings },
 ];
 
-const navEvidence = [
-  { to: "/sources", label: "Sources" },
-  { to: "/evidence", label: "Evidence" },
-];
-
-const navWorkflow = [
-  { to: "/questionnaires", label: "Questionnaires" },
-  { to: "/review-queue", label: "Review Queue" },
-  { to: "/answer-library", label: "Answer Library" },
-];
-
-const navSystem = [
-  { to: "/audit", label: "Activity" },
-  { to: "/settings", label: "Settings" },
-];
-
-function NavGroup({ title, items }: { title: string; items: { to: string; label: string; end?: boolean }[] }) {
+function UserAvatar({ name, email }: { name?: string; email?: string }) {
+  const initial = (name?.trim()?.[0] || email?.[0] || "?").toUpperCase();
   return (
-    <div className="mb-4">
-      <p className="px-3 mb-1 text-label uppercase tracking-wide text-slate-400">{title}</p>
-      <div className="space-y-0.5">
-        {items.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            className={({ isActive }) => `aq-nav-link ${isActive ? "aq-nav-link-active" : ""}`}
-          >
-            {item.label}
-          </NavLink>
-        ))}
-      </div>
-    </div>
+    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-violet/20 to-brand-blue/30 text-sm font-semibold text-slate-700 border border-border">
+      {initial}
+    </span>
   );
 }
 
@@ -49,82 +45,141 @@ export default function AppShell() {
   const { user } = useAuth();
   const { projects, projectId, setProjectId, projectName } = useProjectContext();
   const [navOpen, setNavOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [headerSearch, setHeaderSearch] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
+  const breadcrumb = pageTitleForPath(location.pathname);
+
+  const workspaceLabel = useMemo(() => {
+    if (projectName) return `${projectName} Workspace`;
+    return "Organization Workspace";
+  }, [projectName]);
 
   function logout() {
     clearSession();
     navigate("/login", { replace: true });
   }
 
+  function onHeaderSearchSubmit(e: FormEvent) {
+    e.preventDefault();
+    const q = headerSearch.trim();
+    if (q) navigate(`/evidence?search=${encodeURIComponent(q)}`);
+    else navigate("/evidence");
+  }
+
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row bg-surface-muted">
-      <header className="lg:hidden sticky top-0 z-40 border-b border-border bg-surface px-4 h-14 flex items-center justify-between">
+    <div className="min-h-screen flex bg-surface-canvas font-sans">
+      <header className="lg:hidden sticky top-0 z-40 border-b border-border bg-surface px-4 h-header flex items-center justify-between">
         <button type="button" className="aq-btn-ghost px-2 py-1" onClick={() => setNavOpen((v) => !v)}>
           Menu
         </button>
-        <span className="font-semibold text-slate-900">AQREM</span>
-        <button type="button" className="aq-btn-ghost px-2 py-1 text-xs" onClick={logout}>
-          Sign out
-        </button>
+        <Logo compact />
+        <UserAvatar name={user?.fullName} email={user?.email} />
       </header>
 
       <aside
-        className={`${navOpen ? "block" : "hidden"} lg:block w-full lg:w-60 xl:w-64 shrink-0 border-b lg:border-b-0 lg:border-r border-border bg-surface lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto`}
+        className={`${navOpen ? "block" : "hidden"} lg:flex lg:flex-col w-full lg:w-sidebar shrink-0 border-b lg:border-b-0 lg:border-r border-border bg-surface lg:sticky lg:top-0 lg:h-screen`}
       >
-        <div className="p-4 lg:p-5 border-b border-border hidden lg:flex items-center justify-between gap-2">
-          <span className="text-base font-semibold tracking-tight text-slate-900">AQREM</span>
-          {user && (
-            <span className="text-[11px] text-slate-500 truncate max-w-[9rem]" title={user.email}>
-              {user.email}
-            </span>
-          )}
+        <div className="p-5 border-b border-border hidden lg:block">
+          <Logo />
         </div>
 
-        <div className="p-4 lg:px-5 lg:pb-5 border-b border-border lg:border-b-0">
-          <label className="text-label uppercase tracking-wide text-slate-500">Project</label>
-          <select
-            className="aq-select mt-1.5"
-            value={projectId ?? ""}
-            onChange={(e) => setProjectId(e.target.value || null)}
-          >
-            <option value="">All projects</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-          {projectName && <p className="text-xs text-slate-500 mt-1.5">Scope: {projectName}</p>}
-        </div>
-
-        <nav className="p-3 lg:px-4 lg:py-4">
-          <NavGroup title="Overview" items={navMain} />
-          <NavGroup title="Evidence" items={navEvidence} />
-          <NavGroup title="Workflow" items={navWorkflow} />
-          <Link to="/stale-answers" className="aq-nav-link text-warning-text mb-4">
-            Stale answers
-          </Link>
-          <NavGroup title="System" items={navSystem} />
+        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+          {navItems.map(({ to, label, end, Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              onClick={() => setNavOpen(false)}
+              className={({ isActive }) =>
+                `ref-nav-link ${isActive ? "ref-nav-link-active" : ""}`
+              }
+            >
+              <Icon className="h-5 w-5 opacity-80" />
+              {label}
+            </NavLink>
+          ))}
         </nav>
 
-        <div className="hidden lg:block p-4 lg:px-5 border-t border-border mt-auto">
-          <button type="button" onClick={logout} className="aq-btn-ghost w-full justify-start px-2">
-            Sign out
-          </button>
+        <div className="p-4 border-t border-border hidden lg:block">
+          <div className="ref-workspace-switcher">
+            <LogoMark className="h-9 w-9 text-xs" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-slate-900 truncate">{workspaceLabel}</p>
+              <label className="sr-only" htmlFor="workspace-project">
+                Project scope
+              </label>
+              <select
+                id="workspace-project"
+                className="mt-0.5 w-full bg-transparent text-xs text-slate-500 border-0 p-0 focus:ring-0 cursor-pointer truncate"
+                value={projectId ?? ""}
+                onChange={(e) => setProjectId(e.target.value || null)}
+              >
+                <option value="">All projects</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <UserAvatar name={user?.fullName} email={user?.email} />
+          </div>
         </div>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="hidden lg:flex h-14 shrink-0 items-center border-b border-border bg-surface px-6">
-          <p className="text-sm text-slate-600">
-            Evidence-backed questionnaire responses
-            {projectName ? <span className="text-slate-900 font-medium"> · {projectName}</span> : null}
-          </p>
-        </header>
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0">
-          <div className="aq-page">
-            <Outlet />
+        <header className="hidden lg:flex h-header shrink-0 items-center justify-between gap-4 border-b border-border bg-surface px-8">
+          <p className="text-sm font-medium text-slate-900">{breadcrumb}</p>
+          <div className="flex items-center gap-3">
+            <form onSubmit={onHeaderSearchSubmit} className="relative w-64 xl:w-72">
+              <IconSearch className="absolute left-3 top-1/2 -h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                className="ref-header-search"
+                placeholder="Search"
+                value={headerSearch}
+                onChange={(e) => setHeaderSearch(e.target.value)}
+              />
+            </form>
+            <Link
+              to="/audit"
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-control border border-border text-slate-600 hover:bg-surface-subtle transition-colors"
+              aria-label="Activity and notifications"
+            >
+              <IconBell className="h-5 w-5" />
+              <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-error" aria-hidden />
+            </Link>
+            <div className="relative">
+              <button
+                type="button"
+                className="flex items-center gap-2 rounded-control pl-1 pr-2 py-1 hover:bg-surface-subtle transition-colors"
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-expanded={menuOpen}
+              >
+                <UserAvatar name={user?.fullName} email={user?.email} />
+                <IconChevronDown className="text-slate-500" />
+              </button>
+              {menuOpen && (
+                <>
+                  <button type="button" className="fixed inset-0 z-40 cursor-default" aria-label="Close menu" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-50 w-52 aq-card shadow-panel py-1 text-sm">
+                    <p className="px-3 py-2 text-slate-500 truncate border-b border-border">{user?.email}</p>
+                    <Link to="/settings" className="aq-dropdown-item" onClick={() => setMenuOpen(false)}>
+                      Settings
+                    </Link>
+                    <button type="button" className="aq-dropdown-item w-full text-error-text" onClick={logout}>
+                      Sign out
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
+        </header>
+
+        <main className="flex-1 p-6 lg:p-8 min-w-0 overflow-x-hidden">
+          <Outlet />
         </main>
       </div>
     </div>

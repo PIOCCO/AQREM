@@ -1,7 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ErrorState, LoadingState, PageHeader } from "../components/ui/States";
-import { fetchDashboardOverview } from "../lib/api";
+import { IconFilter, IconGithub, IconSearch, IconShield } from "../components/icons/Icons";
+import { QuestionnaireStatusBadge } from "../components/ui/Badges";
+import { ErrorState, LoadingState } from "../components/ui/States";
+import {
+  fetchAnswerLibrary,
+  fetchAuditLog,
+  fetchDashboardOverview,
+  fetchReviewQueue,
+} from "../lib/api";
+import { useAuth } from "../lib/authContext";
 import { useProjectContext } from "../lib/projectContext";
 
 type Overview = {
@@ -10,31 +18,82 @@ type Overview = {
   recent_questionnaires: Array<{
     id: string;
     name: string;
+    status: string;
+    project_name?: string | null;
     progress_percent: number;
     question_count: number;
     approved_count: number;
   }>;
 };
 
-const metricCards = [
-  ["questions", "Questions", null],
-  ["approved_answers", "Approved", null],
-  ["pending_review", "Review", "/review-queue"],
-  ["potentially_stale", "Stale", "/stale-answers"],
-] as const;
+type ReviewItem = {
+  question_id: string;
+  questionnaire_id?: string;
+  question_text: string;
+  confidence: string;
+};
+
+type AuditItem = { action: string; resource_type: string; created_at: string };
+type LibraryEntry = { id: string; question_text: string; status: string; evidence?: unknown[] };
+
+function greetingName(fullName?: string, email?: string) {
+  const first = fullName?.trim().split(/\s+/)[0];
+  if (first) return first;
+  return email?.split("@")[0] ?? "there";
+}
+
+function timeGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function progressBarClass(status: string) {
+  const s = status.toLowerCase();
+  if (s === "completed") return "bg-success";
+  if (s === "in_review") return "bg-info";
+  if (s === "draft") return "bg-amber-400";
+  return "bg-slate-300";
+}
+
+function activityIcon(action: string, resource: string) {
+  const a = `${action} ${resource}`.toLowerCase();
+  if (a.includes("github") || a.includes("sync") || a.includes("source")) return <IconGithub className="h-5 w-5 text-slate-800" />;
+  if (a.includes("export") || a.includes("document")) return <IconShield className="h-5 w-5 text-emerald-600" />;
+  return <IconShield className="h-5 w-5 text-brand-violet" />;
+}
+
+function formatActivityTitle(action: string) {
+  return action.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export default function DashboardPage() {
-  const { session, projectId, projectName } = useProjectContext();
+  const { session, user } = useAuth();
+  const { projectId } = useProjectContext();
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [reviewItem, setReviewItem] = useState<ReviewItem | null>(null);
+  const [activity, setActivity] = useState<AuditItem[]>([]);
+  const [libraryPreview, setLibraryPreview] = useState<LibraryEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tableSearch, setTableSearch] = useState("");
 
   async function load() {
     if (!session) return;
     setLoading(true);
     setError(null);
     try {
-      setOverview(await fetchDashboardOverview(session, projectId));
+      const [ov, queue, audit, library] = await Promise.all([
+        fetchDashboardOverview(session, projectId),
+        fetchReviewQueue(session, { project_id: projectId ?? undefined, limit: 1 }),
+        fetchAuditLog(session),
+        fetchAnswerLibrary(session),
+      ]);
+      setOverview(ov);
+      setReviewItem(queue.items[0] ?? null);
+      setActivity(audit.items.slice(0, 5));
+      setLibraryPreview(library.slice(0, 4));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to load dashboard");
     } finally {
@@ -44,130 +103,251 @@ export default function DashboardPage() {
 
   useEffect(() => {
     load();
-  }, [session?.organizationId, projectId]);
+  }, [session?.organizationId, session?.token, projectId]);
 
-  const title = projectName ? projectName : "All projects";
-  const pendingReview = overview?.metrics.pending_review ?? 0;
+  const filteredQuestionnaires = useMemo(() => {
+    const rows = overview?.recent_questionnaires ?? [];
+    const q = tableSearch.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) =>
+        r.name.toLowerCase().includes(q) ||
+        (r.project_name ?? "").toLowerCase().includes(q),
+    );
+  }, [overview, tableSearch]);
+
+  const metrics = [
+    ["questions", "Questions"],
+    ["approved_answers", "Approved Answers"],
+    ["pending_review", "Pending Review"],
+    ["insufficient_evidence", "Insufficient Evidence"],
+    ["potentially_stale", "Potentially Stale"],
+  ] as const;
+
+  if (loading) return <LoadingState label="Loading dashboard…" />;
+  if (error) return <ErrorState message={error} onRetry={load} />;
+  if (!overview) return null;
+
+  const reviewHref =
+    reviewItem?.questionnaire_id && reviewItem.question_id
+      ? `/questionnaires/${reviewItem.questionnaire_id}/questions/${reviewItem.question_id}/review`
+      : "/review-queue";
 
   return (
-    <div>
-      <PageHeader title="Dashboard" subtitle={`Operational overview · ${title}`} />
-      {loading && <LoadingState label="Loading dashboard…" />}
-      {error && <ErrorState message={error} onRetry={load} />}
-      {overview && (
-        <>
-          <div className="flex flex-wrap gap-2 mb-6">
-            <Link to="/projects" className="aq-btn-secondary">
-              Create project
+    <div className="max-w-[1400px] mx-auto space-y-8">
+      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+        <div>
+          <h1 className="text-page-title text-slate-900">
+            {timeGreeting()}, {greetingName(user?.fullName, user?.email)}
+          </h1>
+          <p className="mt-1 text-sm text-slate-600 max-w-xl">
+            Manage company evidence and turn it into verified responses.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="relative w-44">
+            <IconSearch className="absolute left-3 top-1/2 -h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              className="ref-header-search"
+              placeholder="Search"
+              value={tableSearch}
+              onChange={(e) => setTableSearch(e.target.value)}
+            />
+          </div>
+          <Link to="/questionnaires" className="aq-btn-secondary h-10">
+            <IconFilter className="h-4 w-4" />
+            Filter
+          </Link>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+        {metrics.map(([key, label]) => {
+          const value = overview.metrics[key] ?? 0;
+          const href =
+            key === "pending_review"
+              ? "/review-queue"
+              : key === "potentially_stale"
+                ? "/stale-answers"
+                : null;
+          const inner = (
+            <>
+              <div className="ref-metric-value">{value}</div>
+              <div className="ref-metric-label">{label}</div>
+            </>
+          );
+          return href ? (
+            <Link key={key} to={href} className="ref-metric-card block hover:border-border-strong transition-colors">
+              {inner}
             </Link>
-            <Link to="/sources" className="aq-btn-secondary">
-              Add source
+          ) : (
+            <div key={key} className="ref-metric-card">
+              {inner}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid xl:grid-cols-3 gap-6">
+        <section className="xl:col-span-2 aq-card shadow-card overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+            <h2 className="text-section-title text-slate-900">Active Questionnaires</h2>
+            <Link to="/questionnaires" className="text-sm text-brand-blue font-medium hover:underline">
+              View all
             </Link>
-            <Link to="/questionnaires" className="aq-btn-secondary">
-              Upload questionnaire
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead className="bg-surface-muted text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-5 py-3">Questionnaire Name</th>
+                  <th className="px-5 py-3">Project</th>
+                  <th className="px-5 py-3">Progress</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3 w-32"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredQuestionnaires.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
+                      No questionnaires yet.{" "}
+                      <Link to="/questionnaires" className="text-brand-blue font-medium hover:underline">
+                        Create one
+                      </Link>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredQuestionnaires.map((qn) => (
+                    <tr key={qn.id} className="border-t border-border hover:bg-surface-muted/60">
+                      <td className="px-5 py-4 font-medium text-slate-900">
+                        <Link to={`/questionnaires/${qn.id}`} className="hover:text-brand-blue">
+                          {qn.name}
+                        </Link>
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">{qn.project_name ?? "—"}</td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-700 tabular-nums w-10">{qn.progress_percent}%</span>
+                          <div className="flex-1 max-w-[120px] h-2 rounded-full bg-surface-subtle overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${progressBarClass(qn.status)}`}
+                              style={{ width: `${qn.progress_percent}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <QuestionnaireStatusBadge status={qn.status} />
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="h-2 rounded-full bg-surface-subtle overflow-hidden">
+                          <div
+                            className={`h-full rounded-full opacity-80 ${progressBarClass(qn.status)}`}
+                            style={{ width: `${Math.max(qn.progress_percent, 8)}%` }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="aq-card shadow-card">
+          <div className="px-5 py-4 border-b border-border">
+            <h2 className="text-section-title text-slate-900">Evidence Activity</h2>
+          </div>
+          <ul className="divide-y divide-border">
+            {activity.length === 0 ? (
+              <li className="px-5 py-6 text-sm text-slate-500">No recent activity.</li>
+            ) : (
+              activity.map((item, idx) => (
+                <li key={idx} className="px-5 py-4 flex gap-3">
+                  <span className="mt-0.5">{activityIcon(item.action, item.resource_type)}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-900">{formatActivityTitle(item.action)}</p>
+                    <p className="text-xs text-slate-500 mt-0.5 capitalize">
+                      {item.resource_type.replaceAll("_", " ")} · {new Date(item.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                </li>
+              ))
+            )}
+          </ul>
+          <div className="px-5 py-3 border-t border-border">
+            <Link to="/audit" className="text-sm font-medium text-brand-blue hover:underline">
+              View activity log
             </Link>
-            <Link to="/review-queue" className="aq-btn-secondary">
-              Review answers
-            </Link>
-            {(overview.metrics.potentially_stale ?? 0) > 0 && (
-              <Link to="/stale-answers" className="aq-btn-secondary border-warning-border bg-warning-bg text-warning-text">
-                Review stale ({overview.metrics.potentially_stale})
+          </div>
+        </section>
+      </div>
+
+      <div className="grid xl:grid-cols-2 gap-6">
+        <section className="aq-card shadow-panel p-6">
+          <h2 className="text-section-title text-slate-900 mb-4">Question Review workspace</h2>
+          {reviewItem ? (
+            <>
+              <p className="text-label uppercase tracking-wide text-slate-500 mb-1">Question</p>
+              <p className="text-sm font-medium text-slate-900 mb-4">{reviewItem.question_text}</p>
+              <p className="text-label uppercase tracking-wide text-slate-500 mb-1">Confidence</p>
+              <p className="text-sm font-medium text-success-text capitalize mb-4">{reviewItem.confidence || "—"}</p>
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
+                <span className="inline-flex items-center gap-1 rounded-full bg-success-bg text-success-text border border-success-border px-2.5 py-0.5 text-xs font-medium">
+                  ✓ Evidence-backed
+                </span>
+                <Link to={reviewHref} className="aq-btn-primary ml-auto">
+                  Open review
+                </Link>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-slate-600">
+              No answers waiting for review.{" "}
+              <Link to="/review-queue" className="text-brand-blue font-medium hover:underline">
+                Open review queue
               </Link>
+            </p>
+          )}
+        </section>
+
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-section-title text-slate-900">Answer Library preview</h2>
+            <Link to="/answer-library" className="text-sm text-brand-blue font-medium hover:underline">
+              View library
+            </Link>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            {libraryPreview.length === 0 ? (
+              <p className="text-sm text-slate-500 sm:col-span-2 aq-card p-5">No library entries yet.</p>
+            ) : (
+              libraryPreview.map((entry) => (
+                <Link
+                  key={entry.id}
+                  to={`/answer-library/${entry.id}`}
+                  className="aq-card p-4 hover:border-border-strong transition-colors shadow-card"
+                >
+                  <div className="flex gap-3">
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-control bg-success-bg text-success">
+                      <IconShield className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-medium text-slate-900 truncate">{entry.question_text.slice(0, 40)}</p>
+                      <p className="text-xs text-slate-500 mt-1 capitalize">
+                        {entry.status.replaceAll("_", " ")}
+                        {Array.isArray(entry.evidence) ? ` · ${entry.evidence.length} sources` : ""}
+                      </p>
+                    </div>
+                  </div>
+                </Link>
+              ))
             )}
           </div>
-
-          {pendingReview > 0 && (
-            <div className="aq-alert-info mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <p>
-                <span className="font-medium">{pendingReview}</span> answer{pendingReview === 1 ? "" : "s"} need
-                review
-              </p>
-              <Link to="/review-queue" className="aq-btn-primary shrink-0">
-                Review now
-              </Link>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            {metricCards.map(([key, label, href]) => {
-              const body = (
-                <>
-                  <div className="aq-metric-value">{overview.metrics[key] ?? 0}</div>
-                  <div className="aq-metric-label">{label}</div>
-                </>
-              );
-              if (href) {
-                return (
-                  <Link key={key} to={href} className="aq-metric block">
-                    {body}
-                  </Link>
-                );
-              }
-              return (
-                <div key={key} className="aq-metric">
-                  {body}
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="grid lg:grid-cols-2 gap-6">
-            <section className="aq-card aq-card-p">
-              <h2 className="aq-section-title mb-4">Recent questionnaires</h2>
-              {overview.recent_questionnaires.length === 0 ? (
-                <p className="text-sm text-slate-600">
-                  No questionnaires yet.{" "}
-                  <Link to="/questionnaires" className="aq-link">
-                    Create one
-                  </Link>
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {overview.recent_questionnaires.map((qn) => (
-                    <li key={qn.id}>
-                      <Link
-                        to={`/questionnaires/${qn.id}`}
-                        className="flex items-center justify-between gap-3 rounded-md px-2 py-2 -mx-2 hover:bg-surface-subtle transition-colors"
-                      >
-                        <span className="font-medium text-slate-900 truncate">{qn.name}</span>
-                        <span className="text-sm text-slate-600 shrink-0">{qn.progress_percent}% complete</span>
-                      </Link>
-                      <div className="aq-progress-track mt-1">
-                        <div className="aq-progress-fill" style={{ width: `${qn.progress_percent}%` }} />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <section className="aq-card aq-card-p">
-              <h2 className="aq-section-title mb-4">Evidence & sources</h2>
-              <dl className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <dt className="text-slate-500">Sources</dt>
-                  <dd className="text-xl font-semibold tabular-nums">{overview.metrics.sources ?? 0}</dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">Evidence items</dt>
-                  <dd className="text-xl font-semibold tabular-nums">{overview.metrics.evidence_items ?? 0}</dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">Indexing</dt>
-                  <dd className="text-xl font-semibold tabular-nums">{overview.metrics.sources_indexing ?? 0}</dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">Insufficient evidence</dt>
-                  <dd className="text-xl font-semibold tabular-nums">{overview.metrics.insufficient_evidence ?? 0}</dd>
-                </div>
-              </dl>
-              <Link to="/sources" className="aq-link inline-block mt-4 text-sm">
-                Manage sources
-              </Link>
-            </section>
-          </div>
-        </>
-      )}
+        </section>
+      </div>
     </div>
   );
 }

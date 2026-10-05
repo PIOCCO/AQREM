@@ -110,11 +110,17 @@ def dashboard_overview(
             or 0
         )
         pct = int(round((approved / total_q) * 100)) if total_q else 0
+        qn_project_name = None
+        if qn.project_id:
+            qn_project = db.get(Project, qn.project_id)
+            if qn_project and qn_project.organization_id == tenant.organization_id:
+                qn_project_name = qn_project.name
         recent.append(
             {
                 "id": str(qn.id),
                 "name": qn.name,
                 "status": qn.status,
+                "project_name": qn_project_name,
                 "question_count": total_q,
                 "approved_count": approved,
                 "progress_percent": pct,

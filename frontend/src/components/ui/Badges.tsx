@@ -19,7 +19,7 @@ function BadgeShell({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium capitalize ${className}`}
+      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${className}`}
     >
       {children}
     </span>
@@ -60,6 +60,19 @@ export function InsufficientEvidenceBadge() {
       Insufficient evidence
     </BadgeShell>
   );
+}
+
+const questionnaireStatusConfig: Record<string, { className: string; label: string }> = {
+  in_review: { className: "bg-review-bg text-review-text border-review-border", label: "In Review" },
+  draft: { className: "bg-warning-bg text-warning-text border-warning-border", label: "Draft" },
+  completed: { className: "bg-success-bg text-success-text border-success-border", label: "Completed" },
+  in_progress: { className: "bg-info-bg text-info-text border-info-border", label: "In Progress" },
+};
+
+export function QuestionnaireStatusBadge({ status }: { status: string }) {
+  const key = status.toLowerCase();
+  const cfg = questionnaireStatusConfig[key] ?? questionnaireStatusConfig.draft;
+  return <BadgeShell className={cfg.className}>{cfg.label}</BadgeShell>;
 }
 
 export function EvidenceStrengthBadge({ strength }: { strength?: string | null }) {
