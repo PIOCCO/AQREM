@@ -15,6 +15,53 @@ function authHeaders(session: AuthSession): HeadersInit {
   };
 }
 
+export function loadSession(): AuthSession | null {
+  const token = localStorage.getItem("aqrem_token");
+  const organizationId = localStorage.getItem("aqrem_org");
+  if (!token || !organizationId) return null;
+  return { token, organizationId };
+}
+
+export function saveSession(token: string, organizationId: string) {
+  localStorage.setItem("aqrem_token", token);
+  localStorage.setItem("aqrem_org", organizationId);
+}
+
+export function clearSession() {
+  localStorage.removeItem("aqrem_token");
+  localStorage.removeItem("aqrem_org");
+}
+
+/** Clear session and send user to login (invalid/expired JWT). */
+export function handleUnauthorized(): void {
+  clearSession();
+  if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+    window.location.assign("/login?expired=1");
+  }
+}
+
+export async function fetchAuthMe(session: AuthSession) {
+  const res = await fetch(`${API_BASE}/api/v1/auth/me`, { headers: authHeaders(session) });
+  if (res.status === 401) {
+    handleUnauthorized();
+    throw new Error("Session expired");
+  }
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to validate session"));
+  return res.json();
+}
+
+async function authedFetch(session: AuthSession, url: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(url, {
+    ...init,
+    headers: { ...authHeaders(session), ...(init?.headers as Record<string, string> | undefined) },
+  });
+  if (res.status === 401) {
+    handleUnauthorized();
+    throw new Error("Session expired");
+  }
+  return res;
+}
+
 export async function registerUser(payload: {
   email: string;
   password: string;
@@ -41,15 +88,13 @@ export async function loginUser(payload: { email: string; password: string }) {
 }
 
 export async function fetchMetrics(session: AuthSession) {
-  const res = await fetch(`${API_BASE}/api/v1/dashboard/metrics`, {
-    headers: authHeaders(session),
-  });
+  const res = await authedFetch(session, `${API_BASE}/api/v1/dashboard/metrics`);
   if (!res.ok) throw new Error("Failed to load metrics");
   return res.json();
 }
 
 export async function fetchQuestionnaires(session: AuthSession) {
-  const res = await fetch(`${API_BASE}/api/v1/questionnaires`, { headers: authHeaders(session) });
+  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires`);
   if (!res.ok) throw new Error("Failed to load questionnaires");
   return res.json();
 }
@@ -63,93 +108,65 @@ export async function fetchQuestionnaireQuestions(
   if (params?.status) qs.set("status", params.status);
   if (params?.search) qs.set("search", params.search);
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
-  const res = await fetch(`${API_BASE}/api/v1/questionnaires/${questionnaireId}/questions${suffix}`, {
-    headers: authHeaders(session),
-  });
+  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires/${questionnaireId}/questions${suffix}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load questions"));
   return res.json();
 }
 
 export async function fetchQuestionDetail(session: AuthSession, questionId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/questionnaires/questions/${questionId}`, {
-    headers: authHeaders(session),
-  });
+  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires/questions/${questionId}`);
   if (!res.ok) throw new Error("Failed to load question");
   return res.json();
 }
 
 export async function generateQuestionnaireAnswers(session: AuthSession, questionnaireId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/questionnaires/${questionnaireId}/generate`, {
+  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires/${questionnaireId}/generate`, {
     method: "POST",
-    headers: authHeaders(session),
   });
   if (!res.ok) throw new Error(await readApiError(res, "Unable to generate answers. Please try again."));
   return res.json();
 }
 
 export async function approveAnswer(session: AuthSession, answerId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/questionnaires/answers/${answerId}/approve`, {
+  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires/answers/${answerId}/approve`, {
     method: "POST",
-    headers: authHeaders(session),
   });
   if (!res.ok) throw new Error("Failed to approve answer");
   return res.json();
 }
 
 export async function rejectAnswer(session: AuthSession, answerId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/questionnaires/answers/${answerId}/reject`, {
+  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires/answers/${answerId}/reject`, {
     method: "POST",
-    headers: authHeaders(session),
   });
   if (!res.ok) throw new Error("Failed to reject answer");
   return res.json();
 }
 
 export async function editAnswer(session: AuthSession, answerId: string, text: string) {
-  const res = await fetch(`${API_BASE}/api/v1/questionnaires/answers/${answerId}/edit`, {
+  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires/answers/${answerId}/edit`, {
     method: "POST",
-    headers: authHeaders(session),
     body: JSON.stringify({ text }),
   });
   if (!res.ok) throw new Error("Failed to edit answer");
   return res.json();
 }
 
-export function loadSession(): AuthSession | null {
-  const token = localStorage.getItem("aqrem_token");
-  const organizationId = localStorage.getItem("aqrem_org");
-  if (!token || !organizationId) return null;
-  return { token, organizationId };
-}
-
-export function saveSession(token: string, organizationId: string) {
-  localStorage.setItem("aqrem_token", token);
-  localStorage.setItem("aqrem_org", organizationId);
-}
-
-export function clearSession() {
-  localStorage.removeItem("aqrem_token");
-  localStorage.removeItem("aqrem_org");
-}
-
 export async function fetchProjects(session: AuthSession) {
-  const res = await fetch(`${API_BASE}/api/v1/projects`, { headers: authHeaders(session) });
+  const res = await authedFetch(session, `${API_BASE}/api/v1/projects`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load projects"));
   return res.json();
 }
 
 export async function fetchProjectSummaries(session: AuthSession) {
-  const res = await fetch(`${API_BASE}/api/v1/projects/summaries`, {
-    headers: authHeaders(session),
-  });
+  const res = await authedFetch(session, `${API_BASE}/api/v1/projects/summaries`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load project summaries"));
   return res.json();
 }
 
 export async function createProject(session: AuthSession, payload: { name: string; description?: string }) {
-  const res = await fetch(`${API_BASE}/api/v1/projects`, {
+  const res = await authedFetch(session, `${API_BASE}/api/v1/projects`, {
     method: "POST",
-    headers: authHeaders(session),
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to create project"));
@@ -157,7 +174,7 @@ export async function createProject(session: AuthSession, payload: { name: strin
 }
 
 export async function fetchSources(session: AuthSession) {
-  const res = await fetch(`${API_BASE}/api/v1/sources`, { headers: authHeaders(session) });
+  const res = await authedFetch(session, `${API_BASE}/api/v1/sources`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load sources"));
   return res.json();
 }
@@ -172,26 +189,20 @@ export async function fetchEvidence(
   if (params?.search) qs.set("search", params.search);
   if (params?.offset != null) qs.set("offset", String(params.offset));
   if (params?.limit != null) qs.set("limit", String(params.limit));
-  const res = await fetch(`${API_BASE}/api/v1/evidence?${qs.toString()}`, {
-    headers: authHeaders(session),
-  });
+  const res = await authedFetch(session, `${API_BASE}/api/v1/evidence?${qs.toString()}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load evidence"));
   return res.json();
 }
 
 export async function fetchEvidenceDetail(session: AuthSession, evidenceId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/evidence/${evidenceId}`, {
-    headers: authHeaders(session),
-  });
+  const res = await authedFetch(session, `${API_BASE}/api/v1/evidence/${evidenceId}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load evidence detail"));
   return res.json();
 }
 
 export async function fetchDashboardOverview(session: AuthSession, projectId?: string | null) {
   const qs = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
-  const res = await fetch(`${API_BASE}/api/v1/dashboard/overview${qs}`, {
-    headers: authHeaders(session),
-  });
+  const res = await authedFetch(session, `${API_BASE}/api/v1/dashboard/overview${qs}`);
   if (!res.ok) throw new Error(await readApiError(res, "Unable to load dashboard"));
   return res.json();
 }
@@ -205,25 +216,19 @@ export async function fetchReviewQueue(
   if (params?.search) qs.set("search", params.search);
   if (params?.offset != null) qs.set("offset", String(params.offset));
   if (params?.limit != null) qs.set("limit", String(params.limit));
-  const res = await fetch(`${API_BASE}/api/v1/review-queue?${qs.toString()}`, {
-    headers: authHeaders(session),
-  });
+  const res = await authedFetch(session, `${API_BASE}/api/v1/review-queue?${qs.toString()}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load review queue"));
   return res.json();
 }
 
 export async function fetchAuditLog(session: AuthSession, offset = 0, limit = 50) {
-  const res = await fetch(`${API_BASE}/api/v1/audit?offset=${offset}&limit=${limit}`, {
-    headers: authHeaders(session),
-  });
+  const res = await authedFetch(session, `${API_BASE}/api/v1/audit?offset=${offset}&limit=${limit}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load activity log"));
   return res.json();
 }
 
 export async function fetchQuestionnaire(session: AuthSession, questionnaireId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/questionnaires/${questionnaireId}`, {
-    headers: authHeaders(session),
-  });
+  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires/${questionnaireId}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load questionnaire"));
   return res.json();
 }
@@ -236,9 +241,9 @@ export async function downloadQuestionnaireExport(
 ) {
   const qs = new URLSearchParams();
   if (options?.approved_only) qs.set("approved_only", "true");
-  const res = await fetch(
+  const res = await authedFetch(
+    session,
     `${API_BASE}/api/v1/questionnaires/${questionnaireId}/export/${format}?${qs.toString()}`,
-    { headers: { Authorization: `Bearer ${session.token}`, "X-Organization-Id": session.organizationId } },
   );
   if (!res.ok) throw new Error(await readApiError(res, "Export failed"));
   const blob = await res.blob();
@@ -249,9 +254,8 @@ export async function downloadQuestionnaireExport(
 }
 
 export async function fetchAnswerLibrary(session: AuthSession, query?: string) {
-  const res = await fetch(`${API_BASE}/api/v1/answer-library/search`, {
+  const res = await authedFetch(session, `${API_BASE}/api/v1/answer-library/search`, {
     method: "POST",
-    headers: authHeaders(session),
     body: JSON.stringify({ query, limit: 50 }),
   });
   if (!res.ok) throw new Error("Failed to load answer library");
@@ -259,9 +263,7 @@ export async function fetchAnswerLibrary(session: AuthSession, query?: string) {
 }
 
 export async function fetchAnswerLibraryEntry(session: AuthSession, entryId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/answer-library/${entryId}`, {
-    headers: authHeaders(session),
-  });
+  const res = await authedFetch(session, `${API_BASE}/api/v1/answer-library/${entryId}`);
   if (!res.ok) throw new Error("Failed to load library entry");
   return res.json();
 }
@@ -275,43 +277,35 @@ export async function fetchStaleAnswers(
   if (params?.project_id) qs.set("project_id", params.project_id);
   if (params?.offset != null) qs.set("offset", String(params.offset));
   if (params?.limit != null) qs.set("limit", String(params.limit));
-  const res = await fetch(`${API_BASE}/api/v1/stale-answers?${qs.toString()}`, {
-    headers: authHeaders(session),
-  });
+  const res = await authedFetch(session, `${API_BASE}/api/v1/stale-answers?${qs.toString()}`);
   if (!res.ok) throw new Error("Failed to load stale answers");
   return res.json();
 }
 
 export async function fetchStaleAnswerDetail(session: AuthSession, answerId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/stale-answers/${answerId}`, {
-    headers: authHeaders(session),
-  });
+  const res = await authedFetch(session, `${API_BASE}/api/v1/stale-answers/${answerId}`);
   if (!res.ok) throw new Error("Failed to load stale answer detail");
   return res.json();
 }
 
 export async function revalidateStaleAnswer(session: AuthSession, answerId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/stale-answers/${answerId}/revalidate`, {
+  const res = await authedFetch(session, `${API_BASE}/api/v1/stale-answers/${answerId}/revalidate`, {
     method: "POST",
-    headers: authHeaders(session),
   });
   if (!res.ok) throw new Error("Revalidation failed");
   return res.json();
 }
 
 export async function regenerateStaleAnswer(session: AuthSession, answerId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/stale-answers/${answerId}/regenerate`, {
+  const res = await authedFetch(session, `${API_BASE}/api/v1/stale-answers/${answerId}/regenerate`, {
     method: "POST",
-    headers: authHeaders(session),
   });
   if (!res.ok) throw new Error("Regeneration failed");
   return res.json();
 }
 
 export async function validateLibraryEntry(session: AuthSession, entryId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/answer-library/${entryId}/validation`, {
-    headers: authHeaders(session),
-  });
+  const res = await authedFetch(session, `${API_BASE}/api/v1/answer-library/${entryId}/validation`);
   if (!res.ok) throw new Error("Failed to validate library entry");
   return res.json();
 }

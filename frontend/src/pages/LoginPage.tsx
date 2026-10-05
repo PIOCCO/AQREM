@@ -1,12 +1,23 @@
-import { FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { FormEvent, useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { clearSession } from "../lib/api";
 import { loginUser, registerUser, saveSession } from "../lib/api";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const sessionExpired = searchParams.get("expired") === "1";
   const [mode, setMode] = useState<"login" | "register">("login");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    sessionExpired
+      ? "Your session is invalid or expired (common after changing servers or ports). Please sign in again."
+      : null,
+  );
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (sessionExpired) clearSession();
+  }, [sessionExpired]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();

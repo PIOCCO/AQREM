@@ -60,7 +60,12 @@ if [[ ! -f "$FRONTEND/dist/index.html" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$BACKEND/.env" ]]; then
+if [[ -f "$ROOT/.env" ]]; then
+  if [[ ! -f "$BACKEND/.env" ]] || ! cmp -s "$ROOT/.env" "$BACKEND/.env" 2>/dev/null; then
+    cp "$ROOT/.env" "$BACKEND/.env"
+    echo "Using $ROOT/.env for backend (same SECRET_KEY as Docker Compose)."
+  fi
+elif [[ ! -f "$BACKEND/.env" ]]; then
   if [[ -f "$ROOT/.env.example" ]]; then
     cp "$ROOT/.env.example" "$BACKEND/.env"
     echo "Created $BACKEND/.env from $ROOT/.env.example (review before production use)."

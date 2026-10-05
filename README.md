@@ -89,7 +89,7 @@ chmod +x scripts/start-web-one-port.sh
 
 Optional: `AQREM_WEB_PORT=4173 ./scripts/start-web-one-port.sh` (4173 is already the default).
 
-The script builds the frontend if needed, bootstraps `backend/.env` / `.venv`, checks the port is free (or picks another), then serves UI + API together. On Tailscale, use `http://<tailscale-ip>:4173` (the script prints your Tailscale IP when `tailscale` is installed). API docs: `/docs` on the same port.
+The script builds the frontend if needed, syncs repo-root `.env` into `backend/.env` (same `SECRET_KEY` as Docker), ensures `.venv`, then serves UI + API together. On Tailscale, open **`http://<tailscale-ip>:4173`** and **sign in on that URL** (browser storage is per host; tokens from `:5173` or `:8000` do not apply). If you see “Invalid token”, use **Sign out** or open `/login?expired=1` and log in again. API docs: `/docs` on the same port.
 
 ### Access via Tailscale
 
