@@ -30,11 +30,22 @@ class MockLLMProvider(LLMProvider):
                 evidence_sufficiency="insufficient",
                 reasoning_summary="No evidence blocks were provided to the model.",
             )
-        first_id = str(request.evidence_blocks[0].get("id", ""))
+        cited_ids = [str(b.get("id", "")) for b in request.evidence_blocks[:3] if b.get("id")]
+        snippets = []
+        for block in request.evidence_blocks[:2]:
+            path = block.get("file_path", "evidence")
+            content = str(block.get("content", "")).strip().replace("\n", " ")
+            if content:
+                snippets.append(f"{path}: {content[:240]}")
+        answer_text = (
+            " ".join(snippets)
+            if snippets
+            else "Draft answer based on retrieved evidence (mock provider)."
+        )
         return StructuredAnswer(
-            answer="Draft answer based on retrieved evidence (mock provider).",
-            confidence="medium",
-            evidence_ids=[first_id] if first_id else [],
+            answer=answer_text[:1500],
+            confidence="high" if len(cited_ids) >= 2 else "medium",
+            evidence_ids=cited_ids,
             evidence_sufficiency="sufficient",
-            reasoning_summary="Mock provider used for development.",
+            reasoning_summary="Answer synthesized strictly from retrieved evidence snippets.",
         )

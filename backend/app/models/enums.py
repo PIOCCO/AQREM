@@ -33,3 +33,17 @@ class EvidenceStrength(StrEnum):
     MODERATE = "moderate"
     WEAK = "weak"
     INSUFFICIENT = "insufficient"
+
+
+class QuestionnaireStatus(StrEnum):
+    DRAFT = "draft"
+    IN_PROGRESS = "in_progress"
+    IN_REVIEW = "in_review"
+    COMPLETED = "completed"
+
+
+class AnswerStatus(StrEnum):
+    DRAFT = "draft"
+    NEEDS_REVIEW = "needs_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"

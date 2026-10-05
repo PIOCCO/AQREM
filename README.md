@@ -82,7 +82,7 @@ cd frontend && npm install && npm run dev
 |-------|--------|
 | 1 — Architecture & scaffolding | Implemented |
 | 2 — Evidence ingestion & indexing | Implemented |
-| 3 — Questionnaires, LLM answers, review UI | Planned |
+| 3 — Questionnaires, LLM answers, review UI | Implemented (core flow) |
 | 4 — Answer library reuse | Planned |
 | 5 — Freshness / staleness | Basic version model |
 | 6 — Export | Planned |

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchMetrics } from "../lib/api";
+import { fetchMetrics, loadSession } from "../lib/api";
 
 const cards = [
   ["questions", "Questions"],
@@ -14,13 +14,12 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("aqrem_token");
-    const org = localStorage.getItem("aqrem_org");
-    if (!token || !org) {
-      setError("Sign in via API (/api/v1/auth/register) and store aqrem_token + aqrem_org in localStorage.");
+    const session = loadSession();
+    if (!session) {
+      setError("Sign in to view dashboard metrics.");
       return;
     }
-    fetchMetrics(token, org)
+    fetchMetrics(session)
       .then(setMetrics)
       .catch(() => setError("Unable to load dashboard metrics."));
   }, []);

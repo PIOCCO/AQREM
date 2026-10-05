@@ -1,15 +1,22 @@
-import { Link, Route, Routes } from "react-router-dom";
+import { Link, Navigate, Route, Routes } from "react-router-dom";
+import RequireAuth from "./components/RequireAuth";
 import DashboardPage from "./pages/DashboardPage";
 import EvidencePage from "./pages/EvidencePage";
+import LoginPage from "./pages/LoginPage";
+import QuestionReviewPage from "./pages/QuestionReviewPage";
+import QuestionnaireDetailPage from "./pages/QuestionnaireDetailPage";
+import QuestionnairesPage from "./pages/QuestionnairesPage";
 import SourcesPage from "./pages/SourcesPage";
+import { loadSession } from "./lib/api";
 
 const nav = [
   { to: "/", label: "Dashboard" },
   { to: "/sources", label: "Sources" },
   { to: "/evidence", label: "Evidence" },
+  { to: "/questionnaires", label: "Questionnaires" },
 ];
 
-export default function App() {
+function AppShell() {
   return (
     <div className="min-h-screen flex">
       <aside className="w-64 bg-white border-r border-slate-200 p-6">
@@ -31,8 +38,31 @@ export default function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/sources" element={<SourcesPage />} />
           <Route path="/evidence" element={<EvidencePage />} />
+          <Route path="/questionnaires" element={<QuestionnairesPage />} />
+          <Route path="/questionnaires/:questionnaireId" element={<QuestionnaireDetailPage />} />
+          <Route
+            path="/questionnaires/:questionnaireId/questions/:questionId/review"
+            element={<QuestionReviewPage />}
+          />
         </Routes>
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  const session = loadSession();
+  return (
+    <Routes>
+      <Route path="/login" element={session ? <Navigate to="/" replace /> : <LoginPage />} />
+      <Route
+        path="/*"
+        element={
+          <RequireAuth>
+            <AppShell />
+          </RequireAuth>
+        }
+      />
+    </Routes>
   );
 }
