@@ -55,6 +55,8 @@ class AnswerResponse(BaseModel):
     status: str
     version: int
     potentially_stale: bool
+    generation_source: str | None = None
+    library_entry_id: UUID | None = None
     evidence: list[EvidenceCitation] = Field(default_factory=list)
 
 

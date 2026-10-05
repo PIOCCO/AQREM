@@ -3,6 +3,8 @@ import RequireAuth from "./components/RequireAuth";
 import DashboardPage from "./pages/DashboardPage";
 import EvidencePage from "./pages/EvidencePage";
 import LoginPage from "./pages/LoginPage";
+import AnswerLibraryDetailPage from "./pages/AnswerLibraryDetailPage";
+import AnswerLibraryPage from "./pages/AnswerLibraryPage";
 import QuestionReviewPage from "./pages/QuestionReviewPage";
 import QuestionnaireDetailPage from "./pages/QuestionnaireDetailPage";
 import QuestionnairesPage from "./pages/QuestionnairesPage";
@@ -14,6 +16,7 @@ const nav = [
   { to: "/sources", label: "Sources" },
   { to: "/evidence", label: "Evidence" },
   { to: "/questionnaires", label: "Questionnaires" },
+  { to: "/answer-library", label: "Answer Library" },
 ];
 
 function AppShell() {
@@ -44,6 +47,8 @@ function AppShell() {
             path="/questionnaires/:questionnaireId/questions/:questionId/review"
             element={<QuestionReviewPage />}
           />
+          <Route path="/answer-library" element={<AnswerLibraryPage />} />
+          <Route path="/answer-library/:entryId" element={<AnswerLibraryDetailPage />} />
         </Routes>
       </main>
     </div>

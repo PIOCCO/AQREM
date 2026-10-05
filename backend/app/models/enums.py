@@ -47,3 +47,14 @@ class AnswerStatus(StrEnum):
     NEEDS_REVIEW = "needs_review"
     APPROVED = "approved"
     REJECTED = "rejected"
+
+
+class LibraryEntryStatus(StrEnum):
+    APPROVED = "approved"
+    NEEDS_REVIEW = "needs_review"
+
+
+class AnswerGenerationSource(StrEnum):
+    RETRIEVAL_LLM = "retrieval_llm"
+    LIBRARY_REUSE = "library_reuse"
+    LIBRARY_ADAPTED = "library_adapted"

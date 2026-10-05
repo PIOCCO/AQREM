@@ -13,6 +13,7 @@ from app.services.ingestion.code_metadata import detect_language, extract_symbol
 from app.services.ingestion.ignore import build_pathspec, should_ignore
 from app.services.ingestion.parsers import parse_bytes
 from app.services.ingestion.strength import classify_evidence_strength
+from app.services.library.invalidate import mark_entries_stale_for_evidence
 from app.services.llm.factory import get_llm_provider
 
 
@@ -93,6 +94,7 @@ async def index_files(
                 continue
 
             if existing and existing.content_hash != c_hash:
+                mark_entries_stale_for_evidence(db, existing.id)
                 db.add(
                     EvidenceItemVersion(
                         evidence_item_id=existing.id,

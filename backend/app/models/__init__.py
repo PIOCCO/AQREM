@@ -1,3 +1,4 @@
+from app.models.answer_library import AnswerLibraryEntry, AnswerLibraryEvidenceLink
 from app.models.audit import AuditEvent
 from app.models.evidence import EvidenceItem, EvidenceItemVersion
 from app.models.organization import Organization, OrganizationMembership, User
@@ -12,6 +13,8 @@ from app.models.source import (
 )
 
 __all__ = [
+    "AnswerLibraryEntry",
+    "AnswerLibraryEvidenceLink",
     "AuditEvent",
     "EvidenceItem",
     "EvidenceItemVersion",

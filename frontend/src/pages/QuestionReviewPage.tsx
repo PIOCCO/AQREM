@@ -27,6 +27,8 @@ type QuestionDetail = {
     evidence_sufficiency: string;
     reasoning_summary?: string;
     status: string;
+    generation_source?: string;
+    library_entry_id?: string;
     evidence: EvidenceCitation[];
   };
 };
@@ -91,6 +93,12 @@ export default function QuestionReviewPage() {
             <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">
               {answer?.draft_text ?? "No draft yet. Generate answers from the questionnaire page."}
             </p>
+            {answer?.generation_source && (
+              <p className="text-xs text-slate-500 mt-2 capitalize">
+                Source: {answer.generation_source.replaceAll("_", " ")}
+                {answer.library_entry_id ? ` · library ${answer.library_entry_id.slice(0, 8)}…` : ""}
+              </p>
+            )}
             {answer?.reasoning_summary && (
               <p className="text-sm text-slate-500 mt-3">{answer.reasoning_summary}</p>
             )}

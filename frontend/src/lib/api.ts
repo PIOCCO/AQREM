@@ -116,3 +116,29 @@ export function saveSession(token: string, organizationId: string) {
   localStorage.setItem("aqrem_token", token);
   localStorage.setItem("aqrem_org", organizationId);
 }
+
+export async function fetchAnswerLibrary(session: AuthSession, query?: string) {
+  const res = await fetch(`${API_BASE}/api/v1/answer-library/search`, {
+    method: "POST",
+    headers: authHeaders(session),
+    body: JSON.stringify({ query, limit: 50 }),
+  });
+  if (!res.ok) throw new Error("Failed to load answer library");
+  return res.json();
+}
+
+export async function fetchAnswerLibraryEntry(session: AuthSession, entryId: string) {
+  const res = await fetch(`${API_BASE}/api/v1/answer-library/${entryId}`, {
+    headers: authHeaders(session),
+  });
+  if (!res.ok) throw new Error("Failed to load library entry");
+  return res.json();
+}
+
+export async function validateLibraryEntry(session: AuthSession, entryId: string) {
+  const res = await fetch(`${API_BASE}/api/v1/answer-library/${entryId}/validation`, {
+    headers: authHeaders(session),
+  });
+  if (!res.ok) throw new Error("Failed to validate library entry");
+  return res.json();
+}

@@ -4,9 +4,10 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.audit.service import record_audit
-from app.models.enums import AnswerStatus, QuestionnaireStatus
+from app.models.enums import AnswerGenerationSource, AnswerStatus, QuestionnaireStatus
 from app.models.evidence import EvidenceItem
 from app.models.questionnaire import Answer, AnswerEvidenceLink, Question, Questionnaire
+from app.services.library.service import AnswerLibraryService
 from app.services.llm.base import AnswerRequest
 from app.services.llm.factory import get_llm_provider
 from app.services.retrieval.service import RetrievalService
@@ -51,6 +52,14 @@ class AnsweringService:
         if questionnaire is None:
             raise ValueError("Questionnaire not found")
 
+        reused = await AnswerLibraryService(self.db).try_reuse_for_question(
+            question=question,
+            questionnaire=questionnaire,
+            user_id=user_id,
+        )
+        if reused is not None:
+            return reused
+
         evidence_items = await RetrievalService(self.db).retrieve(
             organization_id=question.organization_id,
             query=question.text,
@@ -80,6 +89,8 @@ class AnsweringService:
         answer.confidence = structured.confidence
         answer.evidence_sufficiency = structured.evidence_sufficiency
         answer.reasoning_summary = structured.reasoning_summary
+        answer.generation_source = AnswerGenerationSource.RETRIEVAL_LLM.value
+        answer.library_entry_id = None
         answer.status = _status_for_result(structured.evidence_sufficiency)
         answer.reviewer_id = None
         answer.approved_at = None
@@ -124,7 +135,7 @@ class AnsweringService:
         self.db.flush()
         return answer
 
-    def approve_answer(self, answer: Answer, reviewer_id: UUID) -> Answer:
+    async def approve_answer(self, answer: Answer, reviewer_id: UUID) -> Answer:
         answer.approved_text = answer.draft_text
         answer.status = AnswerStatus.APPROVED.value
         answer.reviewer_id = reviewer_id
@@ -137,10 +148,11 @@ class AnsweringService:
             resource_type="answer",
             resource_id=str(answer.id),
         )
+        await AnswerLibraryService(self.db).upsert_from_approved_answer(answer)
         self._refresh_questionnaire_status(answer)
         return answer
 
-    def edit_answer(self, answer: Answer, reviewer_id: UUID, text: str) -> Answer:
+    async def edit_answer(self, answer: Answer, reviewer_id: UUID, text: str) -> Answer:
         answer.draft_text = text
         answer.approved_text = text
         answer.status = AnswerStatus.APPROVED.value
@@ -155,6 +167,7 @@ class AnsweringService:
             resource_type="answer",
             resource_id=str(answer.id),
         )
+        await AnswerLibraryService(self.db).upsert_from_approved_answer(answer)
         self._refresh_questionnaire_status(answer)
         return answer
 

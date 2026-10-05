@@ -79,6 +79,8 @@ def _build_answer_response(db: Session, answer: Answer | None) -> AnswerResponse
         status=answer.status,
         version=answer.version,
         potentially_stale=answer.potentially_stale,
+        generation_source=answer.generation_source,
+        library_entry_id=answer.library_entry_id,
         evidence=evidence,
     )
 
@@ -284,7 +286,7 @@ async def generate_question_answer(
 
 
 @router.post("/answers/{answer_id}/approve", response_model=AnswerResponse)
-def approve_answer(
+async def approve_answer(
     answer_id: UUID,
     tenant: TenantContext = Depends(require_role(Role.REVIEWER)),
     db: Session = Depends(get_db),
@@ -292,13 +294,13 @@ def approve_answer(
     answer = db.get(Answer, answer_id)
     if answer is None or answer.organization_id != tenant.organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Answer not found")
-    AnsweringService(db).approve_answer(answer, tenant.user_id)
+    await AnsweringService(db).approve_answer(answer, tenant.user_id)
     db.commit()
     return _build_answer_response(db, answer)
 
 
 @router.post("/answers/{answer_id}/edit", response_model=AnswerResponse)
-def edit_answer(
+async def edit_answer(
     answer_id: UUID,
     payload: AnswerEditRequest,
     tenant: TenantContext = Depends(require_role(Role.REVIEWER)),
@@ -307,7 +309,7 @@ def edit_answer(
     answer = db.get(Answer, answer_id)
     if answer is None or answer.organization_id != tenant.organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Answer not found")
-    AnsweringService(db).edit_answer(answer, tenant.user_id, payload.text)
+    await AnsweringService(db).edit_answer(answer, tenant.user_id, payload.text)
     db.commit()
     return _build_answer_response(db, answer)
 
