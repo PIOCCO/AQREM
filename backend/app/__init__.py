@@ -1,0 +1,1 @@
+"""AQREM FastAPI application."""
