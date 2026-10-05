@@ -108,8 +108,9 @@ If the page loads but API calls fail, confirm the API is running and reachable o
 | 3 — Questionnaires, LLM answers, review UI | Implemented (core flow) |
 | 4 — Answer library reuse | Implemented |
 | 5 — Evidence staleness workflow | Implemented |
-| 6 — Export | Planned |
-| 7 — Azure deployment | Terraform skeleton |
+| 6 — Questionnaire export (XLSX/CSV) | Implemented |
+| 7 — Production hardening & MVP UX | Implemented (core) |
+| Azure deployment | Terraform skeleton (if present) |
 
 ## Security notes
 

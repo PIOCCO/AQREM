@@ -1,6 +1,7 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -22,8 +23,11 @@ from app.schemas.questionnaire import (
     QuestionnaireCreate,
     QuestionnaireResponse,
     QuestionResponse,
+    QuestionAnswerSummary,
+    QuestionWithAnswerResponse,
 )
 from app.services.answering.service import AnsweringService
+from app.services.questionnaire.export import build_export_rows, render_csv_bytes, render_xlsx_bytes
 from app.services.questionnaire.extract import extract_questionnaire_bytes
 from app.services.questionnaire.normalize import normalize_question
 from app.services.storage.factory import get_blob_storage
@@ -161,18 +165,134 @@ def get_questionnaire(
     return _questionnaire_response(db, _get_questionnaire(db, tenant, questionnaire_id))
 
 
-@router.get("/{questionnaire_id}/questions", response_model=list[QuestionResponse])
+@router.get("/{questionnaire_id}/questions", response_model=list[QuestionWithAnswerResponse])
 def list_questions(
     questionnaire_id: UUID,
     tenant: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
-) -> list[Question]:
+    status_filter: str | None = Query(default=None, alias="status"),
+    search: str | None = Query(default=None),
+) -> list[QuestionWithAnswerResponse]:
     _get_questionnaire(db, tenant, questionnaire_id)
-    return (
+    query = (
         db.query(Question)
+        .options(joinedload(Question.answer))
         .filter(Question.questionnaire_id == questionnaire_id)
-        .order_by(Question.sort_order.asc(), Question.external_id.asc())
-        .all()
+    )
+    if search:
+        query = query.filter(
+            Question.text.ilike(f"%{search}%") | Question.external_id.ilike(f"%{search}%")
+        )
+    questions = query.order_by(Question.sort_order.asc(), Question.external_id.asc()).all()
+    items: list[QuestionWithAnswerResponse] = []
+    for question in questions:
+        answer = question.answer
+        if status_filter and (answer is None or answer.status != status_filter):
+            continue
+        summary = None
+        if answer:
+            strength = None
+            link = (
+                db.query(AnswerEvidenceLink)
+                .filter(AnswerEvidenceLink.answer_id == answer.id)
+                .first()
+            )
+            if link:
+                strength = link.evidence_strength
+            summary = QuestionAnswerSummary(
+                status=answer.status,
+                confidence=answer.confidence,
+                evidence_sufficiency=answer.evidence_sufficiency,
+                potentially_stale=answer.potentially_stale,
+                evidence_strength=strength,
+            )
+        items.append(
+            QuestionWithAnswerResponse(
+                id=question.id,
+                questionnaire_id=question.questionnaire_id,
+                external_id=question.external_id,
+                section=question.section,
+                text=question.text,
+                sort_order=question.sort_order,
+                answer=summary,
+            )
+        )
+    return items
+
+
+@router.get("/{questionnaire_id}/export/csv")
+def export_questionnaire_csv(
+    questionnaire_id: UUID,
+    tenant: TenantContext = Depends(get_tenant_context),
+    db: Session = Depends(get_db),
+    approved_only: bool = Query(default=False),
+    needs_review_only: bool = Query(default=False),
+) -> Response:
+    try:
+        rows = build_export_rows(
+            db,
+            organization_id=tenant.organization_id,
+            questionnaire_id=questionnaire_id,
+            approved_only=approved_only,
+            needs_review_only=needs_review_only,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    questionnaire = _get_questionnaire(db, tenant, questionnaire_id)
+    suffix = "approved" if approved_only else "export"
+    filename = f"{questionnaire.name.replace(' ', '_')}_{suffix}.csv"
+    record_audit(
+        db,
+        organization_id=tenant.organization_id,
+        user_id=tenant.user_id,
+        action="questionnaire_exported",
+        resource_type="questionnaire",
+        resource_id=str(questionnaire_id),
+        metadata={"format": "csv", "rows": len(rows), "approved_only": approved_only},
+    )
+    db.commit()
+    return Response(
+        content=render_csv_bytes(rows),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{questionnaire_id}/export/xlsx")
+def export_questionnaire_xlsx(
+    questionnaire_id: UUID,
+    tenant: TenantContext = Depends(get_tenant_context),
+    db: Session = Depends(get_db),
+    approved_only: bool = Query(default=False),
+    needs_review_only: bool = Query(default=False),
+) -> Response:
+    try:
+        rows = build_export_rows(
+            db,
+            organization_id=tenant.organization_id,
+            questionnaire_id=questionnaire_id,
+            approved_only=approved_only,
+            needs_review_only=needs_review_only,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    questionnaire = _get_questionnaire(db, tenant, questionnaire_id)
+    suffix = "approved" if approved_only else "export"
+    filename = f"{questionnaire.name.replace(' ', '_')}_{suffix}.xlsx"
+    record_audit(
+        db,
+        organization_id=tenant.organization_id,
+        user_id=tenant.user_id,
+        action="questionnaire_exported",
+        resource_type="questionnaire",
+        resource_id=str(questionnaire_id),
+        metadata={"format": "xlsx", "rows": len(rows), "approved_only": approved_only},
+    )
+    db.commit()
+    return Response(
+        content=render_xlsx_bytes(rows),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

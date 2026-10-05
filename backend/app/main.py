@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.api.v1.router import api_router
@@ -30,6 +31,28 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(api_router)
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:
+        detail = exc.detail
+        if isinstance(detail, str):
+            message = detail
+        elif isinstance(detail, dict):
+            message = detail.get("message", "Request could not be completed.")
+        else:
+            message = "Request could not be completed."
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"message": message, "detail": detail},
+        )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(_: Request, exc: Exception) -> JSONResponse:
+        if settings.app_env == "development":
+            message = str(exc)
+        else:
+            message = "Something went wrong. Please try again."
+        return JSONResponse(status_code=500, content={"message": message})
 
     @app.get("/health")
     def health() -> dict[str, str]:

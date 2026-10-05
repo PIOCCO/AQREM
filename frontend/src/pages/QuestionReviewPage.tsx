@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { ConfidenceBadge, StatusBadge } from "../components/ui/Badges";
+import { ErrorState, LoadingState } from "../components/ui/States";
 import {
   approveAnswer,
   editAnswer,
@@ -61,34 +63,43 @@ export default function QuestionReviewPage() {
     }
   }
 
-  if (!session) return <p>Please sign in.</p>;
-  if (!detail) return <p>Loading question…</p>;
+  if (!session) return null;
+  if (!detail) return <LoadingState label="Loading review workspace…" />;
 
   const answer = detail.answer;
   const evidenceBacked =
     answer && answer.evidence_sufficiency === "sufficient" && answer.evidence.length > 0;
 
+  if (answer?.evidence_sufficiency === "insufficient") {
+    return (
+      <div className="max-w-3xl">
+        <h1 className="text-xl font-semibold mb-2">{detail.question.external_id}</h1>
+        <p className="text-slate-700 mb-4">{detail.question.text}</p>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
+          <h2 className="font-medium mb-2">Insufficient evidence</h2>
+          <p className="text-sm">
+            No reliable company evidence was found for this question. Review manually or add sources
+            before approving.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-5xl">
-      <p className="text-sm text-slate-500 mb-2">Question Review workspace</p>
+    <div className="max-w-6xl">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <span className="text-sm font-mono text-slate-500">{detail.question.external_id}</span>
+        {answer && <StatusBadge status={answer.status} />}
+        {answer && <ConfidenceBadge confidence={answer.confidence} />}
+      </div>
       <h1 className="text-2xl font-semibold mb-6">{detail.question.text}</h1>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="space-y-4">
           <section className="rounded-xl border border-slate-200 bg-white p-5">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-medium">AI Draft Answer</h2>
-              {answer && (
-                <span
-                  className={`text-xs px-2 py-1 rounded-full ${
-                    answer.confidence === "high"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-amber-100 text-amber-700"
-                  }`}
-                >
-                  Confidence: {answer.confidence}
-                </span>
-              )}
+              <h2 className="font-medium">AI answer</h2>
             </div>
             <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">
               {answer?.draft_text ?? "No draft yet. Generate answers from the questionnaire page."}
@@ -136,7 +147,9 @@ export default function QuestionReviewPage() {
             <div className="space-y-3">
               {(answer?.evidence ?? []).map((item) => (
                 <div key={item.id} className="rounded-lg bg-slate-50 p-3 text-sm">
-                  <div className="font-medium">{item.file_path}</div>
+                  <Link to={`/evidence/${item.id}`} className="font-medium text-blue-700 hover:underline">
+                    {item.file_path}
+                  </Link>
                   <div className="text-slate-500 text-xs mt-1">
                     {item.line_start != null
                       ? `Lines ${item.line_start}${item.line_end ? `–${item.line_end}` : ""}`

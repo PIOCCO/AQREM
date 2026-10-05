@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -23,3 +24,15 @@ class ProjectResponse(BaseModel):
     organization_id: UUID
     name: str
     description: str | None = None
+
+
+class ProjectSummaryResponse(BaseModel):
+    id: UUID
+    name: str
+    description: str | None = None
+    questionnaire_count: int
+    source_count: int
+    evidence_item_count: int
+    pending_review_count: int
+    potentially_stale_count: int
+    updated_at: datetime

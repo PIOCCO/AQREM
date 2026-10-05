@@ -18,7 +18,9 @@ def list_evidence(
     db: Session = Depends(get_db),
     project_id: UUID | None = Query(default=None),
     source_id: UUID | None = Query(default=None),
+    search: str | None = Query(default=None),
     limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
 ) -> list[EvidenceItem]:
     query = db.query(EvidenceItem).filter(EvidenceItem.organization_id == tenant.organization_id)
     if project_id:
@@ -27,7 +29,13 @@ def list_evidence(
         )
     if source_id:
         query = query.filter(EvidenceItem.source_id == source_id)
-    return query.order_by(EvidenceItem.created_at.desc()).limit(limit).all()
+    if search:
+        query = query.filter(
+            EvidenceItem.file_path.ilike(f"%{search}%")
+            | EvidenceItem.content.ilike(f"%{search}%")
+            | EvidenceItem.file_name.ilike(f"%{search}%")
+        )
+    return query.order_by(EvidenceItem.created_at.desc()).offset(offset).limit(limit).all()
 
 
 @router.get("/{evidence_id}", response_model=EvidenceItemResponse)

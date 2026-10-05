@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     answer_library,
+    audit,
     auth,
     stale_answers,
     dashboard,
@@ -10,6 +11,7 @@ from app.api.v1 import (
     projects,
     questionnaires,
     retrieval,
+    review_queue,
     sources,
 )
 
@@ -24,3 +26,5 @@ api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboar
 api_router.include_router(questionnaires.router, prefix="/questionnaires", tags=["questionnaires"])
 api_router.include_router(answer_library.router, prefix="/answer-library", tags=["answer-library"])
 api_router.include_router(stale_answers.router, prefix="/stale-answers", tags=["stale-answers"])
+api_router.include_router(review_queue.router, prefix="/review-queue", tags=["review-queue"])
+api_router.include_router(audit.router, prefix="/audit", tags=["audit"])

@@ -32,6 +32,18 @@ class QuestionResponse(BaseModel):
     sort_order: int
 
 
+class QuestionAnswerSummary(BaseModel):
+    status: str | None = None
+    confidence: str | None = None
+    evidence_sufficiency: str | None = None
+    potentially_stale: bool = False
+    evidence_strength: str | None = None
+
+
+class QuestionWithAnswerResponse(QuestionResponse):
+    answer: QuestionAnswerSummary | None = None
+
+
 class EvidenceCitation(BaseModel):
     id: UUID
     file_name: str
