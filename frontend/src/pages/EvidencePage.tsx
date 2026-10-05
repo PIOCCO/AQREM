@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { EvidenceStrengthBadge } from "../components/ui/Badges";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "../components/ui/States";
 import { fetchEvidence, fetchSources } from "../lib/api";
+import { capEvidenceListContent, truncateText } from "../lib/textPreview";
 import { useProjectContext } from "../lib/projectContext";
 
 type EvidenceRow = {
   id: string;
-  file_path: string;
-  content: string;
+  file_path?: string;
+  content?: string;
+  content_truncated?: boolean;
   evidence_strength?: string;
   commit_hash?: string;
   repository?: string;
@@ -18,8 +20,30 @@ type EvidenceRow = {
 
 const PAGE_SIZE = 50;
 
+function sanitizeRow(row: EvidenceRow): EvidenceRow {
+  const capped = capEvidenceListContent(row.content);
+  return {
+    ...row,
+    content: capped.text,
+    content_truncated: Boolean(row.content_truncated || capped.truncated),
+  };
+}
+
+function normalizeEvidencePayload(data: unknown): { items: EvidenceRow[]; total: number } {
+  if (Array.isArray(data)) {
+    const items = (data as EvidenceRow[]).map(sanitizeRow);
+    return { items, total: items.length };
+  }
+  if (data && typeof data === "object" && "items" in data) {
+    const obj = data as { items?: EvidenceRow[]; total?: number };
+    const items = Array.isArray(obj.items) ? obj.items.map(sanitizeRow) : [];
+    return { items, total: typeof obj.total === "number" ? obj.total : items.length };
+  }
+  return { items: [], total: 0 };
+}
+
 export default function EvidencePage() {
-  const { session, projectId, setProjectId } = useProjectContext();
+  const { session, projectId } = useProjectContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<EvidenceRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -28,57 +52,62 @@ export default function EvidencePage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   const search = searchParams.get("search") ?? "";
   const sourceId = searchParams.get("source") ?? "";
-  const projectParam = searchParams.get("project") ?? "";
+  const projectFromUrl = searchParams.get("project") ?? "";
+  const scopeProjectId = projectFromUrl || projectId;
 
-  useEffect(() => {
-    if (projectParam && projectParam !== projectId) {
-      setProjectId(projectParam);
-    }
-  }, [projectParam, projectId, setProjectId]);
-
-  async function load(append = false, nextOffset = 0) {
-    if (!session) return;
-    if (append) setLoadingMore(true);
-    else setLoading(true);
-    try {
-      const [evidence, src] = await Promise.all([
-        fetchEvidence(session, {
-          project_id: projectId ?? undefined,
-          source_id: sourceId || undefined,
-          search: search || undefined,
-          limit: PAGE_SIZE,
-          offset: nextOffset,
-        }),
-        fetchSources(session, projectId),
-      ]);
-      const rows = Array.isArray(evidence.items) ? evidence.items : [];
-      setTotal(typeof evidence.total === "number" ? evidence.total : rows.length);
-      setOffset(nextOffset);
-      setItems((prev) => (append ? [...prev, ...rows] : rows) as EvidenceRow[]);
-      setSources(src.map((s: { id: string; name: string }) => ({ id: s.id, name: s.name })));
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load evidence");
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  }
+  const load = useCallback(
+    async (append = false, nextOffset = 0) => {
+      if (!session) {
+        setLoading(false);
+        return;
+      }
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      try {
+        const [evidenceRaw, src] = await Promise.all([
+          fetchEvidence(session, {
+            project_id: scopeProjectId || undefined,
+            source_id: sourceId || undefined,
+            search: search || undefined,
+            limit: PAGE_SIZE,
+            offset: nextOffset,
+          }),
+          fetchSources(session, scopeProjectId),
+        ]);
+        const evidence = normalizeEvidencePayload(evidenceRaw);
+        setTotal(evidence.total);
+        setOffset(nextOffset);
+        setItems((prev) => (append ? [...prev, ...evidence.items] : evidence.items));
+        setSources(Array.isArray(src) ? src.map((s: { id: string; name: string }) => ({ id: s.id, name: s.name })) : []);
+        setError(null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load evidence");
+        if (!append) setItems([]);
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [session, scopeProjectId, sourceId, search],
+  );
 
   useEffect(() => {
     load(false, 0);
-  }, [session?.organizationId, session?.token, projectId, search, sourceId]);
+  }, [load]);
 
   const hasMore = items.length < total;
 
+  const subtitle = useMemo(
+    () => `${total} indexed items${scopeProjectId ? " in project scope" : ""}`,
+    [total, scopeProjectId],
+  );
+
   return (
     <div>
-      <PageHeader
-        title="Evidence"
-        subtitle={`${total} indexed items${projectId ? " in project scope" : ""}`}
-      />
+      <PageHeader title="Evidence" subtitle={subtitle} />
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <input
           className="aq-input flex-1"
@@ -118,23 +147,36 @@ export default function EvidencePage() {
         />
       )}
       <div className="space-y-3">
-        {items.map((item) => (
-          <article key={item.id} className="aq-card aq-card-p">
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <h2 className="font-medium text-slate-900 font-mono text-sm break-all">{item.file_path}</h2>
-              <EvidenceStrengthBadge strength={item.evidence_strength} />
-            </div>
-            <p className="text-xs text-slate-500 mb-2 font-mono">
-              {item.repository && `${item.repository} · `}
-              {item.commit_hash && `commit ${item.commit_hash.slice(0, 8)} · `}
-              {item.line_start != null && `lines ${item.line_start}${item.line_end ? `–${item.line_end}` : ""}`}
-            </p>
-            <p className="text-sm text-slate-700 line-clamp-3 whitespace-pre-wrap font-mono">{item.content}</p>
-            <Link to={`/evidence/${item.id}`} className="aq-link inline-block mt-3 text-sm">
-              View evidence
-            </Link>
-          </article>
-        ))}
+        {items.map((item) => {
+          const path = item.file_path ?? "Evidence item";
+          const preview = truncateText(item.content ?? "", 1200);
+          const hash =
+            item.commit_hash != null && item.commit_hash !== ""
+              ? String(item.commit_hash)
+              : null;
+          return (
+            <article key={item.id} className="aq-card aq-card-p">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <h2 className="font-medium text-slate-900 font-mono text-sm break-all">{path}</h2>
+                <EvidenceStrengthBadge strength={item.evidence_strength} />
+              </div>
+              <p className="text-xs text-slate-500 mb-2 font-mono">
+                {item.repository ? `${item.repository} · ` : null}
+                {hash ? `commit ${hash.slice(0, 8)} · ` : null}
+                {item.line_start != null
+                  ? `lines ${item.line_start}${item.line_end != null ? `–${item.line_end}` : ""}`
+                  : null}
+              </p>
+              <p className="text-sm text-slate-700 line-clamp-4 whitespace-pre-wrap font-mono">{preview}</p>
+              {item.content_truncated && (
+                <p className="text-xs text-slate-500 mt-1">Preview truncated — open detail for full text.</p>
+              )}
+              <Link to={`/evidence/${item.id}`} className="aq-link inline-block mt-3 text-sm">
+                View evidence
+              </Link>
+            </article>
+          );
+        })}
       </div>
       {hasMore && !loading && (
         <button

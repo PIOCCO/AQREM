@@ -15,6 +15,7 @@ import {
   IconSettings,
 } from "../icons/Icons";
 import { Logo, LogoMark } from "../ui/Logo";
+import RouteErrorBoundary from "../ui/RouteErrorBoundary";
 import { clearSession } from "../../lib/api";
 import { useAuth } from "../../lib/authContext";
 import { useProjectContext } from "../../lib/projectContext";
@@ -195,7 +196,9 @@ export default function AppShell() {
         </header>
 
         <main className="flex-1 p-6 lg:p-8 min-w-0 overflow-x-hidden">
-          <Outlet />
+          <RouteErrorBoundary key={location.pathname}>
+            <Outlet />
+          </RouteErrorBoundary>
         </main>
       </div>
     </div>

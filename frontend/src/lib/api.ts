@@ -209,11 +209,7 @@ export async function fetchEvidence(
   if (params?.limit != null) qs.set("limit", String(params.limit));
   const res = await authedFetch(session, `${API_BASE}/api/v1/evidence?${qs.toString()}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load evidence"));
-  const data = await res.json();
-  if (Array.isArray(data)) {
-    return { items: data, total: data.length, offset: params?.offset ?? 0, limit: params?.limit ?? data.length };
-  }
-  return data as { items: unknown[]; total: number; offset: number; limit: number };
+  return res.json();
 }
 
 export async function fetchEvidenceDetail(session: AuthSession, evidenceId: string) {
