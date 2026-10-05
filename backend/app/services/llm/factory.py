@@ -8,7 +8,9 @@ from app.services.llm.mock import MockLLMProvider
 @lru_cache
 def get_llm_provider() -> LLMProvider:
     settings = get_settings()
-    if settings.llm_provider == "azure" and settings.azure_openai_api_key:
+    if settings.llm_provider == "azure" and (
+        settings.azure_openai_api_key or settings.azure_openai_use_managed_identity
+    ):
         from app.services.llm.azure_openai import AzureOpenAIProvider
 
         return AzureOpenAIProvider(settings)

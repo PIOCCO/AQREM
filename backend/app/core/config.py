@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     llm_provider: str = "mock"
     azure_openai_endpoint: str | None = None
     azure_openai_api_key: str | None = None
+    azure_openai_api_version: str = "2024-10-21"
+    azure_openai_use_managed_identity: bool = False
     azure_openai_embedding_deployment: str = "text-embedding-3-small"
     azure_openai_chat_deployment: str = "gpt-4o-mini"
     embedding_dimensions: int = 384

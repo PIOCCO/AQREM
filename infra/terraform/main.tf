@@ -1,24 +1,6 @@
-# Skeleton for Azure Container Apps deployment (Phase 7).
-# Resources: Resource Group, Container Apps Environment, PostgreSQL Flexible Server (pgvector),
-# Azure Cache for Redis, Storage Account, Key Vault references, Container Apps for api/worker.
-
-terraform {
-  required_version = ">= 1.6.0"
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 4.0"
-    }
-  }
-}
-
-provider "azurerm" {
-  features {}
-}
-
-variable "project_name" {
-  type    = string
-  default = "aqrem"
-}
-
-# TODO: define modules for network, postgres, redis, blob, container apps, identity
+# AQREM — Azure OpenAI (Terraform)
+#
+# Provisions a single Azure OpenAI account with chat + embedding deployments.
+# Reuses an existing resource group; does not create Container Apps, Postgres, or VNet.
+#
+# See README.md for apply instructions and AQREM backend integration.
