@@ -1,6 +1,18 @@
+from __future__ import annotations
+
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_WEAK_SECRET_KEYS = frozenset(
+    {
+        "dev-secret-change-me",
+        "change-me-in-production",
+        "changeme",
+        "secret",
+    }
+)
 
 
 class Settings(BaseSettings):
@@ -59,6 +71,17 @@ class Settings(BaseSettings):
     llm_max_output_tokens: int = 2_048
     llm_max_retrieval_results: int = 12
     rate_limit_enabled: bool = True
+    allow_public_registration: bool = True
+
+    @model_validator(mode="after")
+    def _production_guardrails(self) -> Settings:
+        if self.app_env == "production":
+            key = self.secret_key.strip()
+            if key.lower() in _WEAK_SECRET_KEYS or len(key) < 32:
+                raise ValueError(
+                    "In production, SECRET_KEY must be a unique value of at least 32 characters."
+                )
+        return self
 
     @property
     def cors_origins_list(self) -> list[str]:

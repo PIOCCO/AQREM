@@ -1,0 +1,55 @@
+name: Security
+
+on:
+  push:
+    branches: [main, "cursor/**"]
+  pull_request:
+
+jobs:
+  backend-security:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: aqrem
+          POSTGRES_PASSWORD: aqrem
+          POSTGRES_DB: aqrem
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aqrem -d aqrem"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://aqrem:aqrem@localhost:5432/aqrem
+      APP_ENV: development
+      SECRET_KEY: ci-test-secret-key-at-least-32-chars-long
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend
+        run: pip install -e "backend[dev]"
+      - name: Ruff
+        run: python -m ruff check backend/app tests/backend
+      - name: Pytest (including security)
+        run: python -m pytest tests/backend -q --tb=short
+      - name: pip-audit
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/pyproject.toml || true
+
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate

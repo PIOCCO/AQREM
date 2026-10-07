@@ -14,6 +14,7 @@ from app.models.source import Source, SourceSyncJob
 from app.schemas.source import GitHubRepoConnectRequest, SourceCreate, SourceResponse, SyncJobResponse
 from app.services.sources.service import connect_github_to_source, create_source_record
 from app.services.storage.factory import get_blob_storage
+from app.services.storage.path_utils import safe_blob_filename
 
 router = APIRouter()
 
@@ -67,11 +68,16 @@ async def upload_files(
     storage = get_blob_storage()
     uploaded_paths: list[str] = []
     for upload in files:
-        _validate_extension(upload.filename or "upload.bin")
+        raw_name = upload.filename or "upload.bin"
+        _validate_extension(raw_name)
+        try:
+            safe_name = safe_blob_filename(raw_name)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filename") from exc
         data = await upload.read()
         if len(data) > settings.max_upload_bytes:
             raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File too large")
-        blob_path = f"{tenant.organization_id}/{source.id}/{upload.filename}"
+        blob_path = f"{tenant.organization_id}/{source.id}/{safe_name}"
         storage.upload_bytes(blob_path, data, upload.content_type or "application/octet-stream")
         uploaded_paths.append(blob_path)
 

@@ -56,6 +56,8 @@ def run_source_sync(job_id: str) -> dict:
             blobs = job.stats.get("uploaded_blobs") or []
             if not blobs and source.config.get("demo_path"):
                 settings = get_settings()
+                if settings.app_env != "development":
+                    raise ValueError("demo_path indexing is only allowed in development")
                 from pathlib import Path
 
                 demo_root = Path(source.config["demo_path"])

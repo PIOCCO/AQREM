@@ -8,6 +8,7 @@ from app.core.tenant import TenantContext
 from app.models.enums import SourceType
 from app.models.source import GitHubRepoConfig, Source
 from app.schemas.source import GitHubRepoConnectRequest, SourceCreate
+from app.services.sources.config_safety import sanitize_source_config_for_storage
 
 
 def create_source_record(
@@ -23,7 +24,7 @@ def create_source_record(
         name=payload.name,
         source_type=payload.source_type.value,
         scope=payload.scope.value,
-        config=payload.config,
+        config=sanitize_source_config_for_storage(payload.config),
     )
     db.add(source)
     if commit:

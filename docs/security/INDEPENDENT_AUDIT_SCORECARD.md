@@ -1,98 +1,104 @@
 # Independent Security Review Scorecard
 
 **Reviewer stance:** External auditor; prior hardening not assumed correct.  
-**Branch reviewed:** `cursor/aqrem-evidence-platform-00e3` (post-hardening + this pass).  
+**Branch reviewed:** `cursor/aqrem-evidence-platform-00e3` (third independent pass).  
 **Date:** 2026-10-07
 
 ## Methodology
 
-- Static review of backend, frontend, Docker, Terraform, security modules
-- Attacker-oriented analysis (IDOR, cross-tenant, AI abuse, secret exposure)
-- Automated: `pytest` guardrail/redaction/tenant tests; repo pattern scan for keys; `terraform validate` when available
-- **Not executed here:** live penetration test, DAST, production Azure config review (no credentials)
+- Full static review: backend, frontend, worker, Docker, Terraform, CI config
+- Attacker analysis: IDOR/BOLA, cross-tenant, JWT abuse, RAG poisoning, uploads, SSRF, secrets
+- Automated: `pytest` security suite; repo pattern scan (`sk-`, `AKIA`, private keys); `ruff`; `terraform validate` when CLI present
+- **Not executed in cloud agent VM:** Docker-based integration tests (no Docker), live Azure pentest, DAST
 
 ## Scorecard
 
 | Area | Status | Risk | Evidence |
 |------|--------|------|----------|
-| Authentication | Partial | Medium | JWT + bcrypt; 24h token; no MFA/OIDC |
-| Authorization | Good | Low–Med | RBAC + org checks on routes |
-| Tenant isolation | Good | Low | Org filters; matrix test added |
-| AI security | Partial | Medium–High | Guardrails + citation allowlist; injection not fully preventable |
-| RAG security | Partial | Medium | Org/project SQL filters + post-filter; no per-user ACL |
-| API security | Partial | Medium | Rate limits, headers; in-memory limits |
-| Database | Partial | Medium | ORM + parameterized vector SQL; default creds in compose |
-| File security | Partial | Medium | Extension/size checks; no AV scan |
-| Secrets | Partial | High (ops) | No keys in git scan; PAT blocked in prod; default SECRET_KEY |
-| Docker | Partial | Medium | API non-root; worker still root |
-| Terraform | Partial | Low–Med | OpenAI module only; public access default true |
-| Azure | Not deployed | High (ops) | No full landing zone in repo |
-| CI/CD | Missing | High | No automated security pipeline in repo |
-| Monitoring | Missing | High | No SIEM/alert wiring in repo |
+| Authentication | Partial | Medium | JWT + bcrypt; register gated by `ALLOW_PUBLIC_REGISTRATION`; 24h TTL; no MFA/OIDC |
+| Authorization | Good | Low–Med | RBAC + org checks on API routes |
+| Tenant isolation | Good | Low | SQL org filters + post-filter; `test_security_tenant_matrix.py` |
+| AI security | Partial | Medium–High | System rules, clamping, citation allowlist; injection not fully preventable |
+| RAG security | Partial | Medium | Org/project scoped retrieval; untrusted evidence wrapping; no doc-level ACL |
+| API security | Partial | Medium | SlowAPI limits, security headers; in-memory rate limits |
+| Database | Partial | Medium | Parameterized vector SQL + ORM; dev compose uses default creds |
+| File security | Improved | Medium | Extension/size limits; basename uploads; zip-slip filter; no AV |
+| Secrets | Partial | High (ops) | Config tokens stripped at create; response redaction; prod `SECRET_KEY` guard |
+| Docker | Partial | Low–Med | API + worker non-root (`Dockerfile.api`, `Dockerfile.worker`) |
+| Terraform | Partial | Low–Med | OpenAI module; scoped RBAC; public network default on account |
+| Azure | Not in repo | High (ops) | No full landing zone / private endpoints in this repo |
+| CI/CD | Improved | Medium | `.github/workflows/security.yml` (pytest, ruff, terraform, pip-audit) |
+| Monitoring | Missing | High | No SIEM/alert wiring in application repo |
 | Backup/DR | Missing | High | Not defined in application repo |
 
 ## Findings by severity
 
-### CRITICAL (operational — not code-only)
+### CRITICAL (operational — deployment blockers)
 
-| ID | Finding | Location | Fix |
-|----|---------|----------|-----|
-| C-OPS-1 | Default `SECRET_KEY` / DB passwords in `.env.example` | Deploy config | Rotate all secrets before prod |
-| C-OPS-2 | No TLS termination defined in app repo | Edge/ingress | HTTPS only at gateway |
+| ID | Finding | Location | Required fix |
+|----|---------|----------|--------------|
+| C-OPS-1 | Weak/default secrets if deploy ignores guards | Env / Key Vault | Unique `SECRET_KEY` (32+ chars), DB creds, rotate OpenAI keys |
+| C-OPS-2 | No TLS in application repo | Ingress / Container Apps | HTTPS-only at edge |
 
-### HIGH (addressed in this review where code applies)
+### HIGH
 
 | ID | Finding | Status |
 |----|---------|--------|
-| H-1 | GitHub PAT returned in `SourceResponse.config` | **Fixed** — redaction serializer |
-| H-2 | Inline GitHub token stored in prod | **Fixed** — rejected outside `development` |
-| H-3 | OpenAPI `/docs` exposed when `APP_ENV=production` | **Fixed** — disabled |
-| H-4 | Register / stale regenerate LLM without rate limits | **Fixed** |
-| H-5 | Retrieval preview returned full evidence bodies | **Fixed** — summary + sanitize |
-| H-6 | No CI secret/SAST/container gates | **Open** — operational |
+| H-1 | GitHub PAT in API responses | **Fixed** — serializer redaction |
+| H-2 | Inline GitHub token in production | **Fixed** — connect endpoint blocked outside `development` |
+| H-3 | Secrets via `SourceCreate.config` | **Fixed** — `sanitize_source_config_for_storage` |
+| H-4 | OpenAPI in production | **Fixed** — disabled when `APP_ENV=production` |
+| H-5 | Unbounded LLM/register abuse | **Fixed** — rate limits on login/register/generate/preview/stale |
+| H-6 | Upload path / zip-slip | **Fixed** — `safe_blob_filename`, `resolve_under_root`, archive path filter |
+| H-7 | Open registration in production | **Mitigated** — `ALLOW_PUBLIC_REGISTRATION=false` recommended; enforced when set |
+| H-8 | Production boot with weak JWT secret | **Fixed** — Settings validator fails fast |
+| H-9 | No runtime monitoring/SIEM | **Open** — operational |
+| H-10 | No backup/DR | **Open** — operational |
 
 ### MEDIUM
 
 | ID | Finding | Notes |
 |----|---------|-------|
-| M-1 | Prompt injection filter is regex-only | Expected; review workflow required |
-| M-2 | Model answer text not scanned for exfil patterns | Citations constrained; prose not |
-| M-3 | Worker container runs as root | Harden Dockerfile.worker |
-| M-4 | Rate limits per-IP in-memory | Use Redis when scaling |
-| M-5 | JWT 24h lifetime | Shorten + refresh for prod |
-| M-6 | `list_sources` includes org-scoped sources when filtering by project | By design; document |
+| M-1 | Regex-only injection sanitizer | Process + human review still required |
+| M-2 | Answer prose not scanned for exfil | Citations constrained |
+| M-3 | In-memory SlowAPI | Use Redis backend when horizontally scaled |
+| M-4 | JWT 24h lifetime | Shorten + refresh for production |
+| M-5 | `demo_path` worker indexing | Dev-only guard added |
+| M-6 | Terraform OpenAI public access default | Set `public_network_access_enabled=false` + PE for prod |
 
 ### LOW / INFORMATIONAL
 
-- CSRF low risk for Bearer-token SPA API
-- Mock LLM does not test Azure MI path
-- Frontend is not a security boundary (correct)
+- CSRF: low risk for Bearer-token SPA
+- Frontend not a security boundary (correct)
+- Azurite dev key in compose is public Azurite sample (dev only)
 
 ## AI attack assessment
 
 | Attack | Prevented? | Notes |
 |--------|------------|-------|
-| Direct prompt injection in question | Partially | Clamped length; system rules |
-| Indirect injection in evidence | Partially | `[filtered]` + untrusted markers; bypassable |
-| Cross-tenant via RAG | Yes (in tested paths) | Org ID in SQL + post-filter + matrix test |
-| Citation to non-retrieved IDs | Yes | `validate_structured_answer` |
+| Direct prompt injection (question) | Partially | Length clamp + system prompt |
+| Indirect injection (evidence) | Partially | Markers + `[filtered]`; not foolproof |
+| Cross-tenant RAG | Yes (tested paths) | Org in SQL + post-filter + matrix test |
+| Citation to other tenants' IDs | Yes | `validate_structured_answer` allowlist |
 | Tool/function abuse | N/A | No tool calling |
-| System prompt exfil via model | Partially | Prompt rules only; not cryptographic |
-| Cost abuse unauthenticated | Yes | 401 on protected routes |
-| Cost abuse authenticated | Partially | Rate limits; no per-org quota |
+| System prompt exfil | Partially | Policy text only |
+| Unauthenticated cost abuse | Yes | 401 on protected routes |
+| Authenticated cost abuse | Partially | Rate limits; no per-org quota |
 
-## Tests added this review
+## Tenant isolation tests
 
-- `test_security_tenant_matrix.py` — cross-tenant project/source/evidence/questionnaire/stale/retrieval
-- `test_security_source_redaction.py` — config secret redaction
+- `test_security_tenant_matrix.py` — User A / Tenant A vs Tenant B: project, source sync, evidence, questionnaire, stale answer, retrieval preview
+- `test_security_authorization.py` — cross-org project access
+- `test_security_source_config_api.py` — token not persisted via create API
 
-## Tooling run
+## Tooling run (this pass)
 
 | Tool | Result |
 |------|--------|
-| `pytest tests/backend/test_security_*.py` | Pass (no DB tests if Postgres down) |
-| Repo `sk-` / `AKIA` pattern scan | No matches |
-| `pip-audit` | Not available in environment |
-| `terraform validate` | Pass when Terraform installed |
+| `pytest tests/backend/test_security_*.py` | Pass (unit); DB-backed tests need Postgres |
+| Repo secret pattern scan | No `sk-` / `AKIA` / private keys |
+| `ruff check` | Run in CI workflow |
+| `terraform validate` | CI job; skipped locally if CLI missing |
+| `pip-audit` | CI job (non-blocking `|| true`) |
 
 See also [FINAL_REPORT.md](./FINAL_REPORT.md) and [AUDIT_FINDINGS.md](./AUDIT_FINDINGS.md).

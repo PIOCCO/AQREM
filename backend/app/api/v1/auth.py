@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.dependencies import get_tenant_context
 from app.core.rate_limit import AUTH_LOGIN_LIMIT, limiter
 from app.core.roles import Role
@@ -24,6 +25,12 @@ def _slugify(name: str) -> str:
 @router.post("/register", response_model=TokenResponse)
 @limiter.limit(AUTH_LOGIN_LIMIT)
 def register(request: Request, payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    settings = get_settings()
+    if not settings.allow_public_registration:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Registration is disabled for this deployment",
+        )
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
 

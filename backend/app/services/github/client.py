@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import httpx
 
 from app.services.ingestion.indexer import FilePayload
+from app.services.storage.path_utils import safe_archive_member_path
 
 
 @dataclass
@@ -46,6 +47,10 @@ class GitHubClient:
                 rel = member.name
                 if rel.startswith(root_prefix + "/"):
                     rel = rel[len(root_prefix) + 1 :]
+                safe_rel = safe_archive_member_path(rel)
+                if safe_rel is None:
+                    continue
+                rel = safe_rel
                 files.append(
                     FilePayload(
                         relative_path=rel,
@@ -66,7 +71,10 @@ def extract_archive_bytes(filename: str, data: bytes) -> list[FilePayload]:
             for info in zf.infolist():
                 if info.is_dir():
                     continue
-                files.append(FilePayload(relative_path=info.filename, data=zf.read(info)))
+                safe_rel = safe_archive_member_path(info.filename)
+                if safe_rel is None:
+                    continue
+                files.append(FilePayload(relative_path=safe_rel, data=zf.read(info)))
     elif lower.endswith(".tar.gz") or lower.endswith(".tgz"):
         with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
             for member in archive.getmembers():
@@ -75,7 +83,10 @@ def extract_archive_bytes(filename: str, data: bytes) -> list[FilePayload]:
                 extracted = archive.extractfile(member)
                 if extracted is None:
                     continue
-                files.append(FilePayload(relative_path=member.name, data=extracted.read()))
+                safe_rel = safe_archive_member_path(member.name)
+                if safe_rel is None:
+                    continue
+                files.append(FilePayload(relative_path=safe_rel, data=extracted.read()))
     else:
         files.append(FilePayload(relative_path=filename, data=data))
     return files

@@ -9,6 +9,7 @@ Production security materials for the AQREM evidence-backed questionnaire platfo
 | [THREAT_MODEL.md](./THREAT_MODEL.md) | STRIDE-oriented threats |
 | [CHECKLIST.md](./CHECKLIST.md) | Control checklist with status |
 | [FINAL_REPORT.md](./FINAL_REPORT.md) | What changed, remaining risks |
+| [INDEPENDENT_AUDIT_SCORECARD.md](./INDEPENDENT_AUDIT_SCORECARD.md) | External review scorecard (latest) |
 
 Run local checks:
 

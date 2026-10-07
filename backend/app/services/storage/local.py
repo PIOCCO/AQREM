@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from app.services.storage.base import BlobStorage
+from app.services.storage.path_utils import resolve_under_root
 
 
 class LocalBlobStorage(BlobStorage):
@@ -9,7 +10,7 @@ class LocalBlobStorage(BlobStorage):
         self.root.mkdir(parents=True, exist_ok=True)
 
     def _path(self, blob_path: str) -> Path:
-        full = self.root / blob_path
+        full = resolve_under_root(self.root, blob_path)
         full.parent.mkdir(parents=True, exist_ok=True)
         return full
 
