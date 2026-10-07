@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class EvidenceItemResponse(BaseModel):
@@ -64,10 +64,10 @@ class EvidenceListResponse(BaseModel):
 
 
 class EvidenceSearchRequest(BaseModel):
-    query: str
+    query: str = Field(min_length=1, max_length=8000)
     project_id: UUID | None = None
     source_id: UUID | None = None
-    limit: int = 8
+    limit: int = Field(default=8, ge=1, le=12)
 
 
 class RetrievalPreviewResponse(BaseModel):

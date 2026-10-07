@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_tenant_context
+from app.core.rate_limit import RETRIEVAL_PREVIEW_LIMIT, limiter
 from app.core.tenant import TenantContext
 from app.db.session import get_db
 from app.schemas.evidence import EvidenceItemResponse, EvidenceSearchRequest, RetrievalPreviewResponse
@@ -11,7 +12,9 @@ router = APIRouter()
 
 
 @router.post("/preview", response_model=RetrievalPreviewResponse)
+@limiter.limit(RETRIEVAL_PREVIEW_LIMIT)
 async def preview_retrieval(
+    request: Request,
     payload: EvidenceSearchRequest,
     tenant: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),

@@ -6,10 +6,14 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
+from app.core.rate_limit import limiter
+from app.core.security_middleware import SecurityHeadersMiddleware
 from app.db.base import Base
 from app.db.schema_patches import apply_schema_patches
 from app.db.session import engine
@@ -28,12 +32,21 @@ async def lifespan(_: FastAPI):
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="AQREM API", version="0.1.0", lifespan=lifespan)
+    app.state.limiter = limiter
+    if settings.rate_limit_enabled:
+        app.add_middleware(SlowAPIMiddleware)
+
+    @app.exception_handler(RateLimitExceeded)
+    async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+        return JSONResponse(status_code=429, content={"message": "Too many requests. Please retry later."})
+
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"] if settings.app_env == "development" else [],
+        allow_origins=settings.cors_origins_list,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Organization-Id"],
     )
     app.include_router(api_router)
 

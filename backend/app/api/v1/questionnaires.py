@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.audit.service import record_audit
 from app.core.config import get_settings
 from app.core.dependencies import get_tenant_context, require_role
+from app.core.rate_limit import LLM_GENERATE_LIMIT, limiter
 from app.core.roles import Role
 from app.core.tenant import TenantContext
 from app.db.session import get_db
@@ -350,7 +351,9 @@ async def upload_questionnaire(
 
 
 @router.post("/{questionnaire_id}/generate", response_model=GenerateBatchResponse)
+@limiter.limit(LLM_GENERATE_LIMIT)
 async def generate_all_answers(
+    request: Request,
     questionnaire_id: UUID,
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
     db: Session = Depends(get_db),
@@ -393,7 +396,9 @@ def get_question_detail(
 
 
 @router.post("/questions/{question_id}/generate", response_model=AnswerResponse)
+@limiter.limit(LLM_GENERATE_LIMIT)
 async def generate_question_answer(
+    request: Request,
     question_id: UUID,
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
     db: Session = Depends(get_db),
@@ -450,7 +455,9 @@ def reject_answer(
 
 
 @router.post("/questions/{question_id}/regenerate", response_model=AnswerResponse)
+@limiter.limit(LLM_GENERATE_LIMIT)
 async def regenerate_answer(
+    request: Request,
     question_id: UUID,
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
     db: Session = Depends(get_db),

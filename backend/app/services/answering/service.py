@@ -8,8 +8,15 @@ from app.models.enums import AnswerGenerationSource, AnswerStatus, Questionnaire
 from app.models.evidence import EvidenceItem
 from app.models.questionnaire import Answer, AnswerEvidenceLink, Question, Questionnaire
 from app.services.library.service import AnswerLibraryService
+from app.core.config import get_settings
 from app.services.llm.base import AnswerRequest
 from app.services.llm.factory import get_llm_provider
+from app.services.llm.guardrails import (
+    clamp_question,
+    sanitize_evidence_content,
+    validate_structured_answer,
+    wrap_evidence_for_prompt,
+)
 from app.services.retrieval.service import RetrievalService
 
 
@@ -24,7 +31,7 @@ def _evidence_blocks(items: list[EvidenceItem]) -> list[dict]:
                 "line_end": item.line_end,
                 "repository": item.repository,
                 "commit_hash": item.commit_hash,
-                "content": item.content[:2000],
+                "content": sanitize_evidence_content(item.content),
                 "evidence_strength": item.evidence_strength,
             }
         )
@@ -77,20 +84,28 @@ class AnsweringService:
             if reused is not None:
                 return reused
 
+        settings = get_settings()
+        top_k = min(top_k, settings.llm_max_retrieval_results)
         evidence_items = await RetrievalService(self.db).retrieve(
             organization_id=question.organization_id,
-            query=question.text,
+            query=clamp_question(question.text),
             project_id=questionnaire.project_id,
             limit=top_k,
         )
+        evidence_items = [
+            i for i in evidence_items if i.organization_id == question.organization_id
+        ]
+        blocks = wrap_evidence_for_prompt(_evidence_blocks(evidence_items))
+        allowed_ids = {str(i.id) for i in evidence_items}
 
         llm = get_llm_provider()
         structured = await llm.generate_answer(
             AnswerRequest(
-                question=question.text,
-                evidence_blocks=_evidence_blocks(evidence_items),
+                question=clamp_question(question.text),
+                evidence_blocks=blocks,
             )
         )
+        structured = validate_structured_answer(structured, allowed_evidence_ids=allowed_ids)
 
         if answer is None:
             answer = Answer(

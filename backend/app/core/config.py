@@ -52,6 +52,22 @@ class Settings(BaseSettings):
 
     access_token_expire_minutes: int = 60 * 24
 
+    cors_allowed_origins: str = ""
+    llm_max_question_chars: int = 8_000
+    llm_max_evidence_block_chars: int = 2_000
+    llm_max_answer_chars: int = 16_000
+    llm_max_output_tokens: int = 2_048
+    llm_max_retrieval_results: int = 12
+    rate_limit_enabled: bool = True
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        if self.app_env == "development":
+            return ["*"]
+        if not self.cors_allowed_origins.strip():
+            return []
+        return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
+
     @property
     def allowed_extensions_set(self) -> set[str]:
         return {ext.strip().lower() for ext in self.allowed_upload_extensions.split(",") if ext.strip()}

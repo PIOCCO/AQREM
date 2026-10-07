@@ -135,6 +135,8 @@ If the page loads but API calls fail, confirm the API is running and reachable o
 
 ## Security notes
 
+- See **[docs/security/README.md](docs/security/README.md)** for architecture, threat model, checklist, and hardening report.
+- Run `./scripts/run-security-checks.sh` locally when Postgres is available.
 - Tenant isolation enforced in API dependencies and scoped queries.
 - OAuth tokens and document bodies are not written to audit logs.
 - Configure real secrets via environment variables / Key Vault in production.
