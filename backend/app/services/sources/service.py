@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.audit.service import record_audit
+from app.core.config import get_settings
 from app.core.tenant import TenantContext
 from app.models.enums import SourceType
 from app.models.source import GitHubRepoConfig, Source
@@ -51,8 +52,13 @@ def connect_github_to_source(
     if source.source_type != SourceType.GITHUB.value:
         raise ValueError("Source is not GitHub type")
 
+    settings = get_settings()
     config = dict(source.config)
     if payload.access_token:
+        if settings.app_env != "development":
+            raise ValueError(
+                "Inline GitHub tokens are not allowed outside development; use GitHub App credentials."
+            )
         config["github_token_ref"] = "inline-dev-token"
         config["github_token"] = payload.access_token
 

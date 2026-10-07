@@ -1,9 +1,10 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_tenant_context, require_role
+from app.core.rate_limit import LLM_GENERATE_LIMIT, limiter
 from app.core.roles import Role
 from app.core.tenant import TenantContext
 from app.db.session import get_db
@@ -137,7 +138,9 @@ def revalidate_stale_answer(
 
 
 @router.post("/{answer_id}/regenerate", response_model=AnswerResponse)
+@limiter.limit(LLM_GENERATE_LIMIT)
 async def regenerate_stale_answer(
+    request: Request,
     answer_id: UUID,
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
     db: Session = Depends(get_db),

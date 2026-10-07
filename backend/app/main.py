@@ -31,7 +31,17 @@ async def lifespan(_: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="AQREM API", version="0.1.0", lifespan=lifespan)
+    docs_url = None if settings.app_env == "production" else "/docs"
+    redoc_url = None if settings.app_env == "production" else "/redoc"
+    openapi_url = None if settings.app_env == "production" else "/openapi.json"
+    app = FastAPI(
+        title="AQREM API",
+        version="0.1.0",
+        lifespan=lifespan,
+        docs_url=docs_url,
+        redoc_url=redoc_url,
+        openapi_url=openapi_url,
+    )
     app.state.limiter = limiter
     if settings.rate_limit_enabled:
         app.add_middleware(SlowAPIMiddleware)

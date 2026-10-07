@@ -72,4 +72,4 @@ class EvidenceSearchRequest(BaseModel):
 
 class RetrievalPreviewResponse(BaseModel):
     query: str
-    items: list[EvidenceItemResponse]
+    items: list[EvidenceItemSummaryResponse]

@@ -1,9 +1,21 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 from app.models.enums import EvidenceScope, SourceType
+
+_SENSITIVE_CONFIG_KEYS = frozenset({"github_token", "access_token", "api_key", "password", "secret"})
+
+
+def redact_source_config(config: dict | None) -> dict:
+    if not config:
+        return {}
+    safe = dict(config)
+    for key in list(safe.keys()):
+        if key.lower() in _SENSITIVE_CONFIG_KEYS or key.lower().endswith("_token"):
+            safe[key] = "[redacted]"
+    return safe
 
 
 class SourceCreate(BaseModel):
@@ -24,6 +36,10 @@ class SourceResponse(BaseModel):
     status: str
     config: dict
     created_at: datetime
+
+    @field_serializer("config")
+    def serialize_config(self, config: dict) -> dict:
+        return redact_source_config(config)
 
 
 class GitHubRepoConnectRequest(BaseModel):

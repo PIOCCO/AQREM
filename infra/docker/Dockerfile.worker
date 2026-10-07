@@ -5,7 +5,9 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     libmagic1 \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 1001 aqrem \
+    && useradd --system --uid 1001 --gid aqrem --create-home aqrem
 
 COPY backend/pyproject.toml /app/backend/
 RUN pip install --no-cache-dir -e /app/backend[dev]
@@ -16,4 +18,5 @@ COPY worker /app/worker
 ENV PYTHONPATH=/app/backend:/app/worker
 
 WORKDIR /app/worker
+USER aqrem
 CMD ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "-Q", "ingestion,default"]
