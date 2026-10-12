@@ -2,8 +2,10 @@ import { useState } from "react";
 import { Outlet, useLocation, useParams } from "react-router-dom";
 import ChatSidebar from "../chat/ChatSidebar";
 import { ChatMobileMenuButton } from "../../pages/ChatPage";
+import CommandPalette from "../ui/CommandPalette";
 import { LogoMark } from "../ui/Logo";
 import RouteErrorBoundary from "../ui/RouteErrorBoundary";
+import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
 import { pageTitleForPath } from "../../lib/routeMeta";
 
 function isChatRoute(pathname: string) {
@@ -16,17 +18,25 @@ export default function AppShell() {
   const chatMode = isChatRoute(location.pathname);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
 
   const activeConversationId = location.pathname.startsWith("/c/") ? params.conversationId : undefined;
 
+  useKeyboardShortcuts([
+    { key: "b", ctrlOrMeta: true, handler: () => setSidebarCollapsed((v) => !v) },
+    { key: "k", ctrlOrMeta: true, handler: () => setCommandOpen(true) },
+  ]);
+
   return (
     <div className="h-screen flex overflow-hidden bg-chat-main text-chat-fg font-sans">
+      <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} />
       <ChatSidebar
         activeConversationId={activeConversationId}
         collapsed={sidebarCollapsed}
         mobileOpen={mobileOpen}
         onCloseMobile={() => setMobileOpen(false)}
         onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+        onOpenCommandPalette={() => setCommandOpen(true)}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -49,6 +59,8 @@ export default function AppShell() {
                 openMobileSidebar: () => setMobileOpen(true),
                 sidebarCollapsed,
                 expandSidebar: () => setSidebarCollapsed(false),
+                toggleSidebar: () => setSidebarCollapsed((v) => !v),
+                openCommandPalette: () => setCommandOpen(true),
               }}
             />
           </RouteErrorBoundary>

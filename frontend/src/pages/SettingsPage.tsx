@@ -1,7 +1,11 @@
+import { useNavigate } from "react-router-dom";
+import WorkspacePage from "../components/layout/WorkspacePage";
+import { CopyButton } from "../components/ui/CopyButton";
 import { PageLead } from "../components/ui/States";
+import { useToast } from "../components/ui/Toast";
+import { clearSession } from "../lib/api";
 import { useAuth } from "../lib/authContext";
 import { useTheme, type ThemeMode } from "../lib/themeContext";
-import WorkspacePage from "../components/layout/WorkspacePage";
 
 function ThemeOption({
   id,
@@ -19,7 +23,7 @@ function ThemeOption({
   return (
     <label
       htmlFor={id}
-      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${
+      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors duration-150 aq-interactive ${
         checked ? "border-[var(--color-accent)] bg-[var(--color-accent-bg)]" : "border-border bg-surface"
       }`}
     >
@@ -35,12 +39,20 @@ function ThemeOption({
 export default function SettingsPage() {
   const { user } = useAuth();
   const { mode, resolved, setMode } = useTheme();
+  const navigate = useNavigate();
+  const toast = useToast();
 
   const options: { value: ThemeMode; label: string; description: string }[] = [
-    { value: "dark", label: "Dark", description: "Default AQREM appearance. Easier on the eyes in low light." },
+    { value: "dark", label: "Dark", description: "Default AQREM appearance." },
     { value: "light", label: "Light", description: "Bright surfaces for well-lit environments." },
-    { value: "system", label: "System", description: "Follow your device light or dark preference." },
+    { value: "system", label: "System", description: "Match your device preference." },
   ];
+
+  function signOut() {
+    clearSession();
+    toast.push("Signed out");
+    navigate("/login", { replace: true });
+  }
 
   return (
     <WorkspacePage>
@@ -51,7 +63,7 @@ export default function SettingsPage() {
             Appearance
           </h2>
           <p className="text-sm text-[var(--color-text-muted)] mb-4">
-            Currently using <span className="font-medium text-[var(--color-text-primary)]">{resolved}</span> theme
+            Currently using <span className="font-medium text-[var(--color-text-primary)]">{resolved}</span>
             {mode === "system" ? " (system)" : ""}.
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -62,7 +74,10 @@ export default function SettingsPage() {
                 label={opt.label}
                 description={opt.description}
                 checked={mode === opt.value}
-                onSelect={() => setMode(opt.value)}
+                onSelect={() => {
+                  setMode(opt.value);
+                  toast.push(`Theme set to ${opt.label}`);
+                }}
               />
             ))}
           </div>
@@ -74,23 +89,34 @@ export default function SettingsPage() {
           </h2>
           <div>
             <div className="aq-field-label">Signed in as</div>
-            <div className="font-medium text-[var(--color-text-primary)]">{user?.email ?? "—"}</div>
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-[var(--color-text-primary)]">{user?.email ?? "—"}</span>
+              {user?.email ? <CopyButton value={user.email} label="Copy email" /> : null}
+            </div>
           </div>
           <div>
             <div className="aq-field-label">Role</div>
             <div className="font-medium text-[var(--color-text-primary)] capitalize">
               {user?.role?.replaceAll("_", " ") ?? "—"}
             </div>
+            <p className="text-xs text-[var(--color-text-muted)] mt-1">Role is managed by your organization administrator.</p>
           </div>
           <div>
             <div className="aq-field-label">Organization ID</div>
-            <div className="font-mono text-xs break-all text-[var(--color-text-secondary)]">
-              {user?.organizationId ?? "—"}
+            <div className="flex items-start gap-2">
+              <span className="font-mono text-xs break-all text-[var(--color-text-secondary)] flex-1">
+                {user?.organizationId ?? "—"}
+              </span>
+              {user?.organizationId ? <CopyButton value={user.organizationId} label="Copy organization ID" /> : null}
             </div>
           </div>
-          <p className="text-xs pt-2 border-t border-border text-[var(--color-text-muted)]">
-            User management and organization settings are configured via the API in this release. Your role controls
-            which actions appear in the product.
+          <div className="pt-2 border-t border-border flex flex-wrap gap-2">
+            <button type="button" className="aq-btn-secondary" onClick={signOut}>
+              Sign out
+            </button>
+          </div>
+          <p className="text-xs text-[var(--color-text-muted)]">
+            Organization settings are configured by an administrator. Contact them to change membership or licenses.
           </p>
         </section>
       </div>

@@ -19,15 +19,18 @@ import {
 } from "../icons/Icons";
 import { Logo, LogoMark } from "../ui/Logo";
 import { clearSession, fetchReviewQueue } from "../../lib/api";
+import { useToast } from "../ui/Toast";
 import { useAuth } from "../../lib/authContext";
 import { groupConversationsByRecency } from "../../lib/conversations";
 import { useConversations } from "../../lib/conversationContext";
 import { useProjectContext } from "../../lib/projectContext";
 import { roleDisplayLabel } from "../../lib/roleLabels";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
+import { Tooltip } from "../ui/Tooltip";
 
 const primaryNav = [
   { to: "/projects", label: "Projects", Icon: IconFolder },
-  { to: "/projects", label: "Sources", Icon: IconDatabase, match: (p: string) => p.startsWith("/projects") },
+  { to: "/sources", label: "Sources", Icon: IconDatabase },
   { to: "/evidence", label: "Evidence", Icon: IconFileText },
   { to: "/questionnaires", label: "Questionnaires", Icon: IconClipboard },
   { to: "/review-queue", label: "Review Queue", Icon: IconCheckCircle, badge: true },
@@ -42,6 +45,7 @@ type Props = {
   mobileOpen: boolean;
   onCloseMobile: () => void;
   onToggleCollapse: () => void;
+  onOpenCommandPalette?: () => void;
 };
 
 function SidebarUserFooter({
@@ -92,13 +96,16 @@ function ConversationMenu({
   title,
   onRename,
   onDelete,
+  onShare,
 }: {
   title: string;
   onRename: (title: string) => void;
   onDelete: () => void;
+  onShare: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [draft, setDraft] = useState(title);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -137,11 +144,30 @@ function ConversationMenu({
           <button type="button" className="chat-menu-item w-full flex items-center gap-2" onClick={() => { setEditing(true); setDraft(title); }}>
             <IconEdit /> Rename
           </button>
-          <button type="button" className="chat-menu-item w-full flex items-center gap-2 text-red-600" onClick={() => { onDelete(); setOpen(false); }}>
+          <button type="button" className="chat-menu-item w-full flex items-center gap-2" onClick={() => { onShare(); setOpen(false); }}>
+            Share link
+          </button>
+          <button
+            type="button"
+            className="chat-menu-item w-full flex items-center gap-2 text-[var(--color-danger)]"
+            onClick={() => {
+              setOpen(false);
+              setConfirmDelete(true);
+            }}
+          >
             <IconTrash /> Delete
           </button>
         </div>
       ) : null}
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete conversation?"
+        description={<>This removes “{title}” from your device. This cannot be undone.</>}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={onDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
       {editing ? (
         <form className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onSubmit={submitRename}>
           <div className="w-full max-w-sm rounded-xl border border-chat-border bg-chat-surface p-4 shadow-composer">
@@ -164,11 +190,13 @@ export default function ChatSidebar({
   mobileOpen,
   onCloseMobile,
   onToggleCollapse,
+  onOpenCommandPalette,
 }: Props) {
   const navigate = useNavigate();
   const { user, session } = useAuth();
   const { projectId } = useProjectContext();
   const { conversations, createNew, remove, rename } = useConversations();
+  const toast = useToast();
   const [search, setSearch] = useState("");
   const [reviewCount, setReviewCount] = useState<number | null>(null);
 
@@ -226,14 +254,29 @@ export default function ChatSidebar({
                 <IconPlus className="h-4 w-4" />
                 New chat
               </button>
-              <div className="relative">
-                <IconSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-chat-muted pointer-events-none" />
-                <input
-                  className="ref-sidebar-search pl-9"
-                  placeholder="Search conversations"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
+              <div className="flex gap-2">
+                <div className="relative flex-1 min-w-0">
+                  <IconSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-chat-muted pointer-events-none" />
+                  <input
+                    className="ref-sidebar-search pl-9"
+                    placeholder="Search conversations"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    aria-label="Search conversations"
+                  />
+                </div>
+                {onOpenCommandPalette ? (
+                  <Tooltip label="Command palette (Ctrl+K)">
+                    <button
+                      type="button"
+                      className="ref-sidebar-sparkle-btn shrink-0 aq-interactive text-[11px] font-medium px-2"
+                      onClick={onOpenCommandPalette}
+                      aria-label="Open command palette"
+                    >
+                      ⌘K
+                    </button>
+                  </Tooltip>
+                ) : null}
               </div>
             </div>
 
@@ -278,8 +321,13 @@ export default function ChatSidebar({
                             <ConversationMenu
                               title={c.title}
                               onRename={(t) => rename(c.id, t)}
+                              onShare={() => {
+                                const url = `${window.location.origin}/c/${c.id}`;
+                                void navigator.clipboard.writeText(url).then(() => toast.push("Conversation link copied"));
+                              }}
                               onDelete={() => {
                                 remove(c.id);
+                                toast.push("Conversation deleted");
                                 if (activeConversationId === c.id) navigate("/");
                               }}
                             />
@@ -314,12 +362,16 @@ export default function ChatSidebar({
             >
               <IconSidebar className="h-[18px] w-[18px]" />
             </button>
-            <button type="button" className="chat-icon-btn focus-visible:ref-focus-ring" onClick={newChat} aria-label="New chat">
-              <IconPlus className="h-5 w-5" />
-            </button>
-            <Link to="/settings" className="chat-icon-btn focus-visible:ref-focus-ring" aria-label="Settings">
-              <IconSettings className="h-5 w-5" />
-            </Link>
+            <Tooltip label="New chat">
+              <button type="button" className="chat-icon-btn" onClick={newChat} aria-label="New chat">
+                <IconPlus className="h-5 w-5" />
+              </button>
+            </Tooltip>
+            <Tooltip label="Settings">
+              <Link to="/settings" className="chat-icon-btn" aria-label="Settings">
+                <IconSettings className="h-5 w-5" />
+              </Link>
+            </Tooltip>
           </div>
         )}
       </aside>

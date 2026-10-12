@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { Tooltip } from "../ui/Tooltip";
 import type { ChatMessage } from "../../lib/conversations";
 import {
   IconCopy,
@@ -77,7 +78,9 @@ function AssistantMessage({
     <div className="ref-msg-assistant">
       {needsReview ? (
         <div className="mb-3 flex items-center gap-2">
-          <span className="ref-badge-review">Needs review</span>
+          <Link to="/review-queue" className="ref-badge-review aq-interactive hover:opacity-90">
+            Needs review — open queue
+          </Link>
         </div>
       ) : null}
       <MarkdownContent content={message.content} />
@@ -147,10 +150,25 @@ export default function MessageList({
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const liveRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [showScrollDown, setShowScrollDown] = useState(false);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: streamingText ? "auto" : "smooth" });
   }, [messages, streamingText, retrievalStatus]);
+
+  useEffect(() => {
+    const parent = scrollRef.current?.parentElement;
+    if (!(parent instanceof HTMLElement)) return;
+    const el = parent;
+    function onScroll() {
+      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setShowScrollDown(dist > 120);
+    }
+    el.addEventListener("scroll", onScroll);
+    onScroll();
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [messages.length]);
 
   useEffect(() => {
     if (streamingText && liveRef.current) {
@@ -159,8 +177,20 @@ export default function MessageList({
   }, [streamingText]);
 
   return (
-    <div className="ref-conversation-scroll flex-1 overflow-y-auto">
-      <div className="ref-conversation-column">
+    <div className="ref-conversation-scroll flex-1 overflow-y-auto relative">
+      {showScrollDown ? (
+        <Tooltip label="Scroll to latest">
+          <button
+            type="button"
+            className="ref-scroll-bottom-btn"
+            onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}
+            aria-label="Scroll to latest messages"
+          >
+            ↓
+          </button>
+        </Tooltip>
+      ) : null}
+      <div className="ref-conversation-column" ref={scrollRef}>
         {messages.map((m, idx) => {
           const prevUser =
             m.role === "assistant"

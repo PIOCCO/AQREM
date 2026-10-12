@@ -778,4 +778,53 @@
     border-color: var(--admin-alert-border);
     color: var(--admin-alert-text);
   }
+
+  .aq-interactive {
+    @apply transition-colors duration-150 ease-out;
+    cursor: pointer;
+  }
+  .aq-interactive:disabled,
+  .aq-interactive[aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+  .aq-interactive-row {
+    @apply transition-colors duration-150 ease-out cursor-pointer;
+  }
+  .aq-interactive-row:hover {
+    background: var(--chat-hover, var(--color-surface-muted));
+  }
+  .aq-interactive-row:focus-visible {
+    @apply outline-none ring-2 ring-offset-2;
+    ring-color: var(--color-focus-ring);
+    ring-offset-color: var(--color-background);
+  }
+
+  .aq-tooltip-wrap {
+    @apply relative inline-flex;
+  }
+  .aq-tooltip-bubble {
+    @apply pointer-events-none absolute left-1/2 bottom-full z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md px-2 py-1 text-xs shadow-card;
+    background: var(--color-surface-elevated);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border);
+  }
+
+  .ref-scroll-bottom-btn {
+    @apply aq-interactive absolute bottom-4 right-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-chat-border bg-chat-surface text-sm shadow-composer;
+  }
+  .ref-scroll-bottom-btn:hover {
+    background: var(--chat-hover);
+  }
+  .ref-scroll-bottom-btn:focus-visible {
+    @apply outline-none ring-2 ring-offset-2;
+    ring-color: var(--color-focus-ring);
+    ring-offset-color: var(--color-background);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .aq-interactive,
+    .aq-interactive-row {
+      transition: none;
+    }
+  }
 }

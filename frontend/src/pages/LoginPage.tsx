@@ -49,7 +49,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md aq-card shadow-panel aq-card-p">
         <div className="mb-6">
           <Logo />
-          <p className="text-slate-600 mt-3 text-sm">Evidence-backed questionnaire responses</p>
+          <p className="text-[var(--color-text-muted)] mt-3 text-sm">Evidence-backed questionnaire responses</p>
         </div>
         <h1 className="text-lg font-semibold mb-4">Sign in</h1>
         <form className="space-y-3" onSubmit={onSubmit}>
@@ -74,7 +74,7 @@ export default function LoginPage() {
             )}
           </button>
         </form>
-        <p className="text-xs text-slate-500 mt-4">
+        <p className="text-xs text-[var(--color-text-muted)] mt-4">
           Access is provisioned by your administrator. If you received an invitation link, use that URL to set your
           password.
         </p>

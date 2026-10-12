@@ -1,5 +1,17 @@
-import { useCallback, useEffect, useRef, type ChangeEvent, type KeyboardEvent, type ReactNode } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { IconArrowUp, IconPlus, IconStop } from "../icons/Icons";
+import { Tooltip } from "../ui/Tooltip";
 
 export type PendingAttachment = {
   id: string;
@@ -27,23 +39,29 @@ type Props = {
 const MAX_LINES = 8;
 const LINE_HEIGHT_PX = 24;
 
-export default function ChatComposer({
-  value,
-  onChange,
-  onSend,
-  onStop,
-  streaming,
-  disabled,
-  loading,
-  attachments,
-  onPickFiles,
-  onRemoveAttachment,
-  uploadDisabledReason,
-  centered,
-  scopeSlot,
-}: Props) {
+const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatComposer(
+  {
+    value,
+    onChange,
+    onSend,
+    onStop,
+    streaming,
+    disabled,
+    loading,
+    attachments,
+    onPickFiles,
+    onRemoveAttachment,
+    uploadDisabledReason,
+    centered,
+    scopeSlot,
+  },
+  forwardedRef,
+) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  useImperativeHandle(forwardedRef, () => textareaRef.current as HTMLTextAreaElement);
 
   const resize = useCallback(() => {
     const el = textareaRef.current;
@@ -69,14 +87,29 @@ export default function ChatComposer({
     e.target.value = "";
   }
 
+  function onDrop(e: DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    if (uploadDisabledReason || disabled) return;
+    onPickFiles(e.dataTransfer.files);
+  }
+
   const canSend =
     !disabled &&
     !loading &&
     (value.trim().length > 0 || attachments.some((a) => a.status === "pending"));
 
+  const attachTitle = uploadDisabledReason ?? "Attach documents";
+
   return (
     <div
       className={`w-full ${centered ? "max-w-[var(--chat-column-max)] mx-auto px-4" : "max-w-[var(--chat-column-max)] mx-auto px-4 pb-4 pt-2"}`}
+      onDragOver={(e) => {
+        e.preventDefault();
+        if (!uploadDisabledReason && !disabled) setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={onDrop}
     >
       {scopeSlot ? <div className="mb-3">{scopeSlot}</div> : null}
       {attachments.length > 0 ? (
@@ -88,10 +121,10 @@ export default function ChatComposer({
             >
               <span className="max-w-[12rem] truncate">{a.file.name}</span>
               {a.status === "uploading" ? <span className="chat-spinner" aria-hidden /> : null}
-              {a.status === "error" ? <span className="text-[var(--chat-danger-fg)]">Failed</span> : null}
+              {a.status === "error" ? <span className="text-[var(--color-danger)]">Failed</span> : null}
               <button
                 type="button"
-                className="text-chat-muted hover:text-chat-fg focus-visible:ref-focus-ring rounded"
+                className="text-chat-muted hover:text-chat-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-focus-ring)] rounded"
                 onClick={() => onRemoveAttachment(a.id)}
                 aria-label={`Remove ${a.file.name}`}
               >
@@ -102,7 +135,7 @@ export default function ChatComposer({
         </ul>
       ) : null}
 
-      <div className="chat-composer shadow-composer">
+      <div className={`chat-composer shadow-composer ${dragOver ? "ring-2 ring-[var(--color-accent)]" : ""}`}>
         <input
           ref={fileRef}
           type="file"
@@ -111,16 +144,18 @@ export default function ChatComposer({
           onChange={onFileChange}
           disabled={Boolean(uploadDisabledReason) || disabled}
         />
-        <button
-          type="button"
-          className="chat-composer-attach-btn shrink-0"
-          onClick={() => fileRef.current?.click()}
-          disabled={Boolean(uploadDisabledReason) || disabled}
-          title={uploadDisabledReason ?? "Attach documents"}
-          aria-label="Attach documents"
-        >
-          <IconPlus className="h-5 w-5" />
-        </button>
+        <Tooltip label={attachTitle}>
+          <button
+            type="button"
+            className="chat-composer-attach-btn shrink-0"
+            onClick={() => fileRef.current?.click()}
+            disabled={Boolean(uploadDisabledReason) || disabled}
+            aria-label="Attach documents"
+            title={attachTitle}
+          >
+            <IconPlus className="h-5 w-5" />
+          </button>
+        </Tooltip>
         <textarea
           ref={textareaRef}
           rows={1}
@@ -133,20 +168,28 @@ export default function ChatComposer({
           aria-label="Message"
         />
         {streaming ? (
-          <button type="button" className="chat-composer-send chat-composer-send-stop" onClick={onStop} aria-label="Stop generating">
-            <IconStop className="h-4 w-4" />
-            <span className="sr-only">Stop</span>
-          </button>
+          <Tooltip label="Stop generating">
+            <button
+              type="button"
+              className="chat-composer-send chat-composer-send-stop aq-interactive"
+              onClick={onStop}
+              aria-label="Stop generating"
+            >
+              <IconStop className="h-4 w-4" />
+            </button>
+          </Tooltip>
         ) : (
-          <button
-            type="button"
-            className={`chat-composer-send ${canSend ? "chat-composer-send-ready" : ""}`}
-            disabled={!canSend}
-            onClick={onSend}
-            aria-label="Send message"
-          >
-            {loading ? <span className="chat-spinner" aria-hidden /> : <IconArrowUp className="h-4 w-4" />}
-          </button>
+          <Tooltip label={canSend ? "Send message" : "Enter a message to send"}>
+            <button
+              type="button"
+              className={`chat-composer-send aq-interactive ${canSend ? "chat-composer-send-ready" : ""}`}
+              disabled={!canSend}
+              onClick={onSend}
+              aria-label="Send message"
+            >
+              {loading ? <span className="chat-spinner" aria-hidden /> : <IconArrowUp className="h-4 w-4" />}
+            </button>
+          </Tooltip>
         )}
       </div>
       <p className="ref-composer-disclaimer">
@@ -154,4 +197,6 @@ export default function ChatComposer({
       </p>
     </div>
   );
-}
+});
+
+export default ChatComposer;

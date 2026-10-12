@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
+import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
+import { useToast } from "../components/ui/Toast";
 import ChatComposer, { type PendingAttachment } from "../components/chat/ChatComposer";
 import ChatConversationHeader from "../components/chat/ChatConversationHeader";
 import ChatEmptyState from "../components/chat/ChatEmptyState";
@@ -28,6 +30,7 @@ type ChatOutletContext = {
   openMobileSidebar?: () => void;
   sidebarCollapsed?: boolean;
   expandSidebar?: () => void;
+  openCommandPalette?: () => void;
 };
 
 function formatAttachmentMeta(files: PendingAttachment[]) {
@@ -58,10 +61,21 @@ export default function ChatPage() {
   const [retrievalStatus, setRetrievalStatus] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const lastQueryRef = useRef<string | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const { push: toast } = useToast();
   const [uploadSourceId, setUploadSourceId] = useState<string | null>(null);
   const [sourcesCount, setSourcesCount] = useState<number | null>(null);
   const [uploadSourceLoading, setUploadSourceLoading] = useState(false);
   const outlet = useOutletContext<ChatOutletContext | null>();
+
+  useKeyboardShortcuts([
+    {
+      key: "/",
+      handler: () => {
+        composerRef.current?.focus();
+      },
+    },
+  ]);
 
   useEffect(() => {
     if (!conversationId) {
@@ -294,6 +308,7 @@ export default function ChatPage() {
       m.id === messageId ? { ...m, meta: { ...m.meta, feedback } } : m,
     );
     persist({ ...conversation, messages });
+    toast(feedback === "good" ? "Thanks for the feedback" : "Feedback recorded — we'll use this to improve answers");
   }
 
   function onRetry() {
@@ -337,6 +352,7 @@ export default function ChatPage() {
           />
           <div className="w-full shrink-0 ref-composer-dock">
             <ChatComposer
+              ref={composerRef}
               value={input}
               onChange={setInput}
               onSend={onSend}
@@ -364,6 +380,7 @@ export default function ChatPage() {
           />
           <div className="shrink-0 ref-composer-dock">
             <ChatComposer
+              ref={composerRef}
               value={input}
               onChange={setInput}
               onSend={onSend}
