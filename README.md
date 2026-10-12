@@ -141,3 +141,34 @@ If the page loads but API calls fail, confirm the API is running and reachable o
 - OAuth tokens and document bodies are not written to audit logs.
 - Configure real secrets via environment variables / Key Vault in production.
 - `LLM_PROVIDER=mock` uses deterministic embeddings for local development.
+
+## Azure OpenAI
+
+Production answering and chat use **Azure OpenAI** when `LLM_PROVIDER=azure`. Configuration, SDK details, health checks, and an optional live smoke test are documented in **[docs/AZURE_OPENAI.md](docs/AZURE_OPENAI.md)**.
+
+```bash
+# Optional — verify live Azure (requires your deployments and credentials)
+python3 scripts/azure_openai_smoke.py
+```
+
+**Live Azure verified:** only after the smoke script succeeds in your environment. CI uses the mock provider.
+
+## End-to-end workflow (local)
+
+1. `docker compose up -d postgres redis azurite && docker compose up --build api worker`
+2. Register / sign in via the UI or API (`/api/v1/auth/register`)
+3. Create a **project** and connect a **source** (demo folder, file upload, or GitHub)
+4. Wait for the sync job to finish (`ready` status on the source)
+5. Create a **questionnaire**, upload CSV/XLSX, **generate** answers, **review** in the queue
+6. **Approve** answers → **Answer library**; **export** CSV/XLSX
+7. Use **Chat** (home) for ad-hoc questions via `POST /api/v1/chat/ask` (same RAG + LLM stack)
+
+Full backend integration tests require Postgres with pgvector:
+
+```bash
+docker compose exec postgres psql -U aqrem -c "CREATE DATABASE aqrem_test;"
+TEST_DATABASE_URL=postgresql+psycopg://aqrem:aqrem@localhost:5432/aqrem_test \
+  python3 -m pytest tests/backend -q
+```
+
+See **[docs/E2E_AUDIT_REPORT.md](docs/E2E_AUDIT_REPORT.md)** for feature status and known gaps.

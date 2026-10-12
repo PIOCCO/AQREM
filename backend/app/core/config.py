@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _WEAK_SECRET_KEYS = frozenset(
@@ -37,14 +37,45 @@ class Settings(BaseSettings):
     azure_storage_container: str = "evidence"
     local_upload_dir: str = "/tmp/aqrem/uploads"
 
-    llm_provider: str = "mock"
-    azure_openai_endpoint: str | None = None
-    azure_openai_api_key: str | None = None
-    azure_openai_api_version: str = "2024-10-21"
-    azure_openai_use_managed_identity: bool = False
-    azure_openai_embedding_deployment: str = "text-embedding-3-small"
-    azure_openai_chat_deployment: str = "gpt-4o-mini"
-    embedding_dimensions: int = 384
+    llm_provider: str = Field(default="mock", validation_alias=AliasChoices("llm_provider", "LLM_PROVIDER"))
+    azure_openai_endpoint: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("azure_openai_endpoint", "AZURE_OPENAI_ENDPOINT"),
+    )
+    azure_openai_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("azure_openai_api_key", "AZURE_OPENAI_API_KEY"),
+    )
+    azure_openai_api_version: str = Field(
+        default="2024-10-21",
+        validation_alias=AliasChoices("azure_openai_api_version", "AZURE_OPENAI_API_VERSION"),
+    )
+    azure_openai_use_managed_identity: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "azure_openai_use_managed_identity",
+            "AZURE_OPENAI_USE_MANAGED_IDENTITY",
+        ),
+    )
+    azure_openai_embedding_deployment: str = Field(
+        default="text-embedding-3-small",
+        validation_alias=AliasChoices(
+            "azure_openai_embedding_deployment",
+            "AZURE_OPENAI_EMBEDDING_DEPLOYMENT",
+        ),
+    )
+    azure_openai_chat_deployment: str = Field(
+        default="gpt-4o-mini",
+        validation_alias=AliasChoices(
+            "azure_openai_chat_deployment",
+            "AZURE_OPENAI_CHAT_DEPLOYMENT",
+            "AZURE_OPENAI_DEPLOYMENT",
+        ),
+    )
+    embedding_dimensions: int = Field(
+        default=384,
+        validation_alias=AliasChoices("embedding_dimensions", "EMBEDDING_DIMENSIONS"),
+    )
 
     github_app_id: str | None = None
     github_client_id: str | None = None
@@ -81,6 +112,15 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "In production, SECRET_KEY must be a unique value of at least 32 characters."
                 )
+            if self.llm_provider.lower().strip() == "azure":
+                from app.core.llm_config import inspect_azure_openai
+
+                status = inspect_azure_openai(self)
+                if not status.configured:
+                    raise ValueError(
+                        "Production requires complete Azure OpenAI settings when LLM_PROVIDER=azure. "
+                        f"Missing: {', '.join(status.missing)}"
+                    )
         return self
 
     @property

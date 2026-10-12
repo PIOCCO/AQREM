@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -12,6 +13,7 @@ from sqlalchemy import text
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
+from app.core.llm_config import inspect_azure_openai, llm_provider_summary
 from app.core.rate_limit import limiter
 from app.core.security_middleware import SecurityHeadersMiddleware
 from app.db.base import Base
@@ -20,8 +22,26 @@ from app.db.session import engine
 import app.models  # noqa: F401
 
 
+logger = logging.getLogger("aqrem")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    settings = get_settings()
+    summary = llm_provider_summary(settings)
+    logger.info(
+        "LLM provider=%s configured=%s auth=%s",
+        summary.get("provider"),
+        summary.get("configured"),
+        summary.get("auth_mode"),
+    )
+    if settings.llm_provider.lower().strip() == "azure":
+        az = inspect_azure_openai(settings)
+        if not az.configured:
+            logger.error(
+                "Azure OpenAI incomplete configuration; missing: %s",
+                ", ".join(az.missing),
+            )
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         Base.metadata.create_all(bind=conn)
@@ -85,6 +105,34 @@ def create_app() -> FastAPI:
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/health/live")
+    def health_live() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.get("/health/ready")
+    def health_ready() -> dict[str, object]:
+        db_ok = False
+        db_error: str | None = None
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            db_ok = True
+        except Exception as exc:
+            db_error = type(exc).__name__
+
+        llm = llm_provider_summary(settings)
+        llm_ready = llm.get("provider") != "azure" or bool(llm.get("configured"))
+
+        status = "ok" if db_ok and llm_ready else "degraded"
+        payload: dict[str, object] = {
+            "status": status,
+            "database": {"ready": db_ok, "error": db_error},
+            "llm": llm,
+        }
+        if status != "ok":
+            return JSONResponse(status_code=503, content=payload)
+        return payload
 
     if settings.serve_frontend or os.environ.get("SERVE_FRONTEND", "").strip() in {
         "1",

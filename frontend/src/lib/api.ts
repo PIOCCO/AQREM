@@ -464,6 +464,21 @@ export async function regenerateQuestionAnswer(session: AuthSession, questionId:
   return res.json();
 }
 
+export async function askChat(
+  session: AuthSession,
+  payload: { query: string; project_id?: string | null },
+) {
+  const res = await authedFetch(session, `${API_BASE}/api/v1/chat/ask`, {
+    method: "POST",
+    body: JSON.stringify({
+      query: payload.query,
+      project_id: payload.project_id ?? null,
+    }),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Chat request failed"));
+  return res.json();
+}
+
 export async function previewRetrieval(
   session: AuthSession,
   payload: { query: string; project_id?: string | null; source_id?: string; limit?: number },
