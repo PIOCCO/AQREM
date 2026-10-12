@@ -13,6 +13,9 @@ import DashboardPage from "./pages/DashboardPage";
 import EvidenceDetailPage from "./pages/EvidenceDetailPage";
 import EvidencePage from "./pages/EvidencePage";
 import LoginPage from "./pages/LoginPage";
+import AcceptInvitePage from "./pages/AcceptInvitePage";
+import PlatformAdminPage from "./pages/PlatformAdminPage";
+import RequirePlatformAdmin from "./components/RequirePlatformAdmin";
 import AnswerLibraryDetailPage from "./pages/AnswerLibraryDetailPage";
 import AnswerLibraryPage from "./pages/AnswerLibraryPage";
 import ProjectsPage from "./pages/ProjectsPage";
@@ -69,6 +72,15 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={session ? <Navigate to="/" replace /> : <LoginPage />} />
+      <Route path="/accept-invite" element={<AcceptInvitePage />} />
+      <Route
+        path="/platform-admin"
+        element={
+          <RequirePlatformAdmin>
+            <PlatformAdminPage />
+          </RequirePlatformAdmin>
+        }
+      />
       <Route
         path="/*"
         element={

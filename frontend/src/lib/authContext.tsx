@@ -6,8 +6,9 @@ type AuthUser = {
   id: string;
   email: string;
   fullName: string;
-  organizationId: string;
-  role: UserRole;
+  organizationId: string | null;
+  role: UserRole | null;
+  isPlatformAdmin: boolean;
 };
 
 type AuthContextValue = {
@@ -23,7 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const token = localStorage.getItem("aqrem_token");
   const organizationId = localStorage.getItem("aqrem_org");
   const session = useMemo(
-    () => (token && organizationId ? { token, organizationId } : null),
+    () => (token ? { token, organizationId: organizationId ?? null } : null),
     [token, organizationId],
   );
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -43,8 +44,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: me.id,
         email: me.email,
         fullName: me.full_name,
-        organizationId: me.organization_id,
-        role: me.role as UserRole,
+        organizationId: me.organization_id ?? null,
+        role: (me.role as UserRole) ?? null,
+        isPlatformAdmin: Boolean(me.is_platform_admin),
       });
     } catch {
       setUser(null);

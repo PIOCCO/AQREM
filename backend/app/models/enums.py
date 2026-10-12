@@ -66,6 +66,14 @@ class StalenessEventStatus(StrEnum):
     RESOLVED = "resolved"
 
 
+class LicenseStatus(StrEnum):
+    """Organization license state (separate from seat quantity)."""
+
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    TEST = "test"
+
+
 class AnswerOutcome(StrEnum):
     """Structured employee-facing result for chat and RAG answers."""
 

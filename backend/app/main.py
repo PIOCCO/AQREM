@@ -46,6 +46,12 @@ async def lifespan(_: FastAPI):
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         Base.metadata.create_all(bind=conn)
         apply_schema_patches(conn)
+    from app.db.session import SessionLocal
+    from app.services.bootstrap import ensure_platform_admin
+
+    with SessionLocal() as session:
+        ensure_platform_admin(session)
+        session.commit()
     yield
 
 

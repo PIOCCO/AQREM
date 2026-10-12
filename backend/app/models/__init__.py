@@ -1,6 +1,7 @@
 from app.models.answer_library import AnswerLibraryEntry, AnswerLibraryEvidenceLink
 from app.models.audit import AuditEvent
 from app.models.evidence import EvidenceItem, EvidenceItemVersion
+from app.models.invitation import UserInvitation
 from app.models.organization import Organization, OrganizationMembership, User
 from app.models.project import Project
 from app.models.questionnaire import Answer, AnswerEvidenceLink, Question, Questionnaire
@@ -25,6 +26,7 @@ __all__ = [
     "IngestionIgnoreRule",
     "Organization",
     "OrganizationMembership",
+    "UserInvitation",
     "Answer",
     "AnswerEvidenceLink",
     "Project",

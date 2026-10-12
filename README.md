@@ -43,11 +43,11 @@ TEST_DATABASE_URL=postgresql+psycopg://aqrem:aqrem@localhost:5432/aqrem_test pyt
 
 ### Register & ingest demo repo (API)
 
+Set `PLATFORM_ADMIN_EMAIL` / `PLATFORM_ADMIN_PASSWORD` in `.env`, start the API, sign in at `/platform-admin`, or use the admin API:
+
 ```bash
-# Register org + admin user
-curl -s -X POST http://localhost:8000/api/v1/auth/register \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"alex@acme.example","password":"password","full_name":"Alex","organization_name":"Acme Corporation"}'
+# Platform admin login (after bootstrap), then create org + invite users via /api/v1/admin/*
+# Public POST /api/v1/auth/register returns 403
 
 # Create project, source, and trigger demo-path sync (set TOKEN/ORG from register response)
 curl -s -X POST http://localhost:8000/api/v1/projects \

@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { AuthProvider } from "../lib/authContext";
 import { LoadingState } from "./ui/States";
-import { clearSession, fetchAuthMe, loadSession } from "../lib/api";
+import { clearSession, fetchAuthMe, loadSession, saveSession } from "../lib/api";
 
 export default function RequireAuth({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -16,7 +16,20 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
       return;
     }
     fetchAuthMe(session)
-      .then(() => {
+      .then((me) => {
+        if (me.is_platform_admin && !session.organizationId) {
+          setValid(false);
+          setReady(true);
+          return;
+        }
+        if (!me.is_platform_admin && !session.organizationId && !me.organization_id) {
+          setValid(false);
+          setReady(true);
+          return;
+        }
+        if (!session.organizationId && me.organization_id) {
+          saveSession(session.token, me.organization_id);
+        }
         setValid(true);
         setReady(true);
       })

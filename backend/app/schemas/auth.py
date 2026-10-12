@@ -5,13 +5,6 @@ from pydantic import BaseModel, EmailStr
 from app.core.roles import Role
 
 
-class RegisterRequest(BaseModel):
-    email: EmailStr
-    password: str
-    full_name: str
-    organization_name: str
-
-
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
@@ -21,13 +14,17 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    organization_id: UUID
-    role: Role
+    organization_id: UUID | None = None
+    role: Role | None = None
+    must_change_password: bool = False
+    is_platform_admin: bool = False
 
 
 class UserResponse(BaseModel):
     id: UUID
     email: EmailStr
     full_name: str
-    organization_id: UUID
-    role: Role
+    organization_id: UUID | None = None
+    role: Role | None = None
+    is_platform_admin: bool = False
+    must_change_password: bool = False

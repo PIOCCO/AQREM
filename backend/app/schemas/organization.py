@@ -14,6 +14,8 @@ class OrganizationResponse(BaseModel):
     id: UUID
     name: str
     slug: str
+    license_limit: int | None = None
+    license_status: str | None = None
 
 
 class ProjectInitialSourceCreate(BaseModel):

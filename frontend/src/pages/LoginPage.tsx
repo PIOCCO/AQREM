@@ -1,14 +1,12 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Logo } from "../components/ui/Logo";
-import { clearSession } from "../lib/api";
-import { loginUser, registerUser, saveSession } from "../lib/api";
+import { clearSession, loginUser, saveSession } from "../lib/api";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const sessionExpired = searchParams.get("expired") === "1";
-  const [mode, setMode] = useState<"login" | "register">("login");
   const [error, setError] = useState<string | null>(
     sessionExpired
       ? "Your session is invalid or expired (common after changing servers or ports). Please sign in again."
@@ -26,22 +24,18 @@ export default function LoginPage() {
     setLoading(true);
     const form = new FormData(e.currentTarget);
     try {
-      if (mode === "register") {
-        const data = await registerUser({
-          email: String(form.get("email")),
-          password: String(form.get("password")),
-          full_name: String(form.get("full_name")),
-          organization_name: String(form.get("organization_name")),
-        });
-        saveSession(data.access_token, data.organization_id);
+      const data = await loginUser({
+        email: String(form.get("email")),
+        password: String(form.get("password")),
+      });
+      saveSession(data.access_token, data.organization_id ?? null);
+      if (data.is_platform_admin && !data.organization_id) {
+        navigate("/platform-admin");
+      } else if (data.must_change_password) {
+        navigate("/change-password");
       } else {
-        const data = await loginUser({
-          email: String(form.get("email")),
-          password: String(form.get("password")),
-        });
-        saveSession(data.access_token, data.organization_id);
+        navigate("/");
       }
-      navigate("/");
     } catch {
       setError("Authentication failed. Check your credentials and try again.");
     } finally {
@@ -56,31 +50,17 @@ export default function LoginPage() {
           <Logo />
           <p className="text-slate-600 mt-3 text-sm">Evidence-backed questionnaire responses</p>
         </div>
-        <div className="flex gap-2 mb-6 p-1 rounded-control bg-surface-subtle">
-          <button
-            type="button"
-            className={`flex-1 rounded-control py-2 text-sm font-medium transition-colors ${mode === "login" ? "bg-primary text-primary-foreground" : "text-slate-700 hover:bg-surface"}`}
-            onClick={() => setMode("login")}
-          >
-            Sign in
-          </button>
-          <button
-            type="button"
-            className={`flex-1 rounded-control py-2 text-sm font-medium transition-colors ${mode === "register" ? "bg-primary text-primary-foreground" : "text-slate-700 hover:bg-surface"}`}
-            onClick={() => setMode("register")}
-          >
-            Register
-          </button>
-        </div>
+        <h1 className="text-lg font-semibold mb-4">Sign in</h1>
         <form className="space-y-3" onSubmit={onSubmit}>
-          {mode === "register" && (
-            <>
-              <input name="full_name" placeholder="Full name" className="aq-input" required />
-              <input name="organization_name" placeholder="Organization name" className="aq-input" required />
-            </>
-          )}
-          <input name="email" type="email" placeholder="Email" className="aq-input" required />
-          <input name="password" type="password" placeholder="Password" className="aq-input" required />
+          <input name="email" type="email" placeholder="Email" className="aq-input" required autoComplete="username" />
+          <input
+            name="password"
+            type="password"
+            placeholder="Password"
+            className="aq-input"
+            required
+            autoComplete="current-password"
+          />
           {error && <div className="aq-alert-error">{error}</div>}
           <button type="submit" disabled={loading} className="aq-btn-primary w-full">
             {loading ? (
@@ -88,13 +68,15 @@ export default function LoginPage() {
                 <span className="aq-spinner border-t-primary-foreground border-slate-600/30" aria-hidden />
                 Please wait…
               </>
-            ) : mode === "login" ? (
-              "Sign in"
             ) : (
-              "Create account"
+              "Sign in"
             )}
           </button>
         </form>
+        <p className="text-xs text-slate-500 mt-4">
+          Access is provisioned by your administrator. If you received an invitation link, use that URL to set your
+          password.
+        </p>
       </div>
     </div>
   );

@@ -102,11 +102,28 @@ class Settings(BaseSettings):
     llm_max_output_tokens: int = 2_048
     llm_max_retrieval_results: int = 12
     rate_limit_enabled: bool = True
-    allow_public_registration: bool = True
+    allow_public_registration: bool = False
+    licensing_test_mode: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("licensing_test_mode", "LICENSING_TEST_MODE"),
+    )
+    platform_admin_email: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("platform_admin_email", "PLATFORM_ADMIN_EMAIL"),
+    )
+    platform_admin_password: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("platform_admin_password", "PLATFORM_ADMIN_PASSWORD"),
+    )
+    invitation_ttl_hours: int = 72
 
     @model_validator(mode="after")
     def _production_guardrails(self) -> Settings:
         if self.app_env == "production":
+            if self.licensing_test_mode:
+                object.__setattr__(self, "licensing_test_mode", False)
+            if self.allow_public_registration:
+                object.__setattr__(self, "allow_public_registration", False)
             key = self.secret_key.strip()
             if key.lower() in _WEAK_SECRET_KEYS or len(key) < 32:
                 raise ValueError(

@@ -4,27 +4,31 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 export type AuthSession = {
   token: string;
-  organizationId: string;
+  organizationId?: string | null;
 };
 
 function authHeaders(session: AuthSession): HeadersInit {
-  return {
+  const headers: Record<string, string> = {
     Authorization: `Bearer ${session.token}`,
-    "X-Organization-Id": session.organizationId,
     "Content-Type": "application/json",
   };
+  if (session.organizationId) {
+    headers["X-Organization-Id"] = session.organizationId;
+  }
+  return headers;
 }
 
 export function loadSession(): AuthSession | null {
   const token = localStorage.getItem("aqrem_token");
+  if (!token) return null;
   const organizationId = localStorage.getItem("aqrem_org");
-  if (!token || !organizationId) return null;
-  return { token, organizationId };
+  return { token, organizationId: organizationId ?? null };
 }
 
-export function saveSession(token: string, organizationId: string) {
+export function saveSession(token: string, organizationId: string | null) {
   localStorage.setItem("aqrem_token", token);
-  localStorage.setItem("aqrem_org", organizationId);
+  if (organizationId) localStorage.setItem("aqrem_org", organizationId);
+  else localStorage.removeItem("aqrem_org");
 }
 
 export function clearSession() {
@@ -51,9 +55,19 @@ export async function fetchAuthMe(session: AuthSession) {
 }
 
 function authOnlyHeaders(session: AuthSession): HeadersInit {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${session.token}`,
+  };
+  if (session.organizationId) {
+    headers["X-Organization-Id"] = session.organizationId;
+  }
+  return headers;
+}
+
+function platformAdminHeaders(session: AuthSession): HeadersInit {
   return {
     Authorization: `Bearer ${session.token}`,
-    "X-Organization-Id": session.organizationId,
+    "Content-Type": "application/json",
   };
 }
 
@@ -78,21 +92,6 @@ async function authedFormFetch(session: AuthSession, url: string, form: FormData
   return res;
 }
 
-export async function registerUser(payload: {
-  email: string;
-  password: string;
-  full_name: string;
-  organization_name: string;
-}) {
-  const res = await fetch(`${API_BASE}/api/v1/auth/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error("Registration failed");
-  return res.json();
-}
-
 export async function loginUser(payload: { email: string; password: string }) {
   const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
     method: "POST",
@@ -101,6 +100,104 @@ export async function loginUser(payload: { email: string; password: string }) {
   });
   if (!res.ok) throw new Error("Login failed");
   return res.json();
+}
+
+export async function acceptInvitation(payload: {
+  token: string;
+  password: string;
+  full_name?: string;
+}) {
+  const res = await fetch(`${API_BASE}/api/v1/auth/accept-invitation`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Invitation failed");
+  return res.json();
+}
+
+export type AdminOrganization = {
+  id: string;
+  name: string;
+  slug: string;
+  license_limit: number;
+  license_status: string;
+  is_active: boolean;
+  active_seats: number;
+};
+
+export type AdminMember = {
+  id: string;
+  user_id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  is_active: boolean;
+  user_is_active: boolean;
+};
+
+export async function adminListOrganizations(session: AuthSession): Promise<AdminOrganization[]> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/organizations`, {
+    headers: platformAdminHeaders(session),
+  });
+  if (res.status === 401) {
+    handleUnauthorized();
+    throw new Error("Session expired");
+  }
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to load organizations"));
+  return res.json();
+}
+
+export async function adminCreateOrganization(
+  session: AuthSession,
+  payload: { name: string; license_limit?: number; license_status?: string },
+) {
+  const res = await fetch(`${API_BASE}/api/v1/admin/organizations`, {
+    method: "POST",
+    headers: platformAdminHeaders(session),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to create organization"));
+  return res.json() as Promise<AdminOrganization>;
+}
+
+export async function adminUpdateOrganization(
+  session: AuthSession,
+  organizationId: string,
+  payload: { license_limit?: number; license_status?: string },
+) {
+  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${organizationId}`, {
+    method: "PATCH",
+    headers: platformAdminHeaders(session),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to update organization"));
+  return res.json();
+}
+
+export async function adminListMembers(session: AuthSession, organizationId: string): Promise<AdminMember[]> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${organizationId}/members`, {
+    headers: platformAdminHeaders(session),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to load members"));
+  return res.json();
+}
+
+export async function adminProvisionUser(
+  session: AuthSession,
+  organizationId: string,
+  payload: { email: string; full_name: string; role: string },
+) {
+  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${organizationId}/users`, {
+    method: "POST",
+    headers: platformAdminHeaders(session),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to provision user"));
+  return res.json() as Promise<{
+    invitation_setup_path: string;
+    invitation_expires_at: string;
+  }>;
 }
 
 export async function fetchMetrics(session: AuthSession) {
