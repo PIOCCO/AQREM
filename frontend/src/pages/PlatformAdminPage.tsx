@@ -191,6 +191,8 @@ function PlatformAdminInner() {
         setInviteError(
           `No seats left (${selected.seats.seats_used} of ${selected.seats.seats_limit} used). Increase the seat limit or remove a member.`,
         );
+      } else if (isAdminApiError(err) && err.admin.code === "NO_LICENSED_SEATS") {
+        setInviteError(err.admin.message);
       } else {
         setInviteError(err instanceof Error ? err.message : "Invite failed");
       }
@@ -367,7 +369,7 @@ function PlatformAdminInner() {
                     {inviteError ? (
                       <div className="admin-inline-alert border rounded-lg px-3 py-2 text-sm flex flex-wrap gap-2 justify-between" role="alert">
                         <span>{inviteError}</span>
-                        {inviteError.includes("No seats left") ? (
+                        {inviteError.includes("No seats left") || inviteError.includes("no licensed seats") ? (
                           <button type="button" className="underline font-medium" onClick={() => setTab("license")}>
                             Increase seat limit
                           </button>

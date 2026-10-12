@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -85,6 +86,16 @@ def create_app() -> FastAPI:
         allow_headers=["Authorization", "Content-Type", "X-Organization-Id"],
     )
     app.include_router(api_router)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+        parts: list[str] = []
+        for err in exc.errors()[:5]:
+            loc = ".".join(str(x) for x in err.get("loc", []) if x != "body")
+            msg = err.get("msg", "Invalid value")
+            parts.append(f"{loc}: {msg}" if loc else str(msg))
+        message = "; ".join(parts) if parts else "Request validation failed"
+        return JSONResponse(status_code=422, content={"message": message, "detail": exc.errors()})
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:

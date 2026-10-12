@@ -1,4 +1,4 @@
-import { readApiError } from "./errors";
+import { apiErrorMessage, readApiError, readResponseJson } from "./errors";
 import type { AuthSession } from "./api";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
@@ -63,16 +63,22 @@ function adminHeaders(session: AuthSession): HeadersInit {
 }
 
 async function parseError(res: Response, fallback: string): Promise<never> {
-  try {
-    const body = await res.json();
-    if (body?.detail?.code) {
-      const err: AdminApiError = body.detail;
-      throw Object.assign(new Error(err.message), { admin: err });
+  const body = await readResponseJson(res);
+  if (body && typeof body === "object") {
+    const detail = (body as { detail?: unknown }).detail;
+    if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+      const structured = detail as Record<string, unknown>;
+      if (typeof structured.code === "string" && typeof structured.message === "string") {
+        const err: AdminApiError = {
+          code: structured.code,
+          message: structured.message,
+          field: typeof structured.field === "string" ? structured.field : undefined,
+        };
+        throw Object.assign(new Error(err.message), { admin: err });
+      }
     }
-  } catch (e) {
-    if (e instanceof Error && "admin" in e) throw e;
   }
-  throw new Error(await readApiError(res, fallback));
+  throw new Error(apiErrorMessage(body, fallback, res.status));
 }
 
 function statusBucket(status: string): string {

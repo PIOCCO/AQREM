@@ -24,14 +24,24 @@ def license_renews_at(org: Organization):
     return org.created_at + timedelta(days=365)
 
 
-def seat_usage_response(usage: SeatUsage) -> SeatUsageResponse:
+def seat_usage_is_full(org: Organization, usage: SeatUsage) -> bool:
+    if org.license_status == LicenseStatus.TEST.value and licensing_test_mode_effective():
+        return False
+    if usage.seats_limit <= 0:
+        return True
+    return usage.seats_used >= usage.seats_limit
+
+
+def seat_usage_response(org: Organization, usage: SeatUsage) -> SeatUsageResponse:
+    is_full = seat_usage_is_full(org, usage)
+    seats_available = max(0, usage.seats_limit - usage.seats_used) if usage.seats_limit > 0 else 0
     return SeatUsageResponse(
         active_members=usage.active_members,
         pending_invitations=usage.pending_invitations,
         seats_used=usage.seats_used,
         seats_limit=usage.seats_limit,
-        seats_available=usage.seats_available,
-        is_full=usage.is_full,
+        seats_available=seats_available,
+        is_full=is_full,
     )
 
 
@@ -48,7 +58,7 @@ def org_to_admin_response(db: Session, org: Organization) -> AdminOrganizationRe
         owner_display_name=org.owner_display_name,
         created_at=org.created_at,
         license_renews_at=license_renews_at(org),
-        seats=seat_usage_response(usage),
+        seats=seat_usage_response(org, usage),
     )
 
 

@@ -248,7 +248,7 @@ def organization_directory(
     from app.services.admin_org import license_renews_at
 
     return AdminDirectoryResponse(
-        seats=seat_usage_response(usage),
+        seats=seat_usage_response(org, usage),
         license_status=org.license_status,
         license_renews_at=license_renews_at(org),
         rows=page_rows,
@@ -310,7 +310,22 @@ def provision_user(
             full_name=payload.full_name,
             role=payload.role,
         )
-    except LicenseDenied:
+    except LicenseDenied as exc:
+        reason = exc.detail or ""
+        if "No licensed seats" in reason or "license_limit is zero" in reason:
+            raise admin_error(
+                code="NO_LICENSED_SEATS",
+                message="This organization has no licensed seats. Increase the seat limit on the License tab.",
+                field="email",
+                status_code=403,
+            ) from None
+        if "license is not active" in reason or "deactivated" in reason.lower():
+            raise admin_error(
+                code="LICENSE_INACTIVE",
+                message=reason,
+                field="email",
+                status_code=403,
+            ) from None
         raise admin_error(
             code="SEATS_FULL",
             message="No seats left. Increase the seat limit or remove a member.",

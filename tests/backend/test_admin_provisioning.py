@@ -140,6 +140,83 @@ def test_admin_provisions_org_and_client_user(client: TestClient, db_session):
 
 
 @pytest.mark.skipif(not _postgres_available(), reason="PostgreSQL not available")
+def test_admin_invite_zero_license_returns_actionable_error(client: TestClient, db_session):
+    admin = User(
+        email="platform-admin-zero@test.example",
+        full_name="Admin",
+        hashed_password=hash_password("admin-pass-123"),
+        is_platform_admin=True,
+        is_active=True,
+    )
+    db_session.add(admin)
+    db_session.flush()
+
+    admin_token = create_access_token(str(admin.id), {"role": "PLATFORM_ADMIN"})
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    org = Organization(
+        name="Zero Seat Co",
+        slug="zero-seat-co",
+        license_limit=0,
+        license_status=LicenseStatus.ACTIVE.value,
+        is_active=True,
+    )
+    db_session.add(org)
+    db_session.flush()
+    org_id = str(org.id)
+
+    list_res = client.get("/api/v1/admin/organizations", headers=admin_headers)
+    assert list_res.status_code == 200
+    listed = next(item for item in list_res.json()["items"] if item["id"] == org_id)
+    assert listed["seats"]["is_full"] is True
+
+    prov_res = client.post(
+        f"/api/v1/admin/organizations/{org_id}/users",
+        headers=admin_headers,
+        json={"email": "client@zeroseat.example", "full_name": "Client User", "role": "EDITOR"},
+    )
+    assert prov_res.status_code == 403, prov_res.text
+    body = prov_res.json()
+    assert body["detail"]["code"] == "NO_LICENSED_SEATS"
+    assert isinstance(body["message"], str) and body["message"]
+
+
+@pytest.mark.skipif(not _postgres_available(), reason="PostgreSQL not available")
+def test_admin_invite_validation_error_includes_message(client: TestClient, db_session):
+    admin = User(
+        email="platform-admin-val@test.example",
+        full_name="Admin",
+        hashed_password=hash_password("admin-pass-123"),
+        is_platform_admin=True,
+        is_active=True,
+    )
+    db_session.add(admin)
+    db_session.flush()
+
+    org = Organization(
+        name="Val Org",
+        slug="val-org-invite",
+        license_limit=5,
+        license_status=LicenseStatus.ACTIVE.value,
+        is_active=True,
+    )
+    db_session.add(org)
+    db_session.flush()
+
+    admin_token = create_access_token(str(admin.id), {"role": "PLATFORM_ADMIN"})
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    prov_res = client.post(
+        f"/api/v1/admin/organizations/{org.id}/users",
+        headers=admin_headers,
+        json={"email": "not-an-email", "full_name": "X", "role": "EDITOR"},
+    )
+    assert prov_res.status_code == 422, prov_res.text
+    body = prov_res.json()
+    assert isinstance(body.get("message"), str) and body["message"]
+
+
+@pytest.mark.skipif(not _postgres_available(), reason="PostgreSQL not available")
 def test_invitation_single_use_and_expiry(db_session):
     admin = User(
         email="admin-invite@test.example",
