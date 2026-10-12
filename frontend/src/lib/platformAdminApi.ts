@@ -50,6 +50,11 @@ export type AdminContext = {
   test_mode_effective: boolean;
 };
 
+const DEFAULT_CONTEXT: AdminContext = {
+  licensing_test_mode: false,
+  test_mode_effective: false,
+};
+
 function adminHeaders(session: AuthSession): HeadersInit {
   return {
     Authorization: `Bearer ${session.token}`,
@@ -70,8 +75,63 @@ async function parseError(res: Response, fallback: string): Promise<never> {
   throw new Error(await readApiError(res, fallback));
 }
 
+function statusBucket(status: string): string {
+  if (status === "test") return "test";
+  if (status === "suspended" || status === "expired") return "suspended";
+  return "active";
+}
+
+function computeCounts(items: AdminOrganization[]): Record<string, number> {
+  const counts = { all: items.length, active: 0, suspended: 0, test: 0 };
+  for (const o of items) {
+    const b = statusBucket(o.license_status);
+    counts[b as keyof typeof counts] += 1;
+  }
+  return counts;
+}
+
+/** Supports legacy API payloads (plain array, active_seats instead of seats). */
+export function normalizeOrganization(raw: Record<string, unknown>): AdminOrganization {
+  const licenseLimit = Number(raw.license_limit ?? 0);
+  const legacyActive = Number(raw.active_seats ?? 0);
+  const seatsRaw = raw.seats as Partial<SeatUsage> | undefined;
+  const seatsUsed = Number(seatsRaw?.seats_used ?? legacyActive);
+  const activeMembers = Number(seatsRaw?.active_members ?? legacyActive);
+  const pending = Number(seatsRaw?.pending_invitations ?? 0);
+  const seats: SeatUsage = {
+    active_members: activeMembers,
+    pending_invitations: pending,
+    seats_used: seatsUsed,
+    seats_limit: Number(seatsRaw?.seats_limit ?? licenseLimit),
+    seats_available: Number(
+      seatsRaw?.seats_available ?? Math.max(0, licenseLimit - seatsUsed),
+    ),
+    is_full: Boolean(
+      seatsRaw?.is_full ??
+        (licenseLimit > 0 && seatsUsed >= licenseLimit),
+    ),
+  };
+  const licenseStatus = String(raw.license_status ?? "active");
+  return {
+    id: String(raw.id),
+    name: String(raw.name ?? ""),
+    slug: String(raw.slug ?? ""),
+    license_limit: licenseLimit,
+    license_status: licenseStatus,
+    environment: String(
+      raw.environment ?? (licenseStatus === "test" ? "test" : "production"),
+    ),
+    is_active: raw.is_active !== false,
+    owner_display_name: (raw.owner_display_name as string | null) ?? null,
+    created_at: String(raw.created_at ?? new Date().toISOString()),
+    license_renews_at: (raw.license_renews_at as string | null) ?? null,
+    seats,
+  };
+}
+
 export async function fetchAdminContext(session: AuthSession): Promise<AdminContext> {
   const res = await fetch(`${API_BASE}/api/v1/admin/context`, { headers: adminHeaders(session) });
+  if (res.status === 404) return DEFAULT_CONTEXT;
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load admin context"));
   return res.json();
 }
@@ -85,7 +145,19 @@ export async function fetchAdminOrganizations(
   if (params?.status && params.status !== "all") qs.set("status", params.status);
   const res = await fetch(`${API_BASE}/api/v1/admin/organizations?${qs}`, { headers: adminHeaders(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load organizations"));
-  return res.json();
+  const body: unknown = await res.json();
+  if (Array.isArray(body)) {
+    const items = body.map((row) => normalizeOrganization(row as Record<string, unknown>));
+    return { items, counts: computeCounts(items) };
+  }
+  const wrapped = body as { items?: unknown[]; counts?: Record<string, number> };
+  const items = (wrapped.items ?? []).map((row) =>
+    normalizeOrganization(row as Record<string, unknown>),
+  );
+  return {
+    items,
+    counts: wrapped.counts ?? computeCounts(items),
+  };
 }
 
 export async function createAdminOrganization(
@@ -103,7 +175,8 @@ export async function createAdminOrganization(
     body: JSON.stringify(payload),
   });
   if (!res.ok) await parseError(res, "Failed to create organization");
-  return res.json();
+  const body = await res.json();
+  return normalizeOrganization(body as Record<string, unknown>);
 }
 
 export async function updateAdminOrganization(
@@ -117,7 +190,8 @@ export async function updateAdminOrganization(
     body: JSON.stringify(payload),
   });
   if (!res.ok) await parseError(res, "Failed to update organization");
-  return res.json();
+  const body = await res.json();
+  return normalizeOrganization(body as Record<string, unknown>);
 }
 
 export async function fetchOrganizationDirectory(

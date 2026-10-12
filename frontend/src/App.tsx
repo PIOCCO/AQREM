@@ -26,6 +26,7 @@ import QuestionnaireDetailPage from "./pages/QuestionnaireDetailPage";
 import QuestionnairesPage from "./pages/QuestionnairesPage";
 import SourcesPage from "./pages/SourcesPage";
 import LoginEntryRedirect from "./components/LoginEntryRedirect";
+import RouteErrorBoundary from "./components/ui/RouteErrorBoundary";
 
 function AuthenticatedApp() {
   return (
@@ -75,7 +76,9 @@ export default function App() {
         path="/platform-admin"
         element={
           <RequirePlatformAdmin>
-            <PlatformAdminPage />
+            <RouteErrorBoundary>
+              <PlatformAdminPage />
+            </RouteErrorBoundary>
           </RequirePlatformAdmin>
         }
       />

@@ -79,13 +79,16 @@ function PlatformAdminInner() {
   >([]);
   const [lastInvite, setLastInvite] = useState<{ path: string; expires: string } | null>(null);
 
-  const selected = useMemo(() => orgs.find((o) => o.id === selectedId), [orgs, selectedId]);
+  const selected = useMemo(
+    () => (Array.isArray(orgs) ? orgs : []).find((o) => o.id === selectedId),
+    [orgs, selectedId],
+  );
 
   const refreshOrgs = useCallback(async () => {
     if (!session?.token) return;
     const data = await fetchAdminOrganizations(session, { q: search || undefined, status: filter });
-    setOrgs(data.items);
-    setCounts(data.counts);
+    setOrgs(Array.isArray(data.items) ? data.items : []);
+    setCounts(data.counts ?? { all: 0, active: 0, suspended: 0, test: 0 });
     if (!selectedId && data.items[0]) setSelectedId(data.items[0].id);
   }, [session, search, filter, selectedId]);
 
@@ -93,7 +96,7 @@ function PlatformAdminInner() {
     if (!session?.token || !selectedId) return;
     setDirLoading(true);
     try {
-      const data = await fetchOrganizationDirectory(session, selectedId, dirPage, 5);
+      const data = await fetchOrganizationDirectory(auth, selectedId, dirPage, 5, selected ?? undefined);
       setDirectory(data.rows);
       setDirTotal(data.total);
       setDirSeats(data.seats);
@@ -201,7 +204,7 @@ function PlatformAdminInner() {
     { id: "test", label: "Test", count: counts.test ?? 0 },
   ];
 
-  const seatsFull = selected?.seats.is_full ?? false;
+  const seatsFull = selected?.seats?.is_full ?? false;
   const dirPages = Math.max(1, Math.ceil(dirTotal / 5));
 
   return (
