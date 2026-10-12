@@ -4,38 +4,11 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.audit.service import record_audit
-from app.models.enums import AnswerGenerationSource, AnswerStatus, QuestionnaireStatus
+from app.models.enums import AnswerGenerationSource, AnswerOutcome, AnswerStatus, QuestionnaireStatus
 from app.models.evidence import EvidenceItem
 from app.models.questionnaire import Answer, AnswerEvidenceLink, Question, Questionnaire
 from app.services.library.service import AnswerLibraryService
-from app.core.config import get_settings
-from app.services.llm.base import AnswerRequest
-from app.services.llm.factory import get_llm_provider
-from app.services.llm.guardrails import (
-    clamp_question,
-    sanitize_evidence_content,
-    validate_structured_answer,
-    wrap_evidence_for_prompt,
-)
-from app.services.retrieval.service import RetrievalService
-
-
-def _evidence_blocks(items: list[EvidenceItem]) -> list[dict]:
-    blocks: list[dict] = []
-    for item in items:
-        blocks.append(
-            {
-                "id": str(item.id),
-                "file_path": item.file_path,
-                "line_start": item.line_start,
-                "line_end": item.line_end,
-                "repository": item.repository,
-                "commit_hash": item.commit_hash,
-                "content": sanitize_evidence_content(item.content),
-                "evidence_strength": item.evidence_strength,
-            }
-        )
-    return blocks
+from app.services.rag.grounding import generate_grounded_answer
 
 
 def _status_for_result(sufficiency: str) -> str:
@@ -84,28 +57,16 @@ class AnsweringService:
             if reused is not None:
                 return reused
 
-        settings = get_settings()
-        top_k = min(top_k, settings.llm_max_retrieval_results)
-        evidence_items = await RetrievalService(self.db).retrieve(
+        grounded = await generate_grounded_answer(
+            self.db,
             organization_id=question.organization_id,
-            query=clamp_question(question.text),
+            question=question.text,
             project_id=questionnaire.project_id,
             limit=top_k,
         )
-        evidence_items = [
-            i for i in evidence_items if i.organization_id == question.organization_id
-        ]
-        blocks = wrap_evidence_for_prompt(_evidence_blocks(evidence_items))
-        allowed_ids = {str(i.id) for i in evidence_items}
-
-        llm = get_llm_provider()
-        structured = await llm.generate_answer(
-            AnswerRequest(
-                question=clamp_question(question.text),
-                evidence_blocks=blocks,
-            )
-        )
-        structured = validate_structured_answer(structured, allowed_evidence_ids=allowed_ids)
+        structured = grounded.structured
+        evidence_items = grounded.evidence_items
+        selected_ids = grounded.selected_ids
 
         if answer is None:
             answer = Answer(
@@ -116,7 +77,7 @@ class AnsweringService:
         else:
             answer.version += 1
 
-        answer.draft_text = structured.answer
+        answer.draft_text = grounded.composed_answer
         answer.confidence = structured.confidence
         answer.evidence_sufficiency = structured.evidence_sufficiency
         if stale_regeneration:
@@ -131,7 +92,13 @@ class AnsweringService:
         else:
             answer.generation_source = AnswerGenerationSource.RETRIEVAL_LLM.value
             answer.reasoning_summary = structured.reasoning_summary
-            answer.status = _status_for_result(structured.evidence_sufficiency)
+            if grounded.behavior.outcome in {
+                AnswerOutcome.CONFLICTING_EVIDENCE,
+                AnswerOutcome.PARTIALLY_ANSWERED,
+            } or grounded.behavior.needs_review:
+                answer.status = AnswerStatus.NEEDS_REVIEW.value
+            else:
+                answer.status = _status_for_result(structured.evidence_sufficiency)
             answer.reviewer_id = None
             answer.approved_at = None
             answer.approved_text = None
@@ -147,10 +114,6 @@ class AnsweringService:
         self.db.query(AnswerEvidenceLink).filter(AnswerEvidenceLink.answer_id == answer.id).delete(
             synchronize_session=False
         )
-        selected_ids = {UUID(x) for x in structured.evidence_ids if x}
-        if not selected_ids and evidence_items and structured.evidence_sufficiency != "insufficient":
-            selected_ids = {item.id for item in evidence_items[:3]}
-
         for item in evidence_items:
             if item.id not in selected_ids:
                 continue

@@ -55,7 +55,7 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
         membership_query = membership_query.filter(
             OrganizationMembership.organization_id == payload.organization_id
         )
-    membership = membership_query.order_by(OrganizationMembership.created_at.asc()).first()
+    membership = membership_query.order_by(OrganizationMembership.id.asc()).first()
     if membership is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No organization membership")
 
@@ -158,7 +158,7 @@ def me(
         membership = (
             db.query(OrganizationMembership)
             .filter(OrganizationMembership.user_id == user.id, OrganizationMembership.is_active.is_(True))
-            .order_by(OrganizationMembership.created_at.asc())
+            .order_by(OrganizationMembership.id.asc())
             .first()
         )
         if membership:

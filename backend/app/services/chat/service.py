@@ -2,25 +2,11 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.models.enums import AnswerOutcome
-from app.services.answering.service import _evidence_blocks
 from app.services.library.service import AnswerLibraryService
-from app.services.llm.base import AnswerRequest, StructuredAnswer
-from app.services.llm.factory import get_llm_provider
-from app.services.llm.guardrails import (
-    clamp_question,
-    sanitize_evidence_content,
-    validate_structured_answer,
-    wrap_evidence_for_prompt,
-)
-from app.services.rag.behavior import (
-    BehaviorResult,
-    classify_behavior,
-    classify_early_behavior,
-    compose_employee_answer,
-)
-from app.services.retrieval.service import RetrievalService
+from app.services.llm.guardrails import clamp_question, sanitize_evidence_content
+from app.services.rag.behavior import BehaviorResult
+from app.services.rag.grounding import generate_grounded_answer, selected_evidence_ids
 from app.schemas.evidence import EvidenceItemSummaryResponse
 
 
@@ -34,15 +20,6 @@ def _behavior_payload(behavior: BehaviorResult) -> dict:
             {"topic": c.topic, "detail": c.detail, "source_paths": list(c.source_paths)}
             for c in behavior.conflicts
         ],
-    }
-
-
-def _outcome_skips_llm(behavior: BehaviorResult) -> bool:
-    return behavior.outcome in {
-        AnswerOutcome.ACTION_NOT_SUPPORTED,
-        AnswerOutcome.ACCESS_DENIED,
-        AnswerOutcome.CLARIFICATION_REQUIRED,
-        AnswerOutcome.SOURCE_UNAVAILABLE,
     }
 
 
@@ -96,8 +73,6 @@ class ChatAskService:
         user_id: UUID | None = None,
     ) -> dict:
         safe_query = clamp_question(query)
-        settings = get_settings()
-        limit = min(8, settings.llm_max_retrieval_results)
 
         library = AnswerLibraryService(self.db)
         entries = library.search_entries(
@@ -125,93 +100,24 @@ class ChatAskService:
                 "conflicts": [],
             }
 
-        retrieval_error: str | None = None
-        items: list = []
-        try:
-            items = await RetrievalService(self.db).retrieve(
-                organization_id=organization_id,
-                query=safe_query,
-                project_id=project_id,
-                limit=limit,
-            )
-            items = [i for i in items if i.organization_id == organization_id]
-        except Exception:
-            retrieval_error = "retrieval_failed"
-
-        pre_behavior = classify_early_behavior(
+        grounded = await generate_grounded_answer(
+            self.db,
+            organization_id=organization_id,
             question=safe_query,
-            retrieval_error=retrieval_error,
+            project_id=project_id,
         )
-        if pre_behavior and _outcome_skips_llm(pre_behavior):
-            answer = compose_employee_answer("", pre_behavior)
-            return {
-                "query": safe_query,
-                "answer": answer,
-                "confidence": "low",
-                "evidence_sufficiency": "insufficient",
-                "reasoning_summary": None,
-                "is_draft": True,
-                "from_library": False,
-                "library_entry_id": None,
-                "citations": [],
-                **_behavior_payload(pre_behavior),
-            }
+        structured = grounded.structured
+        behavior = grounded.behavior
+        items = grounded.evidence_items
+        selected = grounded.selected_ids
+        if not selected and items:
+            selected = selected_evidence_ids(structured, items, behavior)
 
-        if not items:
-            empty_behavior = classify_behavior(
-                question=safe_query,
-                evidence_items=[],
-                llm_sufficiency="insufficient",
-                retrieval_error=None,
-            )
-            base = (
-                "No supporting documents were retrieved for this question in your connected, indexed sources."
-            )
-            return {
-                "query": safe_query,
-                "answer": compose_employee_answer(base, empty_behavior),
-                "confidence": "low",
-                "evidence_sufficiency": "insufficient",
-                "reasoning_summary": "No evidence items matched the query in the current scope.",
-                "is_draft": True,
-                "from_library": False,
-                "library_entry_id": None,
-                "citations": [],
-                **_behavior_payload(empty_behavior),
-            }
-
-        blocks = wrap_evidence_for_prompt(_evidence_blocks(items))
-        allowed_ids = {str(i.id) for i in items}
-
-        llm = get_llm_provider()
-        structured = await llm.generate_answer(
-            AnswerRequest(question=safe_query, evidence_blocks=blocks),
-        )
-        structured = validate_structured_answer(structured, allowed_evidence_ids=allowed_ids)
-
-        behavior = classify_behavior(
-            question=safe_query,
-            evidence_items=items,
-            llm_sufficiency=structured.evidence_sufficiency,
-            retrieval_error=None,
-        )
-
-        if behavior.outcome in {
-            AnswerOutcome.INSUFFICIENT_EVIDENCE,
-            AnswerOutcome.CONFLICTING_EVIDENCE,
-            AnswerOutcome.PARTIALLY_ANSWERED,
-        }:
-            structured = self._align_structured_with_behavior(structured, behavior)
-
-        answer_text = compose_employee_answer(structured.answer, behavior)
-
-        selected_ids = self._selected_evidence_ids(structured, items, behavior)
-
-        citations = self._build_citations(items, selected_ids)
+        citations = self._build_citations(items, selected)
 
         return {
             "query": safe_query,
-            "answer": answer_text,
+            "answer": grounded.composed_answer,
             "confidence": structured.confidence,
             "evidence_sufficiency": structured.evidence_sufficiency,
             "reasoning_summary": structured.reasoning_summary,
@@ -221,47 +127,3 @@ class ChatAskService:
             "citations": citations,
             **_behavior_payload(behavior),
         }
-
-    @staticmethod
-    def _align_structured_with_behavior(
-        structured: StructuredAnswer,
-        behavior: BehaviorResult,
-    ) -> StructuredAnswer:
-        sufficiency = structured.evidence_sufficiency
-        if behavior.outcome in {
-            AnswerOutcome.INSUFFICIENT_EVIDENCE,
-            AnswerOutcome.CONFLICTING_EVIDENCE,
-        }:
-            sufficiency = "insufficient"
-        elif behavior.outcome == AnswerOutcome.PARTIALLY_ANSWERED:
-            sufficiency = "sufficient"
-        confidence = structured.confidence
-        if behavior.outcome == AnswerOutcome.CONFLICTING_EVIDENCE:
-            confidence = "low"
-        return StructuredAnswer(
-            answer=structured.answer,
-            confidence=confidence,
-            evidence_ids=structured.evidence_ids,
-            reasoning_summary=structured.reasoning_summary,
-            evidence_sufficiency=sufficiency,
-        )
-
-    @staticmethod
-    def _selected_evidence_ids(
-        structured: StructuredAnswer,
-        items: list,
-        behavior: BehaviorResult,
-    ) -> set[UUID]:
-        if behavior.outcome in {
-            AnswerOutcome.INSUFFICIENT_EVIDENCE,
-            AnswerOutcome.ACCESS_DENIED,
-            AnswerOutcome.SOURCE_UNAVAILABLE,
-        }:
-            return set()
-
-        selected_ids = {UUID(x) for x in structured.evidence_ids if x}
-        if not selected_ids and items and structured.evidence_sufficiency != "insufficient":
-            selected_ids = {item.id for item in items[:3]}
-        if behavior.outcome == AnswerOutcome.CONFLICTING_EVIDENCE and items:
-            selected_ids = {item.id for item in items[:6]}
-        return selected_ids

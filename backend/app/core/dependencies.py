@@ -55,6 +55,12 @@ def get_tenant_context(
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
 
+    if user.must_change_password:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must change your password before using the application",
+        )
+
     org_id_str = x_organization_id or payload.get("organization_id")
     if not org_id_str:
         raise HTTPException(

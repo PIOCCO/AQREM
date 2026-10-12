@@ -105,4 +105,4 @@ async def test_insufficient_evidence_without_sources(db_session):
 
     answer = await AnsweringService(db_session).generate_for_question(question=question)
     assert answer.evidence_sufficiency == "insufficient"
-    assert "Insufficient evidence" in answer.draft_text
+    assert "could not find" in answer.draft_text.lower() or "no supporting documents" in answer.draft_text.lower()

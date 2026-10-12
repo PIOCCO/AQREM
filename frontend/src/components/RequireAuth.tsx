@@ -30,6 +30,10 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
         if (!session.organizationId && me.organization_id) {
           saveSession(session.token, me.organization_id);
         }
+        if (me.must_change_password && !window.location.pathname.startsWith("/change-password")) {
+          window.location.assign("/change-password");
+          return;
+        }
         setValid(true);
         setReady(true);
       })
