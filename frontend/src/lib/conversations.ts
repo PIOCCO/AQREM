@@ -12,7 +12,13 @@ export type ChatCitation = {
 
 export type ChatMessageRole = "user" | "assistant" | "system";
 
+export type ChatAttachmentMeta = {
+  name: string;
+  sizeLabel?: string;
+};
+
 export type ChatMessageMeta = {
+  attachments?: ChatAttachmentMeta[];
   /** Draft from retrieval / library — not human-approved */
   isDraft?: boolean;
   /** Reused approved library answer */

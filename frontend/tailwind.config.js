@@ -71,7 +71,7 @@ export default {
         },
       },
       width: {
-        sidebar: "260px",
+        sidebar: "280px",
       },
       boxShadow: {
         sm: "0 1px 2px 0 rgb(15 23 42 / 0.04)",

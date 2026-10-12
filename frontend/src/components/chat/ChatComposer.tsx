@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type ChangeEvent, type KeyboardEvent } from "react";
-import { IconPlus, IconSend, IconStop } from "../icons/Icons";
+import { IconArrowUp, IconPlus, IconStop } from "../icons/Icons";
 
 export type PendingAttachment = {
   id: string;
@@ -66,7 +66,7 @@ export default function ChatComposer({
   const canSend = !disabled && !loading && (value.trim().length > 0 || attachments.some((a) => a.status === "pending"));
 
   return (
-    <div className={`w-full ${centered ? "max-w-3xl mx-auto" : "max-w-3xl mx-auto px-4 pb-4 pt-2"}`}>
+    <div className={`w-full ${centered ? "max-w-[var(--chat-column-max)] mx-auto px-4" : "max-w-[var(--chat-column-max)] mx-auto px-4 pb-5 pt-2"}`}>
       {attachments.length > 0 ? (
         <ul className="mb-2 flex flex-wrap gap-2">
           {attachments.map((a) => (
@@ -115,7 +115,7 @@ export default function ChatComposer({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Message AQREM…"
+          placeholder="Ask AQREM anything about your documents…"
           disabled={disabled}
           className="chat-composer-input"
           aria-label="Message"
@@ -132,12 +132,12 @@ export default function ChatComposer({
             onClick={onSend}
             aria-label="Send message"
           >
-            {loading ? <span className="chat-spinner" aria-hidden /> : <IconSend className="h-4 w-4" />}
+            {loading ? <span className="chat-spinner" aria-hidden /> : <IconArrowUp className="h-4 w-4" />}
           </button>
         )}
       </div>
-      <p className="mt-2 text-center text-[11px] text-chat-muted px-2">
-        AQREM searches your indexed evidence. Answers may be drafts until reviewed in the questionnaire workflow.
+      <p className="ref-composer-disclaimer">
+        AQREM can make mistakes. Verify important answers against the source evidence.
       </p>
     </div>
   );

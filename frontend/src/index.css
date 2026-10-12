@@ -9,15 +9,21 @@
     --aq-radius-lg: 0.75rem;
 
     --chat-main: #ffffff;
-    --chat-sidebar: #f7f7f8;
+    --chat-sidebar: #f9f9f9;
     --chat-surface: #ffffff;
-    --chat-surface-subtle: #f4f4f4;
+    --chat-surface-subtle: #f3f3f3;
     --chat-fg: #0d0d0d;
-    --chat-muted: #6e6e80;
-    --chat-border: #ececf1;
-    --chat-hover: rgba(0, 0, 0, 0.06);
-    --chat-accent: #10a37f;
+    --chat-muted: #737373;
+    --chat-border: #e5e5e5;
+    --chat-hover: #ececec;
+    --chat-accent: #171717;
+    --chat-brand-mark: #0f766e;
     --chat-user-bubble: #f4f4f4;
+    --chat-review-badge-bg: #fef3c7;
+    --chat-review-badge-text: #92400e;
+    --chat-evidence-mark: #fef08a;
+    --chat-column-max: 768px;
+    --chat-sidebar-width: 280px;
   }
 
   html.dark {
@@ -369,7 +375,8 @@
   }
 
   .chat-composer {
-    @apply flex items-end gap-2 rounded-[26px] border border-chat-border bg-chat-surface px-3 py-2;
+    @apply flex items-end gap-2 rounded-[28px] border border-chat-border bg-chat-surface px-3 py-3;
+    min-height: 52px;
   }
   .shadow-composer {
     box-shadow: 0 0 0 1px rgb(0 0 0 / 0.04), 0 4px 20px rgb(0 0 0 / 0.06);
@@ -433,5 +440,116 @@
   .chat-table th,
   .chat-table td {
     @apply border border-chat-border px-3 py-2 text-left;
+  }
+
+  .ref-sidebar-header {
+    @apply flex h-14 items-center justify-between px-4 shrink-0;
+  }
+  .ref-sidebar-collapse-btn {
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-md text-chat-muted hover:bg-chat-hover hover:text-chat-fg;
+  }
+  .ref-new-chat-btn {
+    @apply flex w-full items-center justify-center gap-2 rounded-lg border border-chat-border bg-chat-surface px-3 py-2.5 text-sm font-medium text-chat-fg hover:bg-chat-hover transition-colors;
+  }
+  .ref-sidebar-search {
+    @apply w-full rounded-lg border border-chat-border bg-chat-surface px-3 py-2.5 text-sm text-chat-fg placeholder:text-chat-muted outline-none focus:border-neutral-400;
+  }
+  .ref-nav-item {
+    @apply flex items-center gap-3 rounded-lg px-3 py-2 text-[14px] text-chat-fg hover:bg-chat-hover transition-colors;
+  }
+  .ref-nav-item-active {
+    @apply bg-chat-hover font-medium;
+  }
+  .ref-nav-badge {
+    @apply inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-neutral-200 px-1.5 text-[11px] font-medium text-chat-fg;
+  }
+  .ref-conv-item {
+    @apply block rounded-lg px-3 py-2 text-[14px] text-chat-fg hover:bg-chat-hover transition-colors min-w-0;
+  }
+  .ref-conv-item-active {
+    @apply bg-chat-hover font-medium;
+  }
+  .ref-user-avatar {
+    @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-xs font-semibold text-chat-fg;
+  }
+  .ref-sidebar-sparkle-btn {
+    @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-chat-muted hover:bg-chat-hover hover:text-chat-fg;
+  }
+
+  .ref-chat-header {
+    @apply border-b border-chat-border bg-chat-main;
+  }
+  .ref-chat-header-inner {
+    @apply mx-auto flex h-14 max-w-[var(--chat-column-max)] items-center justify-between gap-4 px-4 lg:px-6;
+  }
+  .ref-header-assistant-btn {
+    @apply inline-flex items-center gap-1 rounded-md px-1 py-0.5 hover:bg-chat-hover;
+  }
+  .ref-header-action-btn {
+    @apply inline-flex items-center gap-1.5 rounded-lg border border-chat-border px-3 py-1.5 text-sm text-chat-fg hover:bg-chat-hover;
+  }
+  .ref-header-icon-btn {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-lg text-chat-muted hover:bg-chat-hover hover:text-chat-fg;
+  }
+
+  .ref-conversation-scroll {
+    @apply bg-chat-main;
+  }
+  .ref-conversation-column {
+    @apply mx-auto w-full max-w-[var(--chat-column-max)] px-4 py-8 lg:px-6;
+  }
+  .ref-msg-user-wrap {
+    @apply mb-8 flex flex-col items-end gap-2;
+  }
+  .ref-user-bubble {
+    @apply max-w-[85%] rounded-3xl px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap;
+    background: var(--chat-user-bubble);
+  }
+  .ref-attachment-card {
+    @apply flex max-w-[min(100%,20rem)] items-center gap-3 rounded-xl border border-chat-border bg-chat-surface px-3 py-2.5 shadow-sm;
+  }
+  .ref-msg-assistant {
+    @apply mb-10 text-[15px] leading-relaxed text-chat-fg;
+  }
+  .ref-msg-actions {
+    @apply mt-4 flex items-center gap-1;
+  }
+  .ref-msg-action-btn {
+    @apply inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-chat-muted hover:bg-chat-hover hover:text-chat-fg text-xs;
+  }
+  .ref-badge-review {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium;
+    background: var(--chat-review-badge-bg);
+    color: var(--chat-review-badge-text);
+  }
+  .ref-badge-review::before {
+    content: "";
+    @apply h-1.5 w-1.5 rounded-full bg-amber-500;
+  }
+  .ref-badge-muted {
+    @apply rounded-full border border-chat-border px-2 py-0.5 text-[11px] text-chat-muted;
+  }
+  .ref-source-pill {
+    @apply inline-flex max-w-full items-center gap-1.5 rounded-full border border-chat-border bg-chat-surface px-2.5 py-1 text-xs text-chat-fg hover:bg-chat-hover;
+  }
+  .ref-evidence-preview {
+    @apply rounded-xl border border-chat-border bg-chat-surface-subtle overflow-hidden;
+  }
+  .ref-evidence-preview-toggle {
+    @apply flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-chat-hover;
+  }
+  .ref-evidence-preview-body {
+    @apply border-t border-chat-border px-3 py-3 bg-chat-surface;
+  }
+  .ref-evidence-mark {
+    background: var(--chat-evidence-mark);
+    @apply rounded px-0.5;
+  }
+  .ref-composer-disclaimer {
+    @apply mt-2 text-center text-[11px] text-chat-muted px-2;
+  }
+
+  .chat-sidebar {
+    width: var(--chat-sidebar-width);
   }
 }

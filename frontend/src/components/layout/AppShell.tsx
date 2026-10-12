@@ -36,12 +36,7 @@ export default function AppShell() {
             <LogoMark className="h-8 w-8 lg:hidden" />
             <h1 className="truncate text-sm font-medium">{pageTitleForPath(location.pathname)}</h1>
           </header>
-        ) : (
-          <div className="lg:hidden chat-topbar flex h-12 shrink-0 items-center px-3">
-            <ChatMobileMenuButton onClick={() => setMobileOpen(true)} />
-            <span className="ml-2 text-sm font-medium truncate">AQREM</span>
-          </div>
-        )}
+        ) : null}
 
         <main
           className={`flex-1 min-h-0 min-w-0 overflow-x-hidden ${
@@ -49,7 +44,7 @@ export default function AppShell() {
           }`}
         >
           <RouteErrorBoundary key={location.pathname}>
-            <Outlet />
+            <Outlet context={{ openMobileSidebar: () => setMobileOpen(true) } satisfies { openMobileSidebar: () => void }} />
           </RouteErrorBoundary>
         </main>
       </div>

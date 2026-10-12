@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import ChatComposer, { type PendingAttachment } from "../components/chat/ChatComposer";
+import ChatConversationHeader from "../components/chat/ChatConversationHeader";
 import MessageList from "../components/chat/MessageList";
 import { IconSidebar } from "../components/icons/Icons";
 import { fetchSources, uploadSourceFiles } from "../lib/api";
@@ -19,6 +20,13 @@ import { useProjectContext } from "../lib/projectContext";
 import { newUuid } from "../lib/uuid";
 
 const UPLOAD_SOURCE_TYPES = new Set(["folder_archive", "file_upload", "local_files"]);
+
+function formatAttachmentMeta(files: PendingAttachment[]) {
+  return files.map((a) => ({
+    name: a.file.name,
+    sizeLabel: a.file.size ? `${Math.max(1, Math.round(a.file.size / 1024))} KB` : undefined,
+  }));
+}
 
 function greetingName(fullName?: string, email?: string) {
   const first = fullName?.trim().split(/\s+/)[0];
@@ -41,6 +49,7 @@ export default function ChatPage() {
   const abortRef = useRef<AbortController | null>(null);
   const [uploadSourceId, setUploadSourceId] = useState<string | null>(null);
   const [uploadSourceLoading, setUploadSourceLoading] = useState(false);
+  const outlet = useOutletContext<{ openMobileSidebar?: () => void } | null>();
 
   useEffect(() => {
     if (!conversationId) {
@@ -193,13 +202,17 @@ export default function ChatPage() {
       return;
     }
 
+    const attachmentMeta = formatAttachmentMeta(attachments.filter((a) => a.status !== "error"));
     const userContent = text || "(Attached files)";
     const userMsg: ChatMessage = {
       id: newUuid(),
       role: "user",
       content: userContent,
       createdAt: new Date().toISOString(),
-      meta: uploadNote ? { uploadNote } : undefined,
+      meta: {
+        ...(uploadNote ? { uploadNote } : {}),
+        ...(attachmentMeta.length ? { attachments: attachmentMeta } : {}),
+      },
     };
 
     let conv = conversation;
@@ -237,14 +250,17 @@ export default function ChatPage() {
   const empty = conversation.messages.length === 0 && !streamingText;
   const name = greetingName(user?.fullName, user?.email);
 
+  async function onRegenerate(userQuery: string) {
+    if (!conversation || loading) return;
+    await streamReply(userQuery, conversation);
+  }
+
   return (
     <div className="flex flex-col h-full min-h-0 bg-chat-main">
-      <header className="chat-topbar shrink-0 hidden lg:block">
-        <div className="mx-auto flex h-12 max-w-3xl items-center justify-between px-4">
-          <p className="truncate text-sm font-medium text-chat-fg">{conversation.title}</p>
-          <span className="text-xs text-chat-muted hidden sm:inline">Evidence assistant</span>
-        </div>
-      </header>
+      <ChatConversationHeader
+        conversationTitle={conversation.title}
+        onOpenSidebar={outlet?.openMobileSidebar}
+      />
 
       {empty ? (
         <div className="flex flex-1 flex-col items-center justify-center px-4 pb-8">
@@ -268,7 +284,11 @@ export default function ChatPage() {
         </div>
       ) : (
         <>
-          <MessageList messages={conversation.messages} streamingText={streamingText} />
+          <MessageList
+            messages={conversation.messages}
+            streamingText={streamingText}
+            onRegenerate={onRegenerate}
+          />
           <div className="shrink-0 border-t border-chat-border backdrop-blur-sm" style={{ backgroundColor: "color-mix(in srgb, var(--chat-main) 90%, transparent)" }}>
             <ChatComposer
               value={input}

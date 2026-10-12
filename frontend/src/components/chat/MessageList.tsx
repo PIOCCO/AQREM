@@ -1,77 +1,124 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "../../lib/conversations";
+import { IconCopy, IconRefresh, IconTableSheet } from "../icons/Icons";
 import MarkdownContent from "./MarkdownContent";
 import MessageMetaPanel from "./SourceCitations";
 
 type Props = {
   messages: ChatMessage[];
   streamingText?: string | null;
-  showScrollDown?: boolean;
-  onScrollDown?: () => void;
+  onRegenerate?: (userQuery: string) => void;
 };
 
-function UserBubble({ content }: { content: string }) {
+function UserMessage({ message }: { message: ChatMessage }) {
+  const attachments = message.meta?.attachments ?? [];
   return (
-    <div className="flex justify-end mb-6">
-      <div className="max-w-[85%] rounded-3xl bg-chat-user-bubble px-4 py-2.5 text-[15px] leading-relaxed text-chat-fg whitespace-pre-wrap">
-        {content}
-      </div>
+    <div className="ref-msg-user-wrap">
+      {attachments.map((a) => (
+        <div key={a.name} className="ref-attachment-card">
+          <IconTableSheet className="h-5 w-5 text-emerald-700 shrink-0" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-chat-fg">{a.name}</p>
+            {a.sizeLabel ? <p className="text-xs text-chat-muted">{a.sizeLabel}</p> : null}
+          </div>
+        </div>
+      ))}
+      <div className="ref-user-bubble">{message.content}</div>
     </div>
   );
 }
 
-function AssistantBlock({ message, streamingText }: { message?: ChatMessage; streamingText?: string | null }) {
-  const content = streamingText ?? message?.content ?? "";
-  if (!content && !message?.meta) return null;
+function AssistantMessage({
+  message,
+  onRegenerate,
+  previousUserText,
+}: {
+  message: ChatMessage;
+  onRegenerate?: (q: string) => void;
+  previousUserText?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const onCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* ignore */
+    }
+  }, [message.content]);
+
+  const needsReview =
+    message.meta?.isDraft &&
+    !message.meta.fromLibrary &&
+    !message.meta.insufficientEvidence &&
+    !message.meta.error;
 
   return (
-    <div className="mb-8 max-w-none">
-      <div className="text-[15px] leading-relaxed text-chat-fg">
-        {streamingText ? (
-          <p className="whitespace-pre-wrap">{streamingText}</p>
-        ) : (
-          <MarkdownContent content={content} />
-        )}
-        {streamingText ? (
-          <span className="inline-block w-2 h-4 ml-0.5 bg-chat-fg/60 animate-pulse align-middle" aria-hidden />
+    <div className="ref-msg-assistant">
+      {needsReview ? (
+        <div className="mb-3 flex items-center gap-2">
+          <span className="ref-badge-review">Needs review</span>
+        </div>
+      ) : null}
+      <MarkdownContent content={message.content} />
+      <MessageMetaPanel meta={message.meta} variant="reference" />
+      <div className="ref-msg-actions">
+        <button type="button" className="ref-msg-action-btn" onClick={onCopy} aria-label="Copy">
+          <IconCopy className="h-4 w-4" />
+          {copied ? <span className="text-xs">Copied</span> : null}
+        </button>
+        {previousUserText && onRegenerate ? (
+          <button
+            type="button"
+            className="ref-msg-action-btn"
+            aria-label="Regenerate"
+            onClick={() => onRegenerate(previousUserText)}
+          >
+            <IconRefresh className="h-4 w-4" />
+          </button>
         ) : null}
       </div>
-      {!streamingText && message ? <MessageMetaPanel meta={message.meta} /> : null}
     </div>
   );
 }
 
-export default function MessageList({ messages, streamingText, showScrollDown, onScrollDown }: Props) {
+export default function MessageList({ messages, streamingText, onRegenerate }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: streamingText ? "auto" : "smooth" });
   }, [messages, streamingText]);
 
   return (
-    <div ref={containerRef} className="relative flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-4 py-6">
-        {messages.map((m) =>
-          m.role === "user" ? (
-            <UserBubble key={m.id} content={m.content} />
-          ) : (
-            <AssistantBlock key={m.id} message={m} />
-          ),
-        )}
-        {streamingText != null && streamingText !== "" ? <AssistantBlock streamingText={streamingText} /> : null}
-        <div ref={bottomRef} className="h-4" aria-hidden />
+    <div className="ref-conversation-scroll flex-1 overflow-y-auto">
+      <div className="ref-conversation-column">
+        {messages.map((m, idx) => {
+          const prevUser =
+            m.role === "assistant"
+              ? [...messages.slice(0, idx)].reverse().find((x) => x.role === "user")?.content
+              : undefined;
+          if (m.role === "user") {
+            return <UserMessage key={m.id} message={m} />;
+          }
+          return (
+            <AssistantMessage
+              key={m.id}
+              message={m}
+              previousUserText={prevUser}
+              onRegenerate={onRegenerate}
+            />
+          );
+        })}
+        {streamingText != null && streamingText !== "" ? (
+          <div className="ref-msg-assistant">
+            <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{streamingText}</p>
+            <span className="inline-block w-2 h-4 ml-0.5 bg-chat-fg/50 animate-pulse align-middle" aria-hidden />
+          </div>
+        ) : null}
+        <div ref={bottomRef} className="h-6" aria-hidden />
       </div>
-
-      {showScrollDown ? (
-        <button
-          type="button"
-          className="fixed bottom-28 left-1/2 z-20 -translate-x-1/2 rounded-full border border-chat-border bg-chat-surface px-3 py-1.5 text-xs shadow-composer hover:bg-chat-hover"
-          onClick={onScrollDown}
-        >
-          Scroll to bottom
-        </button>
-      ) : null}
     </div>
   );
 }
