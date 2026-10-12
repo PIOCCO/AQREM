@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { ChatCitation, ChatMessageMeta } from "../../lib/conversations";
 import { IconChevronDown, IconSource } from "../icons/Icons";
+import InsufficientEvidencePanel from "./InsufficientEvidencePanel";
 
 const HIGHLIGHT_TERMS = [
   "AES-256",
@@ -82,6 +83,12 @@ export default function MessageMetaPanel({
 }) {
   if (!meta) return null;
 
+  if (meta.conversational) return null;
+
+  if (meta.insufficientEvidence) {
+    return <InsufficientEvidencePanel meta={meta} />;
+  }
+
   const outcomeLabels: Record<string, string> = {
     partially_answered: "Partial answer",
     insufficient_evidence: "Insufficient evidence",
@@ -95,7 +102,6 @@ export default function MessageMetaPanel({
   const badges: string[] = [];
   if (meta.fromLibrary && meta.libraryStatus === "approved") badges.push("Approved");
   else if (meta.outcome && outcomeLabels[meta.outcome]) badges.push(outcomeLabels[meta.outcome]);
-  else if (meta.insufficientEvidence) badges.push("Insufficient evidence");
   if (meta.needsReview && !badges.includes("Needs review")) badges.push("Needs review");
 
   const citations = meta.citations ?? [];
@@ -140,7 +146,11 @@ export default function MessageMetaPanel({
         </div>
       ) : null}
 
-      {meta.error ? <p className="text-sm text-red-600">Something went wrong. Try again.</p> : null}
+      {meta.error ? (
+        <p className="text-sm text-[var(--chat-danger-fg)]" role="alert">
+          Something went wrong. Try again.
+        </p>
+      ) : null}
     </div>
   );
 }

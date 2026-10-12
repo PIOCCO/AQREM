@@ -31,3 +31,8 @@ class ChatAskResponse(BaseModel):
     next_steps: list[str] = Field(default_factory=list)
     needs_review: bool = False
     conflicts: list[EvidenceConflictResponse] = Field(default_factory=list)
+    conversational: bool = False
+    intent: str | None = None
+    project_name: str | None = None
+    sources_searched: int = 0
+    query_time_ms: int | None = None

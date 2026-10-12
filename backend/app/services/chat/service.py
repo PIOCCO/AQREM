@@ -1,13 +1,18 @@
+import time
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from app.models.enums import AnswerOutcome
+from app.models.project import Project
+from app.models.source import Source
+from app.schemas.evidence import EvidenceItemSummaryResponse
+from app.services.chat.intent import build_conversational_answer, classify_chat_intent
+from app.services.chat.messages import format_insufficient_evidence_message
 from app.services.library.service import AnswerLibraryService
 from app.services.llm.guardrails import clamp_question, sanitize_evidence_content
 from app.services.rag.behavior import BehaviorResult
 from app.services.rag.grounding import generate_grounded_answer, selected_evidence_ids
-from app.schemas.evidence import EvidenceItemSummaryResponse
 
 
 def _behavior_payload(behavior: BehaviorResult) -> dict:
@@ -21,6 +26,20 @@ def _behavior_payload(behavior: BehaviorResult) -> dict:
             for c in behavior.conflicts
         ],
     }
+
+
+def _project_label(db: Session, project_id: UUID | None) -> str | None:
+    if project_id is None:
+        return None
+    project = db.get(Project, project_id)
+    return project.name if project else None
+
+
+def _count_project_sources(db: Session, organization_id: UUID, project_id: UUID | None) -> int:
+    q = db.query(Source).filter(Source.organization_id == organization_id)
+    if project_id is not None:
+        q = q.filter(Source.project_id == project_id)
+    return q.count()
 
 
 class ChatAskService:
@@ -73,6 +92,32 @@ class ChatAskService:
         user_id: UUID | None = None,
     ) -> dict:
         safe_query = clamp_question(query)
+        project_name = _project_label(self.db, project_id)
+        sources_searched = _count_project_sources(self.db, organization_id, project_id)
+
+        intent = classify_chat_intent(safe_query)
+        if intent:
+            return {
+                "query": safe_query,
+                "answer": build_conversational_answer(intent),
+                "confidence": "high",
+                "evidence_sufficiency": "not_applicable",
+                "reasoning_summary": None,
+                "is_draft": False,
+                "from_library": False,
+                "library_entry_id": None,
+                "citations": [],
+                "outcome": "conversational",
+                "intent": intent,
+                "conversational": True,
+                "missing_information": [],
+                "next_steps": [],
+                "needs_review": False,
+                "conflicts": [],
+                "project_name": project_name,
+                "sources_searched": sources_searched,
+                "query_time_ms": 0,
+            }
 
         library = AnswerLibraryService(self.db)
         entries = library.search_entries(
@@ -98,14 +143,21 @@ class ChatAskService:
                 "next_steps": [],
                 "needs_review": False,
                 "conflicts": [],
+                "conversational": False,
+                "project_name": project_name,
+                "sources_searched": sources_searched,
+                "query_time_ms": 0,
             }
 
+        started = time.perf_counter()
         grounded = await generate_grounded_answer(
             self.db,
             organization_id=organization_id,
             question=safe_query,
             project_id=project_id,
         )
+        query_time_ms = int((time.perf_counter() - started) * 1000)
+
         structured = grounded.structured
         behavior = grounded.behavior
         items = grounded.evidence_items
@@ -114,10 +166,16 @@ class ChatAskService:
             selected = selected_evidence_ids(structured, items, behavior)
 
         citations = self._build_citations(items, selected)
+        answer = grounded.composed_answer
+        if behavior.outcome == AnswerOutcome.INSUFFICIENT_EVIDENCE:
+            answer = format_insufficient_evidence_message(
+                project_name=project_name,
+                sources_searched=sources_searched,
+            )
 
         return {
             "query": safe_query,
-            "answer": grounded.composed_answer,
+            "answer": answer,
             "confidence": structured.confidence,
             "evidence_sufficiency": structured.evidence_sufficiency,
             "reasoning_summary": structured.reasoning_summary,
@@ -125,5 +183,9 @@ class ChatAskService:
             "from_library": False,
             "library_entry_id": None,
             "citations": citations,
+            "conversational": False,
+            "project_name": project_name,
+            "sources_searched": sources_searched,
+            "query_time_ms": query_time_ms,
             **_behavior_payload(behavior),
         }

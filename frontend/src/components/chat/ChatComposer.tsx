@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type ChangeEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, type ChangeEvent, type KeyboardEvent, type ReactNode } from "react";
 import { IconArrowUp, IconPlus, IconStop } from "../icons/Icons";
 
 export type PendingAttachment = {
@@ -21,7 +21,11 @@ type Props = {
   onRemoveAttachment: (id: string) => void;
   uploadDisabledReason?: string | null;
   centered?: boolean;
+  scopeSlot?: ReactNode;
 };
+
+const MAX_LINES = 8;
+const LINE_HEIGHT_PX = 24;
 
 export default function ChatComposer({
   value,
@@ -36,6 +40,7 @@ export default function ChatComposer({
   onRemoveAttachment,
   uploadDisabledReason,
   centered,
+  scopeSlot,
 }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -44,7 +49,8 @@ export default function ChatComposer({
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    const maxHeight = LINE_HEIGHT_PX * MAX_LINES;
+    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
   }, []);
 
   useEffect(() => {
@@ -54,7 +60,7 @@ export default function ChatComposer({
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (!disabled && !loading && value.trim()) onSend();
+      if (!disabled && !loading && (value.trim() || attachments.some((a) => a.status === "pending"))) onSend();
     }
   }
 
@@ -63,10 +69,16 @@ export default function ChatComposer({
     e.target.value = "";
   }
 
-  const canSend = !disabled && !loading && (value.trim().length > 0 || attachments.some((a) => a.status === "pending"));
+  const canSend =
+    !disabled &&
+    !loading &&
+    (value.trim().length > 0 || attachments.some((a) => a.status === "pending"));
 
   return (
-    <div className={`w-full ${centered ? "max-w-[var(--chat-column-max)] mx-auto px-4" : "max-w-[var(--chat-column-max)] mx-auto px-4 pb-5 pt-2"}`}>
+    <div
+      className={`w-full ${centered ? "max-w-[var(--chat-column-max)] mx-auto px-4" : "max-w-[var(--chat-column-max)] mx-auto px-4 pb-4 pt-2"}`}
+    >
+      {scopeSlot ? <div className="mb-3">{scopeSlot}</div> : null}
       {attachments.length > 0 ? (
         <ul className="mb-2 flex flex-wrap gap-2">
           {attachments.map((a) => (
@@ -76,10 +88,10 @@ export default function ChatComposer({
             >
               <span className="max-w-[12rem] truncate">{a.file.name}</span>
               {a.status === "uploading" ? <span className="chat-spinner" aria-hidden /> : null}
-              {a.status === "error" ? <span className="text-red-500">Failed</span> : null}
+              {a.status === "error" ? <span className="text-[var(--chat-danger-fg)]">Failed</span> : null}
               <button
                 type="button"
-                className="text-chat-muted hover:text-chat-fg"
+                className="text-chat-muted hover:text-chat-fg focus-visible:ref-focus-ring rounded"
                 onClick={() => onRemoveAttachment(a.id)}
                 aria-label={`Remove ${a.file.name}`}
               >
@@ -101,11 +113,11 @@ export default function ChatComposer({
         />
         <button
           type="button"
-          className="chat-composer-icon-btn shrink-0"
+          className="chat-composer-attach-btn shrink-0"
           onClick={() => fileRef.current?.click()}
           disabled={Boolean(uploadDisabledReason) || disabled}
-          title={uploadDisabledReason ?? "Attach files"}
-          aria-label="Attach files"
+          title={uploadDisabledReason ?? "Attach documents"}
+          aria-label="Attach documents"
         >
           <IconPlus className="h-5 w-5" />
         </button>
@@ -121,13 +133,14 @@ export default function ChatComposer({
           aria-label="Message"
         />
         {streaming ? (
-          <button type="button" className="chat-composer-send chat-composer-send-stop" onClick={onStop} aria-label="Stop">
+          <button type="button" className="chat-composer-send chat-composer-send-stop" onClick={onStop} aria-label="Stop generating">
             <IconStop className="h-4 w-4" />
+            <span className="sr-only">Stop</span>
           </button>
         ) : (
           <button
             type="button"
-            className="chat-composer-send"
+            className={`chat-composer-send ${canSend ? "chat-composer-send-ready" : ""}`}
             disabled={!canSend}
             onClick={onSend}
             aria-label="Send message"

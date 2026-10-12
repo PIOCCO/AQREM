@@ -6,9 +6,10 @@ import { useToast } from "../ui/Toast";
 type Props = {
   conversationTitle: string;
   onOpenSidebar?: () => void;
+  onExpandSidebar?: () => void;
 };
 
-export default function ChatConversationHeader({ conversationTitle, onOpenSidebar }: Props) {
+export default function ChatConversationHeader({ conversationTitle, onOpenSidebar, onExpandSidebar }: Props) {
   const toast = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -21,6 +22,11 @@ export default function ChatConversationHeader({ conversationTitle, onOpenSideba
     <header className="ref-chat-header shrink-0">
       <div className="ref-chat-header-inner">
         <div className="flex min-w-0 items-center gap-2">
+          {onExpandSidebar ? (
+            <button type="button" className="ref-header-icon-btn hidden lg:inline-flex" onClick={onExpandSidebar} aria-label="Expand sidebar">
+              <IconSidebar className="h-5 w-5" />
+            </button>
+          ) : null}
           {onOpenSidebar ? (
             <button type="button" className="ref-header-icon-btn lg:hidden" onClick={onOpenSidebar} aria-label="Open sidebar">
               <IconSidebar className="h-5 w-5" />

@@ -42,8 +42,8 @@ class TestBehaviorPure:
         )
         assert behavior.outcome == AnswerOutcome.INSUFFICIENT_EVIDENCE
         answer = compose_employee_answer("", behavior)
-        assert "does not prove" in answer or "did not find" in answer
-        assert "Suggested next steps" in answer
+        assert answer == ""
+        assert behavior.next_steps == []
         assert ".pdf" not in answer.lower()
 
     def test_action_request_not_supported(self):
@@ -152,7 +152,7 @@ INTEGRATION_CASES = [
         question="Give me the latest penetration test report.",
         fixture_names=["Information_Security_Policy.md"],
         expected_outcome=AnswerOutcome.INSUFFICIENT_EVIDENCE,
-        answer_contains=["insufficient evidence", "indexed"],
+        answer_contains=["couldn't find evidence", "source searched"],
         answer_must_not_contain=["penetration-test-2026.pdf", "download link"],
     ),
     ConceptualCase(

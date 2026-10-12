@@ -302,10 +302,19 @@ export default function ChatSidebar({
           </>
         ) : (
           <div className="flex flex-col items-center gap-2 py-3">
-            <button type="button" className="chat-icon-btn" onClick={newChat} aria-label="New chat">
+            <button
+              type="button"
+              className="ref-sidebar-collapse-btn"
+              onClick={onToggleCollapse}
+              aria-label="Expand sidebar"
+              title="Expand sidebar"
+            >
+              <IconSidebar className="h-[18px] w-[18px]" />
+            </button>
+            <button type="button" className="chat-icon-btn focus-visible:ref-focus-ring" onClick={newChat} aria-label="New chat">
               <IconPlus className="h-5 w-5" />
             </button>
-            <Link to="/settings" className="chat-icon-btn" aria-label="Settings">
+            <Link to="/settings" className="chat-icon-btn focus-visible:ref-focus-ring" aria-label="Settings">
               <IconSettings className="h-5 w-5" />
             </Link>
           </div>

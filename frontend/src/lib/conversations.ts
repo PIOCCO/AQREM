@@ -26,11 +26,18 @@ export type ChatMessageMeta = {
   libraryEntryId?: string;
   libraryStatus?: string;
   insufficientEvidence?: boolean;
+  conversational?: boolean;
+  intent?: string;
   outcome?: string;
   needsReview?: boolean;
   citations?: ChatCitation[];
   error?: boolean;
   uploadNote?: string;
+  projectName?: string;
+  sourcesSearched?: number;
+  queryTimeMs?: number;
+  userQuery?: string;
+  feedback?: "good" | "bad";
 };
 
 export type ChatMessage = {

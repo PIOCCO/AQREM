@@ -44,7 +44,13 @@ export default function AppShell() {
           }`}
         >
           <RouteErrorBoundary key={location.pathname}>
-            <Outlet context={{ openMobileSidebar: () => setMobileOpen(true) } satisfies { openMobileSidebar: () => void }} />
+            <Outlet
+              context={{
+                openMobileSidebar: () => setMobileOpen(true),
+                sidebarCollapsed,
+                expandSidebar: () => setSidebarCollapsed(false),
+              }}
+            />
           </RouteErrorBoundary>
         </main>
       </div>

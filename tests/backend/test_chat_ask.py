@@ -71,3 +71,32 @@ async def test_chat_ask_returns_evidence_backed_answer(client: TestClient, db_se
 def test_chat_ask_requires_auth(client: TestClient):
     res = client.post("/api/v1/chat/ask", json={"query": "hello"})
     assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_chat_greeting_is_conversational(client: TestClient, db_session):
+    org = Organization(name="Greet Org", slug="greet-org", license_limit=5)
+    db_session.add(org)
+    db_session.flush()
+    user = User(email="greet@acme.example", hashed_password=hash_password("password"), full_name="G")
+    db_session.add(user)
+    db_session.flush()
+    db_session.add(
+        OrganizationMembership(organization_id=org.id, user_id=user.id, role=Role.EDITOR.value),
+    )
+    project = Project(organization_id=org.id, name="P")
+    db_session.add(project)
+    db_session.flush()
+
+    token = create_access_token(str(user.id), {"organization_id": str(org.id), "role": Role.EDITOR.value})
+    res = client.post(
+        "/api/v1/chat/ask",
+        headers=_auth_headers(token, str(org.id)),
+        json={"query": "hi", "project_id": str(project.id)},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body.get("conversational") is True
+    assert body.get("outcome") == "conversational"
+    assert body.get("citations") == []
+    assert body.get("evidence_sufficiency") == "not_applicable"

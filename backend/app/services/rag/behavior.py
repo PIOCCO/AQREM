@@ -177,22 +177,10 @@ def classify_behavior(
         return early
 
     if not evidence_items:
-        steps = [
-            "Upload the document to a project source, or connect the repository where it is stored.",
-            "Confirm you are scoped to the correct project in the sidebar.",
-        ]
-        prefix = (
-            "I could not find matching content in your authorized, connected sources. "
-            "This does not prove the item does not exist elsewhere in the company. "
-        )
-        if looks_like_document_lookup(question):
-            prefix = (
-                "I searched your indexed project sources and did not find that document or report. "
-            )
         return BehaviorResult(
             outcome=AnswerOutcome.INSUFFICIENT_EVIDENCE,
-            next_steps=steps,
-            employee_message_prefix=prefix,
+            next_steps=[],
+            employee_message_prefix="",
         )
 
     conflicts = detect_conflicts(evidence_items)
@@ -215,10 +203,8 @@ def classify_behavior(
         return BehaviorResult(
             outcome=AnswerOutcome.INSUFFICIENT_EVIDENCE,
             missing_information=missing_parts,
-            next_steps=[
-                "Upload or connect additional sources, or narrow the question to indexed material.",
-            ],
-            employee_message_prefix="Available evidence does not adequately support an answer. ",
+            next_steps=[],
+            employee_message_prefix="",
         )
 
     if missing_parts:
@@ -252,7 +238,7 @@ def compose_employee_answer(base_answer: str, behavior: BehaviorResult) -> str:
     if behavior.missing_information:
         parts.append("\n\n**Not found in retrieved evidence:** " + ", ".join(behavior.missing_information))
 
-    if behavior.next_steps:
+    if behavior.next_steps and behavior.outcome != AnswerOutcome.INSUFFICIENT_EVIDENCE:
         parts.append("\n\n**Suggested next steps:**")
         for step in behavior.next_steps:
             parts.append(f"- {step}")

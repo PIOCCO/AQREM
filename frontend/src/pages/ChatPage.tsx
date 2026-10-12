@@ -2,16 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import ChatComposer, { type PendingAttachment } from "../components/chat/ChatComposer";
 import ChatConversationHeader from "../components/chat/ChatConversationHeader";
+import ChatEmptyState from "../components/chat/ChatEmptyState";
+import ChatScopeBar from "../components/chat/ChatScopeBar";
 import MessageList from "../components/chat/MessageList";
 import { IconSidebar } from "../components/icons/Icons";
 import { fetchSources, uploadSourceFiles } from "../lib/api";
 import { useAuth } from "../lib/authContext";
 import { generateAssistantReply } from "../lib/chatAssistant";
+import { classifyChatIntent } from "../lib/chatIntent";
+import { conversationTitleAfterUserMessage } from "../lib/chatTitle";
 import {
   createConversation,
   getConversation,
   saveConversation,
-  titleFromFirstMessage,
   type ChatConversation,
   type ChatMessage,
 } from "../lib/conversations";
@@ -20,6 +23,12 @@ import { useProjectContext } from "../lib/projectContext";
 import { newUuid } from "../lib/uuid";
 
 const UPLOAD_SOURCE_TYPES = new Set(["folder_archive", "file_upload", "local_files"]);
+
+type ChatOutletContext = {
+  openMobileSidebar?: () => void;
+  sidebarCollapsed?: boolean;
+  expandSidebar?: () => void;
+};
 
 function formatAttachmentMeta(files: PendingAttachment[]) {
   return files.map((a) => ({
@@ -38,7 +47,7 @@ export default function ChatPage() {
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const { session, user } = useAuth();
-  const { projectId } = useProjectContext();
+  const { projectId, projectName, projects, setProjectId } = useProjectContext();
   const { upsert } = useConversations();
 
   const [conversation, setConversation] = useState<ChatConversation | null>(null);
@@ -46,10 +55,13 @@ export default function ChatPage() {
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [loading, setLoading] = useState(false);
   const [streamingText, setStreamingText] = useState<string | null>(null);
+  const [retrievalStatus, setRetrievalStatus] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const lastQueryRef = useRef<string | null>(null);
   const [uploadSourceId, setUploadSourceId] = useState<string | null>(null);
+  const [sourcesCount, setSourcesCount] = useState<number | null>(null);
   const [uploadSourceLoading, setUploadSourceLoading] = useState(false);
-  const outlet = useOutletContext<{ openMobileSidebar?: () => void } | null>();
+  const outlet = useOutletContext<ChatOutletContext | null>();
 
   useEffect(() => {
     if (!conversationId) {
@@ -72,19 +84,24 @@ export default function ChatPage() {
   useEffect(() => {
     if (!session || !projectId) {
       setUploadSourceId(null);
+      setSourcesCount(null);
       return;
     }
     setUploadSourceLoading(true);
     fetchSources(session, projectId)
       .then((rows) => {
         const list = Array.isArray(rows) ? rows : [];
+        setSourcesCount(list.filter((s: { project_id?: string }) => s.project_id === projectId).length);
         const match = list.find(
           (s: { project_id?: string; source_type: string; id: string }) =>
             s.project_id === projectId && UPLOAD_SOURCE_TYPES.has(s.source_type),
         );
         setUploadSourceId(match?.id ?? list.find((s: { project_id?: string }) => s.project_id === projectId)?.id ?? null);
       })
-      .catch(() => setUploadSourceId(null))
+      .catch(() => {
+        setUploadSourceId(null);
+        setSourcesCount(null);
+      })
       .finally(() => setUploadSourceLoading(false));
   }, [session, projectId]);
 
@@ -94,6 +111,17 @@ export default function ChatPage() {
     if (!uploadSourceId) return "Add a file source in Projects first";
     return null;
   }, [projectId, uploadSourceId, uploadSourceLoading]);
+
+  const scopeBar = (
+    <ChatScopeBar
+      projectName={projectName}
+      projectId={projectId}
+      sourcesCount={sourcesCount}
+      projects={projects}
+      onSelectProject={setProjectId}
+      compact={false}
+    />
+  );
 
   const persist = useCallback(
     (next: ChatConversation) => {
@@ -146,13 +174,26 @@ export default function ChatPage() {
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
+    lastQueryRef.current = text;
 
     setLoading(true);
-    setStreamingText("");
+    setStreamingText(null);
+    if (!classifyChatIntent(text)) {
+      const n = sourcesCount ?? 0;
+      setRetrievalStatus(`Searching ${n} source${n === 1 ? "" : "s"}…`);
+    } else {
+      setRetrievalStatus(null);
+    }
 
     try {
-      const reply = await generateAssistantReply(session, text, conv.projectId, ac.signal);
+      const reply = await generateAssistantReply(session, text, conv.projectId, ac.signal, {
+        projectName,
+        sourcesCount: sourcesCount ?? 0,
+      });
       if (ac.signal.aborted) return;
+
+      setRetrievalStatus(null);
+      setStreamingText("");
 
       const chars = reply.content.split("");
       let built = "";
@@ -174,16 +215,18 @@ export default function ChatPage() {
       persist({ ...conv, messages: [...conv.messages, assistantMsg] });
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return;
+      setRetrievalStatus(null);
       const assistantMsg: ChatMessage = {
         id: newUuid(),
         role: "assistant",
-        content: e instanceof Error ? e.message : "Request failed",
+        content: "We couldn't reach the server. Check your connection and try again.",
         createdAt: new Date().toISOString(),
-        meta: { error: true, isDraft: true },
+        meta: { error: true, isDraft: true, userQuery: text },
       };
       persist({ ...conv, messages: [...conv.messages, assistantMsg] });
     } finally {
       setStreamingText(null);
+      setRetrievalStatus(null);
       setLoading(false);
       abortRef.current = null;
     }
@@ -216,10 +259,9 @@ export default function ChatPage() {
     };
 
     let conv = conversation;
-    const isFirst = conv.messages.length === 0;
     conv = {
       ...conv,
-      title: isFirst && text ? titleFromFirstMessage(text) : conv.title,
+      title: text ? conversationTitleAfterUserMessage(conv.title, text) : conv.title,
       messages: [...conv.messages, userMsg],
     };
     conv = persist(conv);
@@ -242,12 +284,30 @@ export default function ChatPage() {
   function onStop() {
     abortRef.current?.abort();
     setStreamingText(null);
+    setRetrievalStatus(null);
     setLoading(false);
+  }
+
+  function onFeedback(messageId: string, feedback: "good" | "bad") {
+    if (!conversation) return;
+    const messages = conversation.messages.map((m) =>
+      m.id === messageId ? { ...m, meta: { ...m.meta, feedback } } : m,
+    );
+    persist({ ...conversation, messages });
+  }
+
+  function onRetry() {
+    const q = lastQueryRef.current;
+    if (!conversation || !q) return;
+    const trimmed = conversation.messages;
+    const withoutError = trimmed[trimmed.length - 1]?.meta?.error ? trimmed.slice(0, -1) : trimmed;
+    const conv = persist({ ...conversation, messages: withoutError });
+    void streamReply(q, conv);
   }
 
   if (!session || !conversation) return null;
 
-  const empty = conversation.messages.length === 0 && !streamingText;
+  const empty = conversation.messages.length === 0 && !streamingText && !retrievalStatus;
   const name = greetingName(user?.fullName, user?.email);
 
   async function onRegenerate(userQuery: string) {
@@ -261,12 +321,21 @@ export default function ChatPage() {
       <ChatConversationHeader
         conversationTitle={conversation.title}
         onOpenSidebar={outlet?.openMobileSidebar}
+        onExpandSidebar={outlet?.sidebarCollapsed ? outlet.expandSidebar : undefined}
       />
 
       {empty ? (
-        <div className="flex flex-1 flex-col items-center justify-center px-4 pb-8">
-          <h1 className="mb-8 text-2xl font-semibold text-chat-fg text-center">How can I help, {name}?</h1>
-          <div className="w-full">
+        <>
+          <ChatEmptyState
+            name={name}
+            projectName={projectName}
+            projectId={projectId}
+            sourcesCount={sourcesCount}
+            projects={projects}
+            onSelectProject={setProjectId}
+            onPickPrompt={setInput}
+          />
+          <div className="w-full shrink-0 ref-composer-dock">
             <ChatComposer
               value={input}
               onChange={setInput}
@@ -282,15 +351,18 @@ export default function ChatPage() {
               centered
             />
           </div>
-        </div>
+        </>
       ) : (
         <>
           <MessageList
             messages={conversation.messages}
             streamingText={streamingText}
+            retrievalStatus={retrievalStatus}
             onRegenerate={onRegenerate}
+            onRetry={onRetry}
+            onFeedback={onFeedback}
           />
-          <div className="shrink-0 border-t border-chat-border backdrop-blur-sm" style={{ backgroundColor: "color-mix(in srgb, var(--chat-main) 90%, transparent)" }}>
+          <div className="shrink-0 ref-composer-dock">
             <ChatComposer
               value={input}
               onChange={setInput}
@@ -303,6 +375,7 @@ export default function ChatPage() {
               onPickFiles={onPickFiles}
               onRemoveAttachment={onRemoveAttachment}
               uploadDisabledReason={uploadDisabledReason}
+              scopeSlot={scopeBar}
             />
           </div>
         </>
@@ -314,7 +387,7 @@ export default function ChatPage() {
 /** Mobile header toggle lives in AppShell — export icon for reuse */
 export function ChatMobileMenuButton({ onClick }: { onClick: () => void }) {
   return (
-    <button type="button" className="chat-icon-btn lg:hidden" onClick={onClick} aria-label="Open sidebar">
+    <button type="button" className="chat-icon-btn lg:hidden focus-visible:ref-focus-ring" onClick={onClick} aria-label="Open sidebar">
       <IconSidebar className="h-5 w-5" />
     </button>
   );

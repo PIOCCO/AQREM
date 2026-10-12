@@ -1,10 +1,13 @@
 import { askChat, type AuthSession } from "./api";
+import { buildConversationalReply, classifyChatIntent } from "./chatIntent";
 import type { ChatCitation, ChatMessageMeta } from "./conversations";
+import { formatNoEvidenceMessage } from "./noEvidenceMessage";
 import { truncateText } from "./textPreview";
 
 export type AssistantReply = {
   content: string;
   meta: ChatMessageMeta;
+  skippedRetrieval?: boolean;
 };
 
 type CitationPayload = {
@@ -29,7 +32,7 @@ function mapCitations(items: CitationPayload[]): ChatCitation[] {
   }));
 }
 
-function formatLibraryAnswer(answer: string, fromLibrary: boolean, status?: string) {
+function formatLibraryAnswer(answer: string, fromLibrary: boolean) {
   if (fromLibrary) {
     return `**Approved answer** from the answer library:\n\n${answer.trim()}`;
   }
@@ -41,13 +44,23 @@ export async function generateAssistantReply(
   query: string,
   projectId: string | null,
   signal?: AbortSignal,
+  scope?: { projectName?: string | null; sourcesCount?: number },
 ): Promise<AssistantReply> {
   const trimmed = query.trim();
   if (!trimmed) {
-    return { content: "Please enter a question.", meta: { isDraft: true } };
+    return { content: "Please enter a question.", meta: { isDraft: true }, skippedRetrieval: true };
   }
 
   if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+
+  const intent = classifyChatIntent(trimmed);
+  if (intent) {
+    return {
+      content: buildConversationalReply(intent),
+      meta: { conversational: true, isDraft: false },
+      skippedRetrieval: true,
+    };
+  }
 
   try {
     const data = await askChat(session, { query: trimmed, project_id: projectId });
@@ -55,20 +68,25 @@ export async function generateAssistantReply(
 
     const citations = mapCitations((data.citations ?? []) as CitationPayload[]);
     const outcome = typeof data.outcome === "string" ? data.outcome : undefined;
+    const conversational = Boolean(data.conversational) || outcome === "conversational";
     const insufficient =
-      data.evidence_sufficiency === "insufficient" ||
-      outcome === "insufficient_evidence" ||
-      outcome === "source_unavailable";
+      !conversational &&
+      (data.evidence_sufficiency === "insufficient" ||
+        outcome === "insufficient_evidence" ||
+        outcome === "source_unavailable");
     const fromLibrary = Boolean(data.from_library);
 
     let content = formatLibraryAnswer(data.answer ?? "", fromLibrary);
     if (!fromLibrary && insufficient && !content.trim()) {
-      content =
-        "I could not find enough indexed evidence to support a confident answer in the current project scope.";
+      content = formatNoEvidenceMessage(
+        (data.project_name as string | undefined) ?? scope?.projectName,
+        typeof data.sources_searched === "number" ? data.sources_searched : (scope?.sourcesCount ?? 0),
+      );
     }
     if (
       !fromLibrary &&
       !insufficient &&
+      !conversational &&
       data.reasoning_summary &&
       outcome !== "conflicting_evidence" &&
       outcome !== "partially_answered"
@@ -79,21 +97,27 @@ export async function generateAssistantReply(
     return {
       content,
       meta: {
-        isDraft: data.is_draft !== false,
+        isDraft: data.is_draft !== false && !conversational,
         fromLibrary,
         libraryEntryId: data.library_entry_id ?? undefined,
         libraryStatus: fromLibrary ? "approved" : undefined,
         insufficientEvidence: insufficient,
+        conversational,
+        intent: typeof data.intent === "string" ? data.intent : undefined,
         outcome,
         needsReview: Boolean(data.needs_review),
         citations,
+        projectName: (data.project_name as string | undefined) ?? scope?.projectName ?? undefined,
+        sourcesSearched:
+          typeof data.sources_searched === "number" ? data.sources_searched : scope?.sourcesCount,
+        queryTimeMs: typeof data.query_time_ms === "number" ? data.query_time_ms : undefined,
+        userQuery: trimmed,
       },
+      skippedRetrieval: false,
     };
   } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
     const message = e instanceof Error ? e.message : "Chat request failed";
-    return {
-      content: message,
-      meta: { isDraft: true, error: true },
-    };
+    throw new Error(message);
   }
 }
