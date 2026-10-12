@@ -41,6 +41,50 @@ type Props = {
   onToggleCollapse: () => void;
 };
 
+function SidebarUserFooter({
+  initials,
+  name,
+  roleLabel,
+  email,
+  onLogout,
+}: {
+  initials: string;
+  name: string;
+  roleLabel: string;
+  email?: string;
+  onLogout: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-t border-chat-border p-3 mt-auto relative">
+      <button type="button" className="flex w-full items-center gap-2 rounded-lg hover:bg-chat-hover p-1" onClick={() => setOpen((v) => !v)}>
+        <span className="ref-user-avatar">{initials}</span>
+        <div className="min-w-0 flex-1 text-left">
+          <p className="truncate text-sm font-medium text-chat-fg">{name}</p>
+          <p className="truncate text-xs text-chat-muted">{roleLabel}</p>
+        </div>
+        <Link to="/settings" className="ref-sidebar-sparkle-btn" aria-label="Settings" onClick={(e) => e.stopPropagation()}>
+          <IconSparkles className="h-4 w-4" />
+        </Link>
+      </button>
+      {open ? (
+        <>
+          <button type="button" className="fixed inset-0 z-40" aria-label="Close menu" onClick={() => setOpen(false)} />
+          <div className="absolute bottom-full left-3 right-3 mb-1 z-50 rounded-lg border border-chat-border bg-chat-surface py-1 text-sm shadow-composer">
+            {email ? <p className="px-3 py-2 text-xs text-chat-muted truncate border-b border-chat-border">{email}</p> : null}
+            <Link to="/settings" className="chat-menu-item" onClick={() => setOpen(false)}>
+              Settings
+            </Link>
+            <button type="button" className="chat-menu-item w-full text-left text-red-600" onClick={onLogout}>
+              Sign out
+            </button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function ConversationMenu({
   title,
   onRename,
@@ -245,28 +289,16 @@ export default function ChatSidebar({
               )}
             </nav>
 
-            <div className="border-t border-chat-border p-3 mt-auto">
-              <div className="flex items-center gap-2">
-                <span className="ref-user-avatar">{initials}</span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-chat-fg">{user?.fullName || user?.email || "User"}</p>
-                  <p className="truncate text-xs text-chat-muted">{roleDisplayLabel(user?.role)}</p>
-                </div>
-                <Link to="/settings" className="ref-sidebar-sparkle-btn" aria-label="Settings">
-                  <IconSparkles className="h-4 w-4" />
-                </Link>
-              </div>
-              <button
-                type="button"
-                className="sr-only"
-                onClick={() => {
-                  clearSession();
-                  navigate("/login", { replace: true });
-                }}
-              >
-                Sign out
-              </button>
-            </div>
+            <SidebarUserFooter
+              initials={initials}
+              name={user?.fullName || user?.email || "User"}
+              roleLabel={roleDisplayLabel(user?.role)}
+              email={user?.email}
+              onLogout={() => {
+                clearSession();
+                navigate("/login", { replace: true });
+              }}
+            />
           </>
         ) : (
           <div className="flex flex-col items-center gap-2 py-3">

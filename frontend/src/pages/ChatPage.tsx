@@ -252,7 +252,8 @@ export default function ChatPage() {
 
   async function onRegenerate(userQuery: string) {
     if (!conversation || loading) return;
-    await streamReply(userQuery, conversation);
+    const latest = getConversation(conversation.id) ?? conversation;
+    await streamReply(userQuery, latest);
   }
 
   return (
