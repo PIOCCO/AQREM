@@ -7,6 +7,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const sessionExpired = searchParams.get("expired") === "1";
+  const nextPath = searchParams.get("next") || "/";
   const [error, setError] = useState<string | null>(
     sessionExpired
       ? "Your session is invalid or expired (common after changing servers or ports). Please sign in again."
@@ -29,12 +30,12 @@ export default function LoginPage() {
         password: String(form.get("password")),
       });
       saveSession(data.access_token, data.organization_id ?? null);
-      if (data.is_platform_admin && !data.organization_id) {
+      if (data.is_platform_admin && (nextPath === "/platform-admin" || !data.organization_id)) {
         navigate("/platform-admin");
       } else if (data.must_change_password) {
         navigate("/change-password");
       } else {
-        navigate("/");
+        navigate(nextPath.startsWith("/") ? nextPath : "/");
       }
     } catch {
       setError("Authentication failed. Check your credentials and try again.");
@@ -76,6 +77,14 @@ export default function LoginPage() {
         <p className="text-xs text-slate-500 mt-4">
           Access is provisioned by your administrator. If you received an invitation link, use that URL to set your
           password.
+        </p>
+        <p className="text-xs text-slate-500 mt-2">
+          Platform administrators: sign in with your admin account (from{" "}
+          <code className="text-[11px]">PLATFORM_ADMIN_EMAIL</code>), then open{" "}
+          <a href="/platform-admin" className="text-chat-accent hover:underline">
+            /platform-admin
+          </a>
+          .
         </p>
       </div>
     </div>

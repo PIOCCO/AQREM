@@ -12,7 +12,6 @@ import ChatPage from "./pages/ChatPage";
 import DashboardPage from "./pages/DashboardPage";
 import EvidenceDetailPage from "./pages/EvidenceDetailPage";
 import EvidencePage from "./pages/EvidencePage";
-import LoginPage from "./pages/LoginPage";
 import AcceptInvitePage from "./pages/AcceptInvitePage";
 import PlatformAdminPage from "./pages/PlatformAdminPage";
 import RequirePlatformAdmin from "./components/RequirePlatformAdmin";
@@ -26,7 +25,7 @@ import QuestionReviewPage from "./pages/QuestionReviewPage";
 import QuestionnaireDetailPage from "./pages/QuestionnaireDetailPage";
 import QuestionnairesPage from "./pages/QuestionnairesPage";
 import SourcesPage from "./pages/SourcesPage";
-import { loadSession } from "./lib/api";
+import LoginEntryRedirect from "./components/LoginEntryRedirect";
 
 function AuthenticatedApp() {
   return (
@@ -68,10 +67,9 @@ function AuthenticatedApp() {
 }
 
 export default function App() {
-  const session = loadSession();
   return (
     <Routes>
-      <Route path="/login" element={session ? <Navigate to="/" replace /> : <LoginPage />} />
+      <Route path="/login" element={<LoginEntryRedirect />} />
       <Route path="/accept-invite" element={<AcceptInvitePage />} />
       <Route
         path="/platform-admin"

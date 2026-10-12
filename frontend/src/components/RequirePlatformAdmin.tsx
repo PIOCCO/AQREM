@@ -31,6 +31,8 @@ export default function RequirePlatformAdmin({ children }: { children: ReactNode
       </div>
     );
   }
-  if (!loadSession()?.token || !allowed) return <Navigate to="/login" replace />;
+  if (!loadSession()?.token || !allowed) {
+    return <Navigate to="/login?next=%2Fplatform-admin" replace />;
+  }
   return <>{children}</>;
 }

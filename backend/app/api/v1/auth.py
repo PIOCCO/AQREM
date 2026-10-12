@@ -36,17 +36,16 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
     if not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
+    # Platform administrators may sign in without selecting an organization (admin console).
     if user.is_platform_admin and payload.organization_id is None:
-        membership = db.query(OrganizationMembership).filter(OrganizationMembership.user_id == user.id).first()
-        if membership is None:
-            token = create_access_token(str(user.id), {"role": "PLATFORM_ADMIN"})
-            return TokenResponse(
-                access_token=token,
-                organization_id=None,
-                role=None,
-                must_change_password=user.must_change_password,
-                is_platform_admin=True,
-            )
+        token = create_access_token(str(user.id), {"role": "PLATFORM_ADMIN"})
+        return TokenResponse(
+            access_token=token,
+            organization_id=None,
+            role=None,
+            must_change_password=user.must_change_password,
+            is_platform_admin=True,
+        )
 
     membership_query = db.query(OrganizationMembership).filter(
         OrganizationMembership.user_id == user.id,
