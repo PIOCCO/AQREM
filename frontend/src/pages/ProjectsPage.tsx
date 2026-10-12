@@ -25,7 +25,7 @@ export default function ProjectsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
-  const editable = user ? canEditContent(user.role) : false;
+  const editable = user?.role ? canEditContent(user.role) : false;
   const [rows, setRows] = useState<Summary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -28,7 +28,7 @@ export default function QuestionnairesPage() {
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [filePreview, setFilePreview] = useState<string | null>(null);
-  const editable = user ? canEditContent(user.role) : false;
+  const editable = user?.role ? canEditContent(user.role) : false;
 
   async function load() {
     if (!session) return;

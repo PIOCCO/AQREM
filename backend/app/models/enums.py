@@ -72,6 +72,7 @@ class LicenseStatus(StrEnum):
     ACTIVE = "active"
     SUSPENDED = "suspended"
     TEST = "test"
+    EXPIRED = "expired"
 
 
 class AnswerOutcome(StrEnum):

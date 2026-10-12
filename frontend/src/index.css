@@ -24,6 +24,23 @@
     --chat-evidence-mark: #fef08a;
     --chat-column-max: 768px;
     --chat-sidebar-width: 280px;
+
+    --admin-sidebar-width: 340px;
+    --admin-radius-card: 0.75rem;
+    --admin-radius-input: 0.625rem;
+    --admin-canvas: #f5f5f4;
+    --admin-status-active-bg: #dcfce7;
+    --admin-status-active-text: #166534;
+    --admin-status-suspended-bg: #f3f4f6;
+    --admin-status-suspended-text: #4b5563;
+    --admin-status-test-bg: #ffedd5;
+    --admin-status-test-text: #9a3412;
+    --admin-seat-ok: #0d9488;
+    --admin-seat-full: #d97706;
+    --admin-seat-muted: #9ca3af;
+    --admin-alert-bg: #fffbeb;
+    --admin-alert-border: #fcd34d;
+    --admin-alert-text: #92400e;
   }
 
   html.dark {
@@ -551,5 +568,35 @@
 
   .chat-sidebar {
     width: var(--chat-sidebar-width);
+  }
+
+  .admin-shell {
+    background: var(--admin-canvas);
+    min-height: 100vh;
+  }
+  .admin-card {
+    border-radius: var(--admin-radius-card);
+    @apply border border-chat-border bg-chat-surface shadow-card;
+  }
+  .admin-input {
+    border-radius: var(--admin-radius-input);
+    @apply w-full border border-chat-border bg-chat-surface px-3 py-2 text-sm text-chat-fg;
+  }
+  .admin-badge-active {
+    background: var(--admin-status-active-bg);
+    color: var(--admin-status-active-text);
+  }
+  .admin-badge-suspended {
+    background: var(--admin-status-suspended-bg);
+    color: var(--admin-status-suspended-text);
+  }
+  .admin-badge-test {
+    background: var(--admin-status-test-bg);
+    color: var(--admin-status-test-text);
+  }
+  .admin-inline-alert {
+    background: var(--admin-alert-bg);
+    border-color: var(--admin-alert-border);
+    color: var(--admin-alert-text);
   }
 }

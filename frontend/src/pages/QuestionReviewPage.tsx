@@ -51,8 +51,8 @@ export default function QuestionReviewPage() {
   const [genPhase, setGenPhase] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const canEdit = user ? canEditContent(user.role) : false;
-  const canReview = user ? canReviewAnswers(user.role) : false;
+  const canEdit = user?.role ? canEditContent(user.role) : false;
+  const canReview = user?.role ? canReviewAnswers(user.role) : false;
 
   async function reload() {
     if (!session || !questionId) return;

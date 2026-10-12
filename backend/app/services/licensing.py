@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.models.enums import LicenseStatus
-from app.models.organization import Organization, OrganizationMembership
+from app.models.organization import Organization
+from app.services.seat_usage import get_seat_usage
 
 
 class LicenseDenied(Exception):
@@ -26,14 +27,9 @@ def licensing_test_mode_effective(settings: Settings | None = None) -> bool:
 
 
 def count_active_seats(db: Session, organization_id: UUID) -> int:
-    return (
-        db.query(OrganizationMembership)
-        .filter(
-            OrganizationMembership.organization_id == organization_id,
-            OrganizationMembership.is_active.is_(True),
-        )
-        .count()
-    )
+    from app.services.seat_usage import count_active_members
+
+    return count_active_members(db, organization_id)
 
 
 def org_allows_sign_in(org: Organization, settings: Settings | None = None) -> tuple[bool, str]:
@@ -43,8 +39,8 @@ def org_allows_sign_in(org: Organization, settings: Settings | None = None) -> t
         return False, "Organization is deactivated"
 
     status_value = org.license_status or LicenseStatus.ACTIVE.value
-    if status_value == LicenseStatus.SUSPENDED.value:
-        return False, "Organization license is suspended"
+    if status_value in {LicenseStatus.SUSPENDED.value, LicenseStatus.EXPIRED.value}:
+        return False, "Organization license is not active"
 
     if status_value == LicenseStatus.TEST.value:
         if not licensing_test_mode_effective(settings):
@@ -67,10 +63,10 @@ def assert_can_add_seat(db: Session, org: Organization, settings: Settings | Non
     if org.license_status == LicenseStatus.TEST.value and licensing_test_mode_effective(settings):
         return
 
-    seats = count_active_seats(db, org.id)
+    usage = get_seat_usage(db, org)
     if org.license_limit <= 0:
         raise LicenseDenied("license_limit is zero; increase seats or use a test organization in development")
-    if seats >= org.license_limit:
+    if usage.seats_used >= org.license_limit:
         raise LicenseDenied("Organization has no remaining licensed seats")
 
 

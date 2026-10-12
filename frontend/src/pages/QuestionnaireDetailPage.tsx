@@ -33,7 +33,7 @@ export default function QuestionnaireDetailPage() {
   const { session } = useProjectContext();
   const { user } = useAuth();
   const toast = useToast();
-  const editable = user ? canEditContent(user.role) : false;
+  const editable = user?.role ? canEditContent(user.role) : false;
   const [searchParams, setSearchParams] = useSearchParams();
   const [meta, setMeta] = useState<{ name: string; status: string } | null>(null);
   const [questions, setQuestions] = useState<QuestionRow[]>([]);

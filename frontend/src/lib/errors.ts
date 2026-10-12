@@ -3,6 +3,7 @@ export async function readApiError(res: Response, fallback: string): Promise<str
     const body = await res.json();
     if (typeof body?.message === "string") return body.message;
     if (typeof body?.detail === "string") return body.detail;
+    if (body?.detail && typeof body.detail.message === "string") return body.detail.message;
     if (Array.isArray(body?.detail)) return fallback;
   } catch {
     /* ignore */

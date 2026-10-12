@@ -33,7 +33,7 @@ export default function ProjectDetailPage() {
   const { setProjectId } = useProjectContext();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const editable = user ? canEditContent(user.role) : false;
+  const editable = user?.role ? canEditContent(user.role) : false;
 
   useEffect(() => {
     if (projectId) setProjectId(projectId);

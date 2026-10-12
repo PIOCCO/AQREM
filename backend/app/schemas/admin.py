@@ -7,17 +7,33 @@ from app.core.roles import Role
 from app.models.enums import LicenseStatus
 
 
+class AdminContextResponse(BaseModel):
+    licensing_test_mode: bool
+    test_mode_effective: bool
+
+
+class SeatUsageResponse(BaseModel):
+    active_members: int
+    pending_invitations: int
+    seats_used: int
+    seats_limit: int
+    seats_available: int
+    is_full: bool
+
+
 class AdminOrganizationCreate(BaseModel):
     name: str = Field(min_length=2, max_length=255)
     slug: str | None = Field(default=None, min_length=2, max_length=100)
-    license_limit: int = Field(default=0, ge=0)
-    license_status: LicenseStatus | None = None
+    license_limit: int = Field(ge=1)
+    environment: str = Field(description="production or test")
+    owner_display_name: str | None = Field(default=None, max_length=255)
 
 
 class AdminOrganizationUpdate(BaseModel):
     license_limit: int | None = Field(default=None, ge=0)
     license_status: LicenseStatus | None = None
     is_active: bool | None = None
+    owner_display_name: str | None = None
 
 
 class AdminOrganizationResponse(BaseModel):
@@ -26,8 +42,17 @@ class AdminOrganizationResponse(BaseModel):
     slug: str
     license_limit: int
     license_status: str
+    environment: str
     is_active: bool
-    active_seats: int
+    owner_display_name: str | None
+    created_at: datetime
+    license_renews_at: datetime | None
+    seats: SeatUsageResponse
+
+
+class AdminOrganizationListResponse(BaseModel):
+    items: list[AdminOrganizationResponse]
+    counts: dict[str, int]
 
 
 class AdminProvisionUserRequest(BaseModel):
@@ -41,6 +66,7 @@ class AdminProvisionUserResponse(BaseModel):
     organization_id: UUID
     email: EmailStr
     role: Role
+    invitation_id: UUID
     invitation_expires_at: datetime
     invitation_setup_path: str
 
@@ -53,6 +79,52 @@ class AdminMembershipResponse(BaseModel):
     role: Role
     is_active: bool
     user_is_active: bool
+
+
+class AdminInvitationResponse(BaseModel):
+    id: UUID
+    email: EmailStr
+    role: Role
+    expires_at: datetime
+    created_at: datetime
+
+
+class AdminDirectoryRow(BaseModel):
+    row_id: str
+    kind: str
+    membership_id: UUID | None = None
+    invitation_id: UUID | None = None
+    user_id: UUID | None = None
+    full_name: str
+    email: EmailStr
+    role: Role
+    status: str
+
+
+class AdminDirectoryResponse(BaseModel):
+    seats: SeatUsageResponse
+    license_status: str
+    license_renews_at: datetime | None
+    rows: list[AdminDirectoryRow]
+    total: int
+    page: int
+    page_size: int
+
+
+class AdminAuditRow(BaseModel):
+    id: UUID
+    created_at: datetime
+    actor_email: str | None
+    action: str
+    target: str
+
+
+class AdminAuditListResponse(BaseModel):
+    items: list[AdminAuditRow]
+
+
+class AdminMemberRoleUpdate(BaseModel):
+    role: Role
 
 
 class AcceptInvitationRequest(BaseModel):

@@ -160,7 +160,7 @@ def test_invitation_single_use_and_expiry(db_session):
     )
     db_session.flush()
 
-    _user, _membership, raw_token, _expires = provision_user_invitation(
+    _user, _membership, _inv, raw_token, _expires = provision_user_invitation(
         db_session,
         admin_user_id=admin.id,
         organization_id=org.id,
@@ -183,7 +183,7 @@ def test_invitation_single_use_and_expiry(db_session):
     inv.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
     db_session.commit()
 
-    _user2, _m2, token2, _ = provision_user_invitation(
+    _user2, _m2, _inv2, token2, _ = provision_user_invitation(
         db_session,
         admin_user_id=admin.id,
         organization_id=org.id,

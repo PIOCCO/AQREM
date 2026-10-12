@@ -47,6 +47,7 @@ def create_organization_admin(
     slug: str | None = None,
     license_limit: int = 0,
     license_status: LicenseStatus | None = None,
+    owner_display_name: str | None = None,
 ) -> Organization:
     settings = get_settings()
     status_value = license_status
@@ -59,6 +60,7 @@ def create_organization_admin(
         license_limit=license_limit,
         license_status=status_value.value,
         is_active=True,
+        owner_display_name=owner_display_name,
     )
     db.add(org)
     db.flush()
@@ -83,7 +85,7 @@ def provision_user_invitation(
     full_name: str,
     role: Role,
     expires_hours: int = 72,
-) -> tuple[User, OrganizationMembership, str, datetime]:
+) -> tuple[User, OrganizationMembership, UserInvitation, str, datetime]:
     org = db.get(Organization, organization_id)
     if org is None or not org.is_active:
         raise ValueError("Organization not found or inactive")
@@ -91,7 +93,22 @@ def provision_user_invitation(
     try:
         assert_can_add_seat(db, org)
     except LicenseDenied as exc:
-        raise ValueError(exc.detail) from exc
+        raise LicenseDenied(exc.detail) from exc
+
+    now = datetime.now(timezone.utc)
+    pending_same = (
+        db.query(UserInvitation)
+        .filter(
+            UserInvitation.organization_id == organization_id,
+            UserInvitation.email == email.lower(),
+            UserInvitation.used_at.is_(None),
+            UserInvitation.revoked_at.is_(None),
+            UserInvitation.expires_at > now,
+        )
+        .first()
+    )
+    if pending_same:
+        raise ValueError("DUPLICATE_EMAIL")
 
     user = db.query(User).filter(User.email == email).first()
     if user is None:
@@ -149,7 +166,72 @@ def provision_user_invitation(
         resource_id=str(user.id),
         metadata={"email": email, "role": role.value, "invitation_id": str(invitation.id)},
     )
-    return user, membership, raw_token, expires_at
+    return user, membership, invitation, raw_token, expires_at
+
+
+def resend_invitation(
+    db: Session,
+    *,
+    admin_user_id: UUID,
+    invitation: UserInvitation,
+    expires_hours: int = 72,
+) -> tuple[str, datetime]:
+    if invitation.used_at is not None or invitation.revoked_at is not None:
+        raise ValueError("Invitation is not pending")
+    raw_token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_hours)
+    invitation.token_hash = hash_invitation_token(raw_token)
+    invitation.expires_at = expires_at
+    record_audit(
+        db,
+        organization_id=invitation.organization_id,
+        user_id=admin_user_id,
+        action="invitation_resent",
+        resource_type="invitation",
+        resource_id=str(invitation.id),
+        metadata={"email": invitation.email},
+    )
+    return raw_token, expires_at
+
+
+def revoke_invitation(
+    db: Session,
+    *,
+    admin_user_id: UUID,
+    invitation: UserInvitation,
+) -> None:
+    if invitation.used_at is not None:
+        raise ValueError("Invitation already accepted")
+    invitation.revoked_at = datetime.now(timezone.utc)
+    record_audit(
+        db,
+        organization_id=invitation.organization_id,
+        user_id=admin_user_id,
+        action="invitation_revoked",
+        resource_type="invitation",
+        resource_id=str(invitation.id),
+        metadata={"email": invitation.email},
+    )
+
+
+def update_membership_role(
+    db: Session,
+    *,
+    admin_user_id: UUID,
+    membership: OrganizationMembership,
+    role: Role,
+) -> None:
+    old = membership.role
+    membership.role = role.value
+    record_audit(
+        db,
+        organization_id=membership.organization_id,
+        user_id=admin_user_id,
+        action="member_role_changed",
+        resource_type="organization_membership",
+        resource_id=str(membership.id),
+        metadata={"user_id": str(membership.user_id), "from": old, "to": role.value},
+    )
 
 
 def accept_invitation(
