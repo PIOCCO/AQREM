@@ -8,27 +8,50 @@
     --aq-radius-md: 0.5rem;
     --aq-radius-lg: 0.75rem;
 
-    --chat-main: #ffffff;
-    --chat-sidebar: #f9f9f9;
-    --chat-surface: #ffffff;
-    --chat-surface-subtle: #f3f3f3;
-    --chat-fg: #0d0d0d;
-    --chat-muted: #737373;
-    --chat-border: #e5e5e5;
-    --chat-hover: #ececec;
-    --chat-accent: #171717;
-    --chat-brand-mark: #0f766e;
-    --chat-user-bubble: #f4f4f4;
-    --chat-review-badge-bg: #fef3c7;
-    --chat-review-badge-text: #92400e;
-    --chat-evidence-mark: #fef08a;
-    --chat-insufficient-bg: #fef3c7;
-    --chat-insufficient-fg: #78350f;
-    --chat-insufficient-border: #d97706;
-    --chat-danger-fg: #b91c1c;
-    --chat-send-ready-bg: #171717;
-    --chat-send-ready-fg: #ffffff;
+    --color-background: #f5f5f4;
+    --color-surface: #ffffff;
+    --color-surface-raised: #f3f3f3;
+    --color-border: #e5e5e5;
+    --color-border-strong: #d4d4d4;
+    --color-text-primary: #171717;
+    --color-text-secondary: #404040;
+    --color-text-muted: #737373;
+    --color-accent: #0f766e;
+    --color-accent-fg: #ffffff;
+    --color-accent-bg: #ecfdf5;
+    --color-danger: #b91c1c;
+    --color-danger-bg: #fef2f2;
+    --color-danger-border: #fecaca;
+    --color-warning: #b45309;
+    --color-warning-bg: #fffbeb;
+    --color-warning-border: #fde68a;
+    --color-success: #047857;
+    --color-success-bg: #ecfdf5;
+    --color-success-border: #a7f3d0;
+    --color-focus-ring: #0f766e;
+
+    --chat-main: var(--color-background);
+    --chat-sidebar: var(--color-surface-raised);
+    --chat-surface: var(--color-surface);
+    --chat-surface-subtle: var(--color-surface-raised);
+    --chat-fg: var(--color-text-primary);
+    --chat-muted: var(--color-text-muted);
+    --chat-border: var(--color-border);
+    --chat-hover: color-mix(in srgb, var(--color-text-primary) 6%, transparent);
+    --chat-accent: var(--color-accent);
+    --chat-brand-mark: var(--color-accent);
+    --chat-user-bubble: var(--color-surface-raised);
+    --chat-review-badge-bg: var(--color-warning-bg);
+    --chat-review-badge-text: var(--color-warning);
+    --chat-evidence-mark: var(--color-warning-border);
+    --chat-insufficient-bg: var(--color-warning-bg);
+    --chat-insufficient-fg: var(--color-warning);
+    --chat-insufficient-border: var(--color-warning);
+    --chat-danger-fg: var(--color-danger);
+    --chat-send-ready-bg: var(--color-text-primary);
+    --chat-send-ready-fg: var(--color-accent-fg);
     --chat-column-max: 768px;
+    --workspace-column-max: 960px;
     --chat-sidebar-width: 280px;
 
     --admin-sidebar-width: 340px;
@@ -50,22 +73,32 @@
   }
 
   html.dark {
-    --chat-main: #212121;
-    --chat-sidebar: #171717;
-    --chat-surface: #2f2f2f;
-    --chat-surface-subtle: #3a3a3a;
-    --chat-fg: #ececec;
-    --chat-muted: #9b9b9b;
-    --chat-border: #3f3f3f;
+    --color-background: #141414;
+    --color-surface: #1f1f1f;
+    --color-surface-raised: #2a2a2a;
+    --color-border: #3f3f3f;
+    --color-border-strong: #525252;
+    --color-text-primary: #ececec;
+    --color-text-secondary: #d4d4d4;
+    --color-text-muted: #a3a3a3;
+    --color-accent: #10a37f;
+    --color-accent-fg: #0d0d0d;
+    --color-accent-bg: #1a2e28;
+    --color-danger: #fca5a5;
+    --color-danger-bg: #3b1212;
+    --color-danger-border: #7f1d1d;
+    --color-warning: #fde68a;
+    --color-warning-bg: #422006;
+    --color-warning-border: #f59e0b;
+    --color-success: #6ee7b7;
+    --color-success-bg: #052e21;
+    --color-success-border: #047857;
+    --color-focus-ring: #10a37f;
+
     --chat-hover: rgba(255, 255, 255, 0.08);
-    --chat-accent: #10a37f;
-    --chat-user-bubble: #2f2f2f;
-    --chat-insufficient-bg: #422006;
-    --chat-insufficient-fg: #fde68a;
-    --chat-insufficient-border: #f59e0b;
-    --chat-danger-fg: #fca5a5;
-    --chat-send-ready-bg: #10a37f;
-    --chat-send-ready-fg: #0d0d0d;
+    --chat-user-bubble: var(--color-surface-raised);
+    --chat-send-ready-bg: var(--color-accent);
+    --chat-send-ready-fg: var(--color-accent-fg);
   }
 
   html {
@@ -79,7 +112,8 @@
   }
 
   :focus-visible {
-    @apply outline-none ring-2 ring-info/40 ring-offset-2 ring-offset-surface-muted;
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
   }
 }
 
@@ -93,15 +127,18 @@
   }
 
   .aq-page-title {
-    @apply text-page-title text-slate-900 tracking-tight;
+    @apply text-page-title tracking-tight;
+    color: var(--color-text-primary);
   }
 
   .aq-page-subtitle {
-    @apply mt-1 text-sm text-slate-600 max-w-3xl;
+    @apply mt-1 text-sm max-w-3xl;
+    color: var(--color-text-secondary);
   }
 
   .aq-section-title {
-    @apply text-section-title text-slate-800;
+    @apply text-section-title;
+    color: var(--color-text-primary);
   }
 
   .aq-card {
@@ -117,7 +154,8 @@
   }
 
   .aq-panel-label {
-    @apply text-label uppercase tracking-wide text-slate-500 mb-3;
+    @apply text-label uppercase tracking-wide mb-3;
+    color: var(--color-text-muted);
   }
 
   .aq-btn {
@@ -125,15 +163,19 @@
   }
 
   .aq-btn-primary {
-    @apply aq-btn bg-primary text-primary-foreground hover:bg-primary-hover;
+    @apply aq-btn hover:opacity-90;
+    background: var(--color-accent);
+    color: var(--color-accent-fg);
   }
 
   .aq-btn-secondary {
-    @apply aq-btn border border-border-strong bg-surface text-slate-800 hover:bg-surface-subtle;
+    @apply aq-btn border border-border-strong bg-surface hover:bg-surface-subtle;
+    color: var(--color-text-primary);
   }
 
   .aq-btn-ghost {
-    @apply aq-btn text-slate-700 hover:bg-surface-subtle;
+    @apply aq-btn hover:bg-surface-subtle;
+    color: var(--color-text-secondary);
   }
 
   .aq-btn-danger {
@@ -141,7 +183,8 @@
   }
 
   .aq-btn-success {
-    @apply aq-btn bg-success text-white hover:bg-emerald-700;
+    @apply aq-btn bg-success hover:opacity-90;
+    color: var(--color-accent-fg);
   }
 
   .aq-dropdown {
@@ -149,11 +192,21 @@
   }
 
   .aq-dropdown-item {
-    @apply block w-full text-left px-3 py-2 text-slate-800 hover:bg-surface-subtle transition-colors disabled:opacity-50;
+    @apply block w-full text-left px-3 py-2 hover:bg-surface-subtle transition-colors disabled:opacity-50;
+    color: var(--color-text-primary);
   }
 
   .aq-input {
-    @apply w-full h-10 rounded-control border border-border-strong bg-surface px-3 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15;
+    @apply w-full h-10 rounded-control border border-border-strong bg-surface px-3 text-sm transition-colors;
+    color: var(--color-text-primary);
+  }
+  .aq-input::placeholder {
+    color: var(--color-text-muted);
+  }
+  .aq-input:focus {
+    border-color: var(--color-accent);
+    outline: 2px solid color-mix(in srgb, var(--color-focus-ring) 35%, transparent);
+    outline-offset: 0;
   }
 
   .aq-select {
@@ -173,7 +226,8 @@
   }
 
   .aq-table thead {
-    @apply bg-surface-subtle text-left text-label uppercase tracking-wide text-slate-500;
+    @apply bg-surface-subtle text-left text-label uppercase tracking-wide;
+    color: var(--color-text-muted);
   }
 
   .aq-table th {
@@ -185,19 +239,28 @@
   }
 
   .aq-table tbody tr {
-    @apply border-t border-border transition-colors hover:bg-surface-muted/80;
+    @apply border-t border-border transition-colors hover:bg-surface-subtle;
   }
 
   .ref-nav-link {
-    @apply flex items-center gap-3 rounded-control py-2.5 pr-3 pl-[9px] text-sm text-slate-600 border-l-[3px] border-transparent transition-colors hover:bg-surface-subtle hover:text-slate-900;
+    @apply flex items-center gap-3 rounded-control py-2.5 pr-3 pl-[9px] text-sm border-l-[3px] border-transparent transition-colors hover:bg-surface-subtle;
+    color: var(--color-text-secondary);
+  }
+  .ref-nav-link:hover {
+    color: var(--color-text-primary);
   }
 
   .ref-nav-link-active {
-    @apply bg-surface-subtle text-slate-900 font-medium border-brand-violet hover:bg-surface-subtle;
+    @apply bg-surface-subtle font-medium border-brand-violet hover:bg-surface-subtle;
+    color: var(--color-text-primary);
   }
 
   .ref-header-search {
-    @apply h-10 w-full min-w-0 rounded-control border border-border bg-surface-subtle/80 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15 outline-none;
+    @apply h-10 w-full min-w-0 rounded-control border border-border bg-surface-subtle pl-10 pr-3 text-sm outline-none;
+    color: var(--color-text-primary);
+  }
+  .ref-header-search::placeholder {
+    color: var(--color-text-muted);
   }
 
   .ref-header-user-btn {
@@ -205,7 +268,7 @@
   }
 
   .ref-workspace-switcher {
-    @apply flex items-center gap-3 rounded-card border border-border bg-surface-subtle/50 p-3;
+    @apply flex items-center gap-3 rounded-card border border-border bg-surface-subtle p-3;
   }
 
   .ref-metric-card {
@@ -213,11 +276,13 @@
   }
 
   .ref-metric-value {
-    @apply text-[2rem] leading-none font-semibold tabular-nums text-slate-900 tracking-tight;
+    @apply text-[2rem] leading-none font-semibold tabular-nums tracking-tight;
+    color: var(--color-text-primary);
   }
 
   .ref-metric-label {
-    @apply mt-2 text-sm text-slate-500;
+    @apply mt-2 text-sm;
+    color: var(--color-text-muted);
   }
 
   .aq-metric {
@@ -225,11 +290,13 @@
   }
 
   .aq-metric-value {
-    @apply text-[2rem] leading-none font-semibold tabular-nums text-slate-900;
+    @apply text-[2rem] leading-none font-semibold tabular-nums;
+    color: var(--color-text-primary);
   }
 
   .aq-metric-label {
-    @apply text-sm text-slate-500;
+    @apply text-sm;
+    color: var(--color-text-muted);
   }
 
   .aq-alert {
@@ -253,7 +320,8 @@
   }
 
   .aq-modal-backdrop {
-    @apply fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[1px];
+    @apply fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-[1px];
+    background: color-mix(in srgb, var(--color-background) 40%, transparent);
   }
 
   .aq-modal {
@@ -261,15 +329,19 @@
   }
 
   .aq-code-block {
-    @apply rounded-md border border-border bg-surface-subtle p-4 font-mono text-xs leading-relaxed text-slate-800 overflow-x-auto whitespace-pre-wrap;
+    @apply rounded-md border border-border bg-surface-subtle p-4 font-mono text-xs leading-relaxed overflow-x-auto whitespace-pre-wrap;
+    color: var(--color-text-secondary);
   }
 
   .aq-skeleton {
-    @apply animate-pulse rounded-md bg-slate-200/80;
+    @apply animate-pulse rounded-md;
+    background: color-mix(in srgb, var(--color-text-muted) 25%, transparent);
   }
 
   .aq-spinner {
-    @apply inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700;
+    @apply inline-block h-4 w-4 animate-spin rounded-full border-2;
+    border-color: var(--color-border);
+    border-top-color: var(--color-text-primary);
   }
 
   .aq-link {
@@ -277,7 +349,8 @@
   }
 
   .aq-field-label {
-    @apply block text-label uppercase tracking-wide text-slate-500 mb-1.5;
+    @apply block text-label uppercase tracking-wide mb-1.5;
+    color: var(--color-text-muted);
   }
 
   .aq-workspace-section {
@@ -285,7 +358,8 @@
   }
 
   .aq-modal-title {
-    @apply text-section-title text-slate-900 mb-4;
+    @apply text-section-title mb-4;
+    color: var(--color-text-primary);
   }
 
   .aq-progress-track {
@@ -400,7 +474,11 @@
     background-color: color-mix(in srgb, var(--chat-main) 95%, transparent);
   }
   .chat-workspace-main {
-    @apply p-4 lg:p-8 max-w-7xl mx-auto w-full;
+    @apply py-6 px-4 lg:px-6 w-full flex flex-col items-center overflow-y-auto;
+  }
+  .workspace-page {
+    @apply w-full;
+    max-width: var(--workspace-column-max);
   }
 
   .chat-composer {
@@ -502,7 +580,10 @@
     @apply flex w-full items-center justify-center gap-2 rounded-lg border border-chat-border bg-chat-surface px-3 py-2.5 text-sm font-medium text-chat-fg hover:bg-chat-hover transition-colors;
   }
   .ref-sidebar-search {
-    @apply w-full rounded-lg border border-chat-border bg-chat-surface px-3 py-2.5 text-sm text-chat-fg placeholder:text-chat-muted outline-none focus:border-neutral-400;
+    @apply w-full rounded-lg border border-chat-border bg-chat-surface px-3 py-2.5 text-sm text-chat-fg placeholder:text-chat-muted outline-none;
+  }
+  .ref-sidebar-search:focus {
+    border-color: var(--color-accent);
   }
   .ref-nav-item {
     @apply flex items-center gap-3 rounded-lg px-3 py-2 text-[14px] text-chat-fg hover:bg-chat-hover transition-colors;
@@ -511,7 +592,8 @@
     @apply bg-chat-hover font-medium;
   }
   .ref-nav-badge {
-    @apply inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-neutral-200 px-1.5 text-[11px] font-medium text-chat-fg;
+    @apply inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11px] font-medium text-chat-fg;
+    background: var(--color-surface-raised);
   }
   .ref-conv-item {
     @apply block rounded-lg px-3 py-2 text-[14px] text-chat-fg hover:bg-chat-hover transition-colors min-w-0;
@@ -520,7 +602,8 @@
     @apply bg-chat-hover font-medium;
   }
   .ref-user-avatar {
-    @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-xs font-semibold text-chat-fg;
+    @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-chat-fg;
+    background: var(--color-surface-raised);
   }
   .ref-sidebar-sparkle-btn {
     @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-chat-muted hover:bg-chat-hover hover:text-chat-fg;

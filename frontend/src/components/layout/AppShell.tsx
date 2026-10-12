@@ -31,7 +31,7 @@ export default function AppShell() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         {!chatMode ? (
-          <header className="chat-topbar flex h-12 shrink-0 items-center gap-3 px-4 lg:px-6">
+          <header className="chat-topbar flex h-[52px] shrink-0 items-center gap-3 px-4 lg:px-6 max-w-[var(--workspace-column-max)] w-full mx-auto">
             <ChatMobileMenuButton onClick={() => setMobileOpen(true)} />
             <LogoMark className="h-8 w-8 lg:hidden" />
             <h1 className="truncate text-sm font-medium">{pageTitleForPath(location.pathname)}</h1>

@@ -7,8 +7,22 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <title>AQREM</title>
+    <script>
+      (function () {
+        var key = "aqrem_theme";
+        var stored = localStorage.getItem(key);
+        var resolved = "dark";
+        if (stored === "light") resolved = "light";
+        else if (stored === "dark") resolved = "dark";
+        else if (stored === "system") {
+          resolved = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        document.documentElement.classList.toggle("dark", resolved === "dark");
+        document.documentElement.dataset.theme = resolved;
+      })();
+    </script>
   </head>
-  <body class="bg-slate-50">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

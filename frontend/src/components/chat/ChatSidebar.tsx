@@ -11,6 +11,7 @@ import {
   IconMore,
   IconPlus,
   IconSearch,
+  IconActivity,
   IconSettings,
   IconSidebar,
   IconSparkles,
@@ -31,6 +32,8 @@ const primaryNav = [
   { to: "/questionnaires", label: "Questionnaires", Icon: IconClipboard },
   { to: "/review-queue", label: "Review Queue", Icon: IconCheckCircle, badge: true },
   { to: "/answer-library", label: "Answer Library", Icon: IconLibrary },
+  { to: "/audit", label: "Activity", Icon: IconActivity },
+  { to: "/settings", label: "Settings", Icon: IconSettings },
 ];
 
 type Props = {

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { applyResolvedTheme, resolveThemeFromStorage, THEME_STORAGE_KEY, type StoredTheme } from "./themeInit";
 
-export type ThemeMode = "light" | "dark" | "system";
+export type ThemeMode = StoredTheme;
 
 type ThemeContextValue = {
   mode: ThemeMode;
@@ -9,47 +10,33 @@ type ThemeContextValue = {
   toggle: () => void;
 };
 
-const STORAGE_KEY = "aqrem_theme";
-
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-function systemPrefersDark(): boolean {
-  return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
-}
-
-function resolveTheme(mode: ThemeMode): "light" | "dark" {
-  if (mode === "system") return systemPrefersDark() ? "dark" : "light";
-  return mode;
-}
-
-function applyTheme(resolved: "light" | "dark") {
-  document.documentElement.classList.toggle("dark", resolved === "dark");
-  document.documentElement.dataset.theme = resolved;
+function readStoredMode(): ThemeMode {
+  const stored = localStorage.getItem(THEME_STORAGE_KEY);
+  if (stored === "light" || stored === "dark" || stored === "system") return stored;
+  return "dark";
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<ThemeMode>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "light" || stored === "dark" || stored === "system") return stored;
-    return "system";
-  });
+  const [mode, setModeState] = useState<ThemeMode>(readStoredMode);
 
-  const resolved = useMemo(() => resolveTheme(mode), [mode]);
+  const resolved = useMemo(() => resolveThemeFromStorage(mode), [mode]);
 
   useEffect(() => {
-    applyTheme(resolved);
+    applyResolvedTheme(resolved);
   }, [resolved]);
 
   useEffect(() => {
     if (mode !== "system") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => applyTheme(resolveTheme("system"));
+    const onChange = () => applyResolvedTheme(resolveThemeFromStorage("system"));
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, [mode]);
 
   const setMode = useCallback((next: ThemeMode) => {
-    localStorage.setItem(STORAGE_KEY, next);
+    localStorage.setItem(THEME_STORAGE_KEY, next);
     setModeState(next);
   }, []);
 
