@@ -10,6 +10,12 @@ class ChatAskRequest(BaseModel):
     project_id: UUID | None = None
 
 
+class EvidenceConflictResponse(BaseModel):
+    topic: str
+    detail: str
+    source_paths: list[str] = Field(default_factory=list)
+
+
 class ChatAskResponse(BaseModel):
     query: str
     answer: str
@@ -20,3 +26,8 @@ class ChatAskResponse(BaseModel):
     from_library: bool = False
     library_entry_id: UUID | None = None
     citations: list[EvidenceItemSummaryResponse] = Field(default_factory=list)
+    outcome: str = "answered"
+    missing_information: list[str] = Field(default_factory=list)
+    next_steps: list[str] = Field(default_factory=list)
+    needs_review: bool = False
+    conflicts: list[EvidenceConflictResponse] = Field(default_factory=list)

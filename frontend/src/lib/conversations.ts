@@ -26,6 +26,8 @@ export type ChatMessageMeta = {
   libraryEntryId?: string;
   libraryStatus?: string;
   insufficientEvidence?: boolean;
+  outcome?: string;
+  needsReview?: boolean;
   citations?: ChatCitation[];
   error?: boolean;
   uploadNote?: string;

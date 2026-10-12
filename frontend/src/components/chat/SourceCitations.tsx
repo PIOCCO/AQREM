@@ -82,9 +82,21 @@ export default function MessageMetaPanel({
 }) {
   if (!meta) return null;
 
+  const outcomeLabels: Record<string, string> = {
+    partially_answered: "Partial answer",
+    insufficient_evidence: "Insufficient evidence",
+    conflicting_evidence: "Conflicting evidence",
+    clarification_required: "Needs clarification",
+    access_denied: "Not permitted",
+    source_unavailable: "Source unavailable",
+    action_not_supported: "Action not available",
+  };
+
   const badges: string[] = [];
   if (meta.fromLibrary && meta.libraryStatus === "approved") badges.push("Approved");
+  else if (meta.outcome && outcomeLabels[meta.outcome]) badges.push(outcomeLabels[meta.outcome]);
   else if (meta.insufficientEvidence) badges.push("Insufficient evidence");
+  if (meta.needsReview && !badges.includes("Needs review")) badges.push("Needs review");
 
   const citations = meta.citations ?? [];
 

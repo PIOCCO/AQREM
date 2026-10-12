@@ -64,3 +64,16 @@ class AnswerGenerationSource(StrEnum):
 class StalenessEventStatus(StrEnum):
     OPEN = "open"
     RESOLVED = "resolved"
+
+
+class AnswerOutcome(StrEnum):
+    """Structured employee-facing result for chat and RAG answers."""
+
+    ANSWERED = "answered"
+    PARTIALLY_ANSWERED = "partially_answered"
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+    CONFLICTING_EVIDENCE = "conflicting_evidence"
+    CLARIFICATION_REQUIRED = "clarification_required"
+    ACCESS_DENIED = "access_denied"
+    SOURCE_UNAVAILABLE = "source_unavailable"
+    ACTION_NOT_SUPPORTED = "action_not_supported"

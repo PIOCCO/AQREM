@@ -54,16 +54,25 @@ export async function generateAssistantReply(
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
     const citations = mapCitations((data.citations ?? []) as CitationPayload[]);
-    const insufficient = data.evidence_sufficiency === "insufficient";
+    const outcome = typeof data.outcome === "string" ? data.outcome : undefined;
+    const insufficient =
+      data.evidence_sufficiency === "insufficient" ||
+      outcome === "insufficient_evidence" ||
+      outcome === "source_unavailable";
     const fromLibrary = Boolean(data.from_library);
 
     let content = formatLibraryAnswer(data.answer ?? "", fromLibrary);
-    if (!fromLibrary && insufficient) {
+    if (!fromLibrary && insufficient && !content.trim()) {
       content =
-        data.answer?.trim() ||
         "I could not find enough indexed evidence to support a confident answer in the current project scope.";
     }
-    if (!fromLibrary && !insufficient && data.reasoning_summary) {
+    if (
+      !fromLibrary &&
+      !insufficient &&
+      data.reasoning_summary &&
+      outcome !== "conflicting_evidence" &&
+      outcome !== "partially_answered"
+    ) {
       content += `\n\n_${data.reasoning_summary}_`;
     }
 
@@ -75,6 +84,8 @@ export async function generateAssistantReply(
         libraryEntryId: data.library_entry_id ?? undefined,
         libraryStatus: fromLibrary ? "approved" : undefined,
         insufficientEvidence: insufficient,
+        outcome,
+        needsReview: Boolean(data.needs_review),
         citations,
       },
     };
