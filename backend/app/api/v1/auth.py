@@ -38,7 +38,7 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
 
     # Platform administrators may sign in without selecting an organization (admin console).
     if user.is_platform_admin and payload.organization_id is None:
-        token = create_access_token(str(user.id), {"role": "PLATFORM_ADMIN"})
+        token = create_access_token(str(user.id), {"role": "PLATFORM_ADMIN", "aud": "aqrem-master"})
         return TokenResponse(
             access_token=token,
             organization_id=None,
@@ -67,14 +67,16 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
     if not allowed:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
 
+    member_role = Role(membership.role)
+    audience = "aqrem-org-admin" if member_role == Role.ORG_ADMIN else "aqrem-employee"
     token = create_access_token(
         str(user.id),
-        {"organization_id": str(membership.organization_id), "role": membership.role},
+        {"organization_id": str(membership.organization_id), "role": membership.role, "aud": audience},
     )
     return TokenResponse(
         access_token=token,
         organization_id=membership.organization_id,
-        role=Role(membership.role),
+        role=member_role,
         must_change_password=user.must_change_password,
         is_platform_admin=user.is_platform_admin,
     )

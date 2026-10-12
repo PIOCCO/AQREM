@@ -1,5 +1,6 @@
 from app.models.answer_library import AnswerLibraryEntry, AnswerLibraryEvidenceLink
 from app.models.audit import AuditEvent
+from app.models.client_admin import ClientCredentialMetadata, ClientDocument
 from app.models.evidence import EvidenceItem, EvidenceItemVersion
 from app.models.environment import ClientEnvironment, ControlPlaneEvent, ProvisioningJob
 from app.models.invitation import UserInvitation
@@ -20,6 +21,8 @@ __all__ = [
     "AnswerLibraryEvidenceLink",
     "AnswerStalenessEvent",
     "AuditEvent",
+    "ClientCredentialMetadata",
+    "ClientDocument",
     "EvidenceItem",
     "EvidenceItemVersion",
     "GitHubConnection",

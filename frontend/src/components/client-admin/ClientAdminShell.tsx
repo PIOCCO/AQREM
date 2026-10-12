@@ -1,24 +1,36 @@
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, Link } from "react-router-dom";
 import { useAuth } from "../../lib/authContext";
 import { roleDisplayLabel } from "../../lib/roleLabels";
+import { fetchOrgOverview } from "../../lib/orgAdminApi";
 
 const NAV = [
   { to: "/admin", end: true, label: "Setup" },
   { to: "/admin/documents", label: "Documents" },
+  { to: "/admin/model-token", label: "Model token" },
   { to: "/admin/users", label: "Users & access" },
-  { to: "/audit", label: "Security & audit" },
-  { to: "/settings", label: "Settings" },
+  { to: "/admin/usage", label: "Usage" },
+  { to: "/admin/audit", label: "Security & audit" },
+  { to: "/admin/privacy", label: "Privacy" },
 ];
 
 export default function ClientAdminShell() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
+  const [incomplete, setIncomplete] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!session) return;
+    fetchOrgOverview(session)
+      .then((o) => setIncomplete(o.setup.incomplete_count))
+      .catch(() => setIncomplete(null));
+  }, [session]);
 
   return (
     <div className="min-h-screen flex bg-[var(--admin-canvas,#f5f5f4)] text-chat-fg">
-      <aside className="w-64 shrink-0 border-r border-chat-border bg-chat-surface flex flex-col">
+      <aside className="w-64 shrink-0 border-r border-chat-border bg-chat-surface flex flex-col min-h-screen">
         <div className="p-5 border-b border-chat-border">
-          <p className="font-semibold text-sm">{user?.fullName ? "Your organization" : "Admin console"}</p>
-          <p className="text-xs text-chat-muted mt-0.5">Admin console</p>
+          <p className="font-semibold text-sm">Private assistant</p>
+          <p className="text-xs text-chat-muted mt-0.5">Client admin</p>
         </div>
         <nav className="flex-1 p-3 space-y-0.5" aria-label="Client administration">
           {NAV.map((item) => (
@@ -27,10 +39,20 @@ export default function ClientAdminShell() {
               to={item.to}
               end={item.end}
               className={({ isActive }) =>
-                `block rounded-lg px-3 py-2 text-sm ${isActive ? "bg-chat-surface-subtle font-medium" : "text-chat-muted hover:bg-chat-hover"}`
+                `flex items-center justify-between rounded-lg px-3 py-2 text-sm ${
+                  isActive ? "bg-chat-surface-subtle font-medium" : "text-chat-muted hover:bg-chat-hover"
+                }`
               }
             >
-              {item.label}
+              <span>{item.label}</span>
+              {item.end && incomplete != null && incomplete > 0 ? (
+                <span
+                  className="text-xs rounded-full bg-[var(--chat-brand-mark)] text-white px-2 py-0.5 min-w-[1.25rem] text-center"
+                  aria-label={`${incomplete} setup steps incomplete`}
+                >
+                  {incomplete}
+                </span>
+              ) : null}
             </NavLink>
           ))}
         </nav>

@@ -19,6 +19,11 @@ import RequireOrgAdmin from "./components/RequireOrgAdmin";
 import ClientAdminShell from "./components/client-admin/ClientAdminShell";
 import ClientAdminSetupPage from "./pages/ClientAdminSetupPage";
 import ClientAdminUsersPage from "./pages/ClientAdminUsersPage";
+import ClientAdminDocumentsPage from "./pages/ClientAdminDocumentsPage";
+import ClientAdminModelTokenPage from "./pages/ClientAdminModelTokenPage";
+import ClientAdminUsagePage from "./pages/ClientAdminUsagePage";
+import ClientAdminAuditPage from "./pages/ClientAdminAuditPage";
+import ClientAdminPrivacyPage from "./pages/ClientAdminPrivacyPage";
 import AnswerLibraryDetailPage from "./pages/AnswerLibraryDetailPage";
 import AnswerLibraryPage from "./pages/AnswerLibraryPage";
 import ProjectsPage from "./pages/ProjectsPage";
@@ -108,8 +113,12 @@ export default function App() {
         }
       >
         <Route index element={<ClientAdminSetupPage />} />
+        <Route path="documents" element={<ClientAdminDocumentsPage />} />
+        <Route path="model-token" element={<ClientAdminModelTokenPage />} />
         <Route path="users" element={<ClientAdminUsersPage />} />
-        <Route path="documents" element={<SourcesPage />} />
+        <Route path="usage" element={<ClientAdminUsagePage />} />
+        <Route path="audit" element={<ClientAdminAuditPage />} />
+        <Route path="privacy" element={<ClientAdminPrivacyPage />} />
       </Route>
       <Route
         path="/*"

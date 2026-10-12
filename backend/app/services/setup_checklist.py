@@ -7,89 +7,117 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.llm_config import inspect_azure_openai
+from app.models.client_admin import ClientCredentialMetadata, ClientDocument
 from app.models.enums import SourceStatus, SyncJobStatus
 from app.models.evidence import EvidenceItem
+from app.models.invitation import UserInvitation
 from app.models.organization import Organization
 from app.models.source import Source, SourceSyncJob
 from app.services.seat_usage import get_seat_usage
 
 
+def _step(status: str, *, title: str, detail: str, step_id: str) -> dict:
+    return {"id": step_id, "title": title, "status": status, "detail": detail}
+
+
 def build_setup_checklist(db: Session, *, organization_id: UUID) -> dict:
     settings = get_settings()
     org = db.get(Organization, organization_id)
-    sources = db.query(Source).filter(Source.organization_id == organization_id).count()
+    storage_ok = bool(settings.azure_storage_connection_string or settings.local_upload_dir)
+    env_ready = bool(org and org.is_active and storage_ok)
+
+    cred = db.query(ClientCredentialMetadata).filter(ClientCredentialMetadata.organization_id == organization_id).first()
+    token_connected = cred is not None and cred.status in {"connected", "expiring_soon"}
+
+    doc_total = db.query(ClientDocument).filter(ClientDocument.organization_id == organization_id).count()
+    indexed_docs = (
+        db.query(ClientDocument)
+        .filter(ClientDocument.organization_id == organization_id, ClientDocument.status == "indexed")
+        .count()
+    )
+    indexing_docs = (
+        db.query(ClientDocument)
+        .filter(ClientDocument.organization_id == organization_id, ClientDocument.status.in_(("uploading", "indexing")))
+        .count()
+    )
+    evidence_count = db.query(EvidenceItem).filter(EvidenceItem.organization_id == organization_id).count()
     ready_sources = (
         db.query(Source)
         .filter(Source.organization_id == organization_id, Source.status == SourceStatus.READY.value)
         .count()
     )
-    evidence_count = db.query(EvidenceItem).filter(EvidenceItem.organization_id == organization_id).count()
     failed_jobs = (
         db.query(SourceSyncJob)
         .filter(SourceSyncJob.organization_id == organization_id, SourceSyncJob.status == SyncJobStatus.FAILED.value)
         .count()
     )
-    running_jobs = (
-        db.query(SourceSyncJob)
-        .filter(SourceSyncJob.organization_id == organization_id, SourceSyncJob.status == SyncJobStatus.RUNNING.value)
-        .count()
-    )
-    usage = get_seat_usage(db, org) if org else None
 
-    storage_ok = bool(settings.azure_storage_connection_string or settings.local_upload_dir)
-    az = inspect_azure_openai(settings)
-    ai_status = "configured" if az.configured else "not_configured"
+    documents_ok = indexed_docs > 0 or (evidence_count > 0 and failed_jobs == 0)
+    documents_status = "complete" if documents_ok else ("in_progress" if doc_total or indexing_docs else "pending")
+
+    usage = get_seat_usage(db, org) if org else None
+    pending_invites = (
+        db.query(UserInvitation)
+        .filter(UserInvitation.organization_id == organization_id, UserInvitation.used_at.is_(None))
+        .count()
+        if org
+        else 0
+    )
+    access_ok = usage is not None and (usage.active_members > 1 or pending_invites > 0)
+    access_status = "complete" if access_ok else "pending"
+
+    link_status = "locked" if not access_ok else "complete"
 
     steps = [
-        {
-            "id": "organization",
-            "title": "Organization identity",
-            "status": "complete" if org else "pending",
-            "detail": org.name if org else "Organization not found",
-        },
-        {
-            "id": "storage",
-            "title": "Private storage",
-            "status": "complete" if storage_ok else "pending",
-            "detail": "Blob or local upload path configured" if storage_ok else "Storage not configured",
-        },
-        {
-            "id": "ai",
-            "title": "Model token / AI provider",
-            "status": "complete" if az.configured else "pending",
-            "detail": "Azure OpenAI configured" if az.configured else "Configure LLM_PROVIDER=azure with deployment settings",
-        },
-        {
-            "id": "sources",
-            "title": "Source connections",
-            "status": "complete" if ready_sources > 0 else ("in_progress" if sources > 0 else "pending"),
-            "detail": f"{ready_sources} ready of {sources} sources",
-        },
-        {
-            "id": "indexing",
-            "title": "Document ingestion",
-            "status": "complete"
-            if evidence_count > 0 and failed_jobs == 0
-            else ("attention" if failed_jobs else ("in_progress" if running_jobs else "pending")),
-            "detail": f"{evidence_count} indexed chunks; {failed_jobs} failed jobs; {running_jobs} running",
-        },
-        {
-            "id": "employees",
-            "title": "Employee accounts",
-            "status": "complete"
-            if usage and usage.active_members > 0
-            else "pending",
-            "detail": f"{usage.active_members if usage else 0} active members"
-            + (f" ({usage.seats_used}/{usage.seats_limit} seats)" if usage else ""),
-        },
+        _step(
+            "complete" if env_ready else "pending",
+            step_id="environment",
+            title="Environment ready",
+            detail="Organization and private storage are configured."
+            if env_ready
+            else "Waiting for organization activation and storage.",
+        ),
+        _step(
+            "complete" if token_connected else "pending",
+            step_id="model_token",
+            title="Model token connected",
+            detail="Model API token stored in your Key Vault."
+            if token_connected
+            else "Add your Azure OpenAI key — it is never stored in the platform database.",
+        ),
+        _step(
+            documents_status,
+            step_id="documents",
+            title="Documents uploaded and indexed",
+            detail=f"{indexed_docs} indexed · {indexing_docs} in progress · {ready_sources} sources ready",
+        ),
+        _step(
+            access_status,
+            step_id="access",
+            title="Employee access configured",
+            detail=f"{usage.active_members if usage else 0} active members · {pending_invites} pending invites"
+            if usage
+            else "Invite at least one employee.",
+        ),
+        _step(
+            link_status,
+            step_id="employee_link",
+            title="Employee link ready to share",
+            detail="Copy the assistant link for your team."
+            if access_ok
+            else "Complete access setup to enable sharing.",
+        ),
     ]
+
+    incomplete = sum(1 for s in steps if s["status"] not in {"complete"})
     completed = sum(1 for s in steps if s["status"] == "complete")
     return {
         "steps": steps,
         "completed_count": completed,
         "total_count": len(steps),
+        "incomplete_count": incomplete,
         "percent": int((completed / len(steps)) * 100) if steps else 0,
-        "ai_provider_status": ai_status,
+        "employee_link_enabled": access_ok,
         "storage_configured": storage_ok,
+        "model_token_status": cred.status if cred else "not_configured",
     }
