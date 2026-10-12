@@ -21,10 +21,18 @@ def sanitize_source_config_for_storage(config: dict | None) -> dict:
     """Remove secrets and server-side paths before persisting source.config."""
     if not config:
         return {}
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    blocked = _BLOCKED_CONFIG_KEYS
+    if settings.app_env == "development":
+        # Demo fixtures and local folder archives use demo_path in dev only.
+        blocked = blocked - {"demo_path"}
+
     safe = dict(config)
     for key in list(safe.keys()):
         lower = key.lower()
-        if lower in _BLOCKED_CONFIG_KEYS or lower.endswith("_token"):
+        if lower in blocked or lower.endswith("_token"):
             safe.pop(key, None)
     return safe
 

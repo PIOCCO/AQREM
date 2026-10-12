@@ -54,6 +54,39 @@ export async function fetchAuthMe(session: AuthSession) {
   return res.json();
 }
 
+/** Active membership for the selected organization (same checks as tenant APIs). */
+export async function fetchAuthMeTenant(session: AuthSession) {
+  if (!session.organizationId) {
+    throw new Error("No organization selected");
+  }
+  const res = await fetch(`${API_BASE}/api/v1/auth/me/tenant`, { headers: authHeaders(session) });
+  if (res.status === 401) {
+    handleUnauthorized();
+    throw new Error("Session expired");
+  }
+  if (res.status === 403) {
+    throw new Error("Organization access denied");
+  }
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to validate session"));
+  return res.json();
+}
+
+export async function changePassword(
+  session: AuthSession,
+  payload: { current_password: string; new_password: string },
+) {
+  const res = await fetch(`${API_BASE}/api/v1/auth/change-password`, {
+    method: "POST",
+    headers: authHeaders(session),
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) {
+    handleUnauthorized();
+    throw new Error("Session expired");
+  }
+  if (!res.ok) throw new Error(await readApiError(res, "Password change failed"));
+}
+
 function authOnlyHeaders(session: AuthSession): HeadersInit {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${session.token}`,

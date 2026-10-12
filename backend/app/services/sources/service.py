@@ -1,14 +1,28 @@
 from uuid import UUID
 
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.audit.service import record_audit
 from app.core.config import get_settings
 from app.core.tenant import TenantContext
 from app.models.enums import SourceType
+from app.models.project import Project
 from app.models.source import GitHubRepoConfig, Source
 from app.schemas.source import GitHubRepoConnectRequest, SourceCreate
 from app.services.sources.config_safety import sanitize_source_config_for_storage
+
+
+def assert_project_belongs_to_tenant(
+    db: Session,
+    tenant: TenantContext,
+    project_id: UUID | None,
+) -> None:
+    if project_id is None:
+        return
+    project = db.get(Project, project_id)
+    if project is None or project.organization_id != tenant.organization_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid project")
 
 
 def create_source_record(
@@ -18,6 +32,7 @@ def create_source_record(
     *,
     commit: bool = True,
 ) -> Source:
+    assert_project_belongs_to_tenant(db, tenant, payload.project_id)
     source = Source(
         organization_id=tenant.organization_id,
         project_id=payload.project_id,

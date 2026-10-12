@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../lib/authContext";
-import { fetchOrgOverview, type SetupStep } from "../lib/orgAdminApi";
+import { fetchOrgOverview, type SetupChecklist, type SetupStep } from "../lib/orgAdminApi";
 
 function StepIcon({ status }: { status: string }) {
   if (status === "complete") {
@@ -48,7 +48,10 @@ export default function ClientAdminSetupPage() {
   const { session } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [setup, setSetup] = useState<Awaited<ReturnType<typeof fetchOrgOverview>> | null>(null);
+  const [setup, setSetup] = useState<{
+    organization?: { name?: string };
+    setup?: SetupChecklist;
+  } | null>(null);
 
   useEffect(() => {
     if (!session) return;

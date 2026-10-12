@@ -84,7 +84,13 @@ def list_project_summaries(
             or 0
         )
         sources = (
-            db.query(func.count(Source.id)).filter(Source.project_id == project.id).scalar() or 0
+            db.query(func.count(Source.id))
+            .filter(
+                Source.project_id == project.id,
+                Source.organization_id == tenant.organization_id,
+            )
+            .scalar()
+            or 0
         )
         pending = (
             db.query(func.count(Answer.id))

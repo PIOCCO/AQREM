@@ -18,7 +18,10 @@ def list_organizations(
     org_ids = [
         m.organization_id
         for m in db.query(OrganizationMembership)
-        .filter(OrganizationMembership.user_id == tenant.user_id)
+        .filter(
+            OrganizationMembership.user_id == tenant.user_id,
+            OrganizationMembership.is_active.is_(True),
+        )
         .all()
     ]
     return db.query(Organization).filter(Organization.id.in_(org_ids)).all()

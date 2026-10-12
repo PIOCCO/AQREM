@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -63,3 +64,12 @@ def filter_orgs_for_admin(orgs: list[Organization]) -> list[Organization]:
     if licensing_test_mode_effective():
         return orgs
     return [o for o in orgs if o.license_status != LicenseStatus.TEST.value]
+
+
+def get_admin_visible_org(db: Session, organization_id: UUID) -> Organization | None:
+    org = db.get(Organization, organization_id)
+    if org is None:
+        return None
+    if org.license_status == LicenseStatus.TEST.value and not licensing_test_mode_effective():
+        return None
+    return org

@@ -107,11 +107,11 @@ def test_admin_provisions_org_and_client_user(client: TestClient, db_session):
     create_res = client.post(
         "/api/v1/admin/organizations",
         headers=admin_headers,
-        json={"name": "Client Co", "license_limit": 0, "license_status": "test"},
+        json={"name": "Client Co", "license_limit": 1, "environment": "test"},
     )
     assert create_res.status_code == 201, create_res.text
     org_id = create_res.json()["id"]
-    assert create_res.json()["license_limit"] == 0
+    assert create_res.json()["license_limit"] == 1
 
     prov_res = client.post(
         f"/api/v1/admin/organizations/{org_id}/users",

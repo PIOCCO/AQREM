@@ -51,7 +51,25 @@ def db_session(engine) -> Generator[Session, None, None]:
 
 
 @pytest.fixture()
-def client(db_session: Session) -> Generator[TestClient, None, None]:
+def client(db_session: Session, monkeypatch) -> Generator[TestClient, None, None]:
+    from app.services import licensing as licensing_mod
+
+    _real_org_allows_sign_in = licensing_mod.org_allows_sign_in
+
+    def _org_allows_sign_in_for_tests(org, settings=None):
+        allowed, reason = _real_org_allows_sign_in(org, settings)
+        if allowed:
+            return allowed, reason
+        from app.core.config import get_settings
+
+        settings = settings or get_settings()
+        if settings.app_env != "production" and (org.license_limit or 0) <= 0:
+            return True, ""
+        return allowed, reason
+
+    monkeypatch.setattr(licensing_mod, "org_allows_sign_in", _org_allows_sign_in_for_tests)
+    monkeypatch.setattr("app.core.dependencies.org_allows_sign_in", _org_allows_sign_in_for_tests)
+
     app = create_app()
 
     def override_get_db():

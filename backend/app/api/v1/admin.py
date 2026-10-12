@@ -30,6 +30,7 @@ from app.schemas.admin import (
 )
 from app.services.admin_org import (
     filter_orgs_for_admin,
+    get_admin_visible_org,
     org_status_bucket,
     org_to_admin_response,
     seat_usage_response,
@@ -48,6 +49,13 @@ from app.services.platform_provisioning import (
 from app.services.seat_usage import get_seat_usage
 
 router = APIRouter()
+
+
+def _require_admin_visible_org(db: Session, organization_id: UUID) -> Organization:
+    org = get_admin_visible_org(db, organization_id)
+    if org is None:
+        raise admin_error(code="NOT_FOUND", message="Organization not found", status_code=404)
+    return org
 
 
 @router.get("/context", response_model=AdminContextResponse)
@@ -89,11 +97,7 @@ def get_organization(
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_admin),
 ) -> AdminOrganizationResponse:
-    org = db.get(Organization, organization_id)
-    if org is None:
-        raise admin_error(code="NOT_FOUND", message="Organization not found", status_code=404)
-    if org.license_status == LicenseStatus.TEST.value and not licensing_test_mode_effective():
-        raise admin_error(code="NOT_FOUND", message="Organization not found", status_code=404)
+    org = _require_admin_visible_org(db, organization_id)
     return org_to_admin_response(db, org)
 
 
@@ -142,9 +146,7 @@ def update_organization(
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_admin),
 ) -> AdminOrganizationResponse:
-    org = db.get(Organization, organization_id)
-    if org is None:
-        raise admin_error(code="NOT_FOUND", message="Organization not found", status_code=404)
+    org = _require_admin_visible_org(db, organization_id)
 
     usage = get_seat_usage(db, org)
     if payload.license_limit is not None and payload.license_limit < usage.seats_used:
@@ -187,9 +189,7 @@ def organization_directory(
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_admin),
 ) -> AdminDirectoryResponse:
-    org = db.get(Organization, organization_id)
-    if org is None:
-        raise admin_error(code="NOT_FOUND", message="Organization not found", status_code=404)
+    org = _require_admin_visible_org(db, organization_id)
 
     usage = get_seat_usage(db, org)
     rows: list[AdminDirectoryRow] = []
@@ -264,6 +264,7 @@ def list_invitations(
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_admin),
 ) -> list[AdminInvitationResponse]:
+    _require_admin_visible_org(db, organization_id)
     now = datetime.now(timezone.utc)
     invites = (
         db.query(UserInvitation)
@@ -299,6 +300,7 @@ def provision_user(
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_admin),
 ) -> AdminProvisionUserResponse:
+    _require_admin_visible_org(db, organization_id)
     try:
         user, _membership, invitation, raw_token, expires_at = provision_user_invitation(
             db,
@@ -345,9 +347,7 @@ def resend_user_invitation(
     invitation = db.get(UserInvitation, invitation_id)
     if invitation is None or invitation.organization_id != organization_id:
         raise admin_error(code="NOT_FOUND", message="Invitation not found", status_code=404)
-    org = db.get(Organization, organization_id)
-    if org is None:
-        raise admin_error(code="NOT_FOUND", message="Organization not found", status_code=404)
+    org = _require_admin_visible_org(db, organization_id)
     try:
         assert_can_add_seat(db, org)
     except LicenseDenied:
@@ -374,11 +374,40 @@ def revoke_user_invitation(
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_admin),
 ) -> None:
+    _require_admin_visible_org(db, organization_id)
     invitation = db.get(UserInvitation, invitation_id)
     if invitation is None or invitation.organization_id != organization_id:
         raise admin_error(code="NOT_FOUND", message="Invitation not found", status_code=404)
     revoke_invitation(db, admin_user_id=admin.id, invitation=invitation)
     db.commit()
+
+
+@router.get("/organizations/{organization_id}/members", response_model=list[AdminMembershipResponse])
+def list_members(
+    organization_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_admin),
+) -> list[AdminMembershipResponse]:
+    _require_admin_visible_org(db, organization_id)
+    rows = (
+        db.query(OrganizationMembership, User)
+        .join(User, User.id == OrganizationMembership.user_id)
+        .filter(OrganizationMembership.organization_id == organization_id)
+        .order_by(User.full_name.asc())
+        .all()
+    )
+    return [
+        AdminMembershipResponse(
+            id=membership.id,
+            user_id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            role=Role(membership.role),
+            is_active=membership.is_active,
+            user_is_active=user.is_active,
+        )
+        for membership, user in rows
+    ]
 
 
 @router.patch("/organizations/{organization_id}/members/{membership_id}", response_model=AdminMembershipResponse)
@@ -389,6 +418,7 @@ def patch_member_role(
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_admin),
 ) -> AdminMembershipResponse:
+    _require_admin_visible_org(db, organization_id)
     membership = db.get(OrganizationMembership, membership_id)
     if membership is None or membership.organization_id != organization_id:
         raise admin_error(code="NOT_FOUND", message="Membership not found", status_code=404)
@@ -415,6 +445,7 @@ def deactivate_member(
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_admin),
 ) -> None:
+    _require_admin_visible_org(db, organization_id)
     membership = db.get(OrganizationMembership, membership_id)
     if membership is None or membership.organization_id != organization_id:
         raise admin_error(code="NOT_FOUND", message="Membership not found", status_code=404)
@@ -429,6 +460,7 @@ def list_org_audit(
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_admin),
 ) -> AdminAuditListResponse:
+    _require_admin_visible_org(db, organization_id)
     events = (
         db.query(AuditEvent, User)
         .outerjoin(User, User.id == AuditEvent.user_id)

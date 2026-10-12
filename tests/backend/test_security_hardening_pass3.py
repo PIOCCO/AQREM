@@ -8,9 +8,15 @@ from app.services.sources.config_safety import sanitize_source_config_for_storag
 from app.services.storage.path_utils import resolve_under_root, safe_archive_member_path, safe_blob_filename
 
 
-def test_create_source_config_strips_inline_tokens():
+def test_create_source_config_strips_inline_tokens(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("SECRET_KEY", "x" * 32)
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
     raw = {"github_token": "ghp_evil", "demo_path": "/etc", "repo": "ok"}
     safe = sanitize_source_config_for_storage(raw)
+    get_settings.cache_clear()
     assert "github_token" not in safe
     assert "demo_path" not in safe
     assert safe.get("repo") == "ok"

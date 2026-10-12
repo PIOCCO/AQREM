@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { clearSession, fetchAuthMe, loadSession } from "../lib/api";
+import { clearSession, fetchAuthMeTenant, loadSession } from "../lib/api";
 import { canManageOrg } from "../lib/roles";
 import type { UserRole } from "../lib/roles";
 import { LoadingState } from "./ui/States";
@@ -15,7 +15,7 @@ export default function RequireOrgAdmin({ children }: { children: ReactNode }) {
       setReady(true);
       return;
     }
-    fetchAuthMe(session)
+    fetchAuthMeTenant(session)
       .then((me) => {
         setAllowed(canManageOrg((me.role as UserRole) ?? "VIEWER"));
         setReady(true);

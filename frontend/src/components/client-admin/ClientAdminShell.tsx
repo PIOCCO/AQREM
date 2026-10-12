@@ -6,7 +6,6 @@ const NAV = [
   { to: "/admin", end: true, label: "Setup" },
   { to: "/admin/documents", label: "Documents" },
   { to: "/admin/users", label: "Users & access" },
-  { to: "/sources", label: "Sources" },
   { to: "/audit", label: "Security & audit" },
   { to: "/settings", label: "Settings" },
 ];

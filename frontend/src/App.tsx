@@ -30,6 +30,7 @@ import QuestionnaireDetailPage from "./pages/QuestionnaireDetailPage";
 import QuestionnairesPage from "./pages/QuestionnairesPage";
 import SourcesPage from "./pages/SourcesPage";
 import LoginEntryRedirect from "./components/LoginEntryRedirect";
+import ChangePasswordPage from "./pages/ChangePasswordPage";
 import RouteErrorBoundary from "./components/ui/RouteErrorBoundary";
 
 function AuthenticatedApp() {
@@ -76,6 +77,14 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginEntryRedirect />} />
+      <Route
+        path="/change-password"
+        element={
+          <RequireAuth>
+            <ChangePasswordPage />
+          </RequireAuth>
+        }
+      />
       <Route path="/accept-invite" element={<AcceptInvitePage />} />
       <Route path="/platform-admin" element={<Navigate to="/master-admin" replace />} />
       <Route
