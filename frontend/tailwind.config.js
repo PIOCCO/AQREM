@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: "class",
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
@@ -65,9 +66,18 @@ export default {
           text: "#b91c1c",
           border: "#fecaca",
         },
+        chat: {
+          accent: "#10a37f",
+        },
       },
       width: {
-        sidebar: "240px",
+        sidebar: "260px",
+      },
+      boxShadow: {
+        sm: "0 1px 2px 0 rgb(15 23 42 / 0.04)",
+        card: "0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.06)",
+        panel: "0 4px 6px -1px rgb(15 23 42 / 0.07), 0 2px 4px -2px rgb(15 23 42 / 0.05)",
+        composer: "0 0 0 1px rgb(0 0 0 / 0.05), 0 4px 16px rgb(0 0 0 / 0.08)",
       },
       height: {
         header: "64px",
@@ -75,11 +85,6 @@ export default {
       borderRadius: {
         card: "12px",
         control: "8px",
-      },
-      boxShadow: {
-        sm: "0 1px 2px 0 rgb(15 23 42 / 0.04)",
-        card: "0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.06)",
-        panel: "0 4px 6px -1px rgb(15 23 42 / 0.07), 0 2px 4px -2px rgb(15 23 42 / 0.05)",
       },
       fontSize: {
         "page-title": ["1.75rem", { lineHeight: "2.125rem", fontWeight: "600" }],

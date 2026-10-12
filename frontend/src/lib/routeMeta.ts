@@ -1,5 +1,6 @@
 const titles: Record<string, string> = {
-  "/": "Dashboard",
+  "/": "Chat",
+  "/dashboard": "Dashboard",
   "/projects": "Projects",
   "/evidence": "Evidence",
   "/questionnaires": "Questionnaires",
@@ -11,6 +12,7 @@ const titles: Record<string, string> = {
 };
 
 export function pageTitleForPath(pathname: string): string {
+  if (pathname.startsWith("/c/")) return "Chat";
   if (titles[pathname]) return titles[pathname];
   if (pathname.startsWith("/projects/")) return "Project";
   if (pathname.startsWith("/questionnaires/") && pathname.includes("/review")) return "Question Review";

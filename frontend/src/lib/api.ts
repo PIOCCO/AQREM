@@ -463,3 +463,20 @@ export async function regenerateQuestionAnswer(session: AuthSession, questionId:
   if (!res.ok) throw new Error(await readApiError(res, "Unable to generate answer. Please try again."));
   return res.json();
 }
+
+export async function previewRetrieval(
+  session: AuthSession,
+  payload: { query: string; project_id?: string | null; source_id?: string; limit?: number },
+) {
+  const res = await authedFetch(session, `${API_BASE}/api/v1/retrieval/preview`, {
+    method: "POST",
+    body: JSON.stringify({
+      query: payload.query,
+      project_id: payload.project_id ?? null,
+      source_id: payload.source_id ?? null,
+      limit: payload.limit ?? 8,
+    }),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Retrieval failed"));
+  return res.json();
+}
