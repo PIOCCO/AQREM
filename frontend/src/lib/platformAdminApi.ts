@@ -199,21 +199,70 @@ export async function fetchOrganizationDirectory(
   orgId: string,
   page: number,
   pageSize = 5,
+  orgFallback?: AdminOrganization,
 ) {
   const res = await fetch(
     `${API_BASE}/api/v1/admin/organizations/${orgId}/directory?page=${page}&page_size=${pageSize}`,
     { headers: adminHeaders(session) },
   );
-  if (!res.ok) throw new Error(await readApiError(res, "Failed to load members"));
-  return res.json() as Promise<{
-    seats: SeatUsage;
-    license_status: string;
-    license_renews_at: string | null;
-    rows: DirectoryRow[];
-    total: number;
-    page: number;
-    page_size: number;
-  }>;
+  if (res.ok) {
+    return res.json() as Promise<{
+      seats: SeatUsage;
+      license_status: string;
+      license_renews_at: string | null;
+      rows: DirectoryRow[];
+      total: number;
+      page: number;
+      page_size: number;
+    }>;
+  }
+  if (res.status === 404) {
+    const memRes = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/members`, {
+      headers: adminHeaders(session),
+    });
+    if (!memRes.ok) throw new Error(await readApiError(res, "Failed to load members"));
+    const members = (await memRes.json()) as {
+      id: string;
+      user_id: string;
+      email: string;
+      full_name: string;
+      role: string;
+      is_active: boolean;
+      user_is_active: boolean;
+    }[];
+    const rows: DirectoryRow[] = members.map((m) => ({
+      row_id: `m-${m.id}`,
+      kind: "member" as const,
+      membership_id: m.id,
+      user_id: m.user_id,
+      full_name: m.full_name,
+      email: m.email,
+      role: m.role,
+      status: m.is_active && m.user_is_active ? "Active" : "Inactive",
+    }));
+    const total = rows.length;
+    const start = (page - 1) * pageSize;
+    const seats =
+      orgFallback?.seats ??
+      ({
+        active_members: members.filter((m) => m.is_active).length,
+        pending_invitations: 0,
+        seats_used: members.filter((m) => m.is_active).length,
+        seats_limit: orgFallback?.license_limit ?? 0,
+        seats_available: 0,
+        is_full: false,
+      } as SeatUsage);
+    return {
+      seats,
+      license_status: orgFallback?.license_status ?? "active",
+      license_renews_at: orgFallback?.license_renews_at ?? null,
+      rows: rows.slice(start, start + pageSize),
+      total,
+      page,
+      page_size: pageSize,
+    };
+  }
+  throw new Error(await readApiError(res, "Failed to load members"));
 }
 
 export async function inviteOrganizationUser(

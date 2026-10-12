@@ -90,6 +90,12 @@ def get_tenant_context(
     )
 
 
+def require_org_admin(tenant: TenantContext = Depends(get_tenant_context)) -> TenantContext:
+    if not role_at_least(tenant.role, Role.ORG_ADMIN):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization administrator required")
+    return tenant
+
+
 def require_role(required: Role):
     def _checker(tenant: TenantContext = Depends(get_tenant_context)) -> TenantContext:
         if not role_at_least(tenant.role, required):

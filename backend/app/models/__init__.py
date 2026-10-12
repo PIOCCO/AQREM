@@ -1,6 +1,7 @@
 from app.models.answer_library import AnswerLibraryEntry, AnswerLibraryEvidenceLink
 from app.models.audit import AuditEvent
 from app.models.evidence import EvidenceItem, EvidenceItemVersion
+from app.models.environment import ClientEnvironment, ControlPlaneEvent, ProvisioningJob
 from app.models.invitation import UserInvitation
 from app.models.organization import Organization, OrganizationMembership, User
 from app.models.project import Project
@@ -27,6 +28,9 @@ __all__ = [
     "Organization",
     "OrganizationMembership",
     "UserInvitation",
+    "ClientEnvironment",
+    "ProvisioningJob",
+    "ControlPlaneEvent",
     "Answer",
     "AnswerEvidenceLink",
     "Project",

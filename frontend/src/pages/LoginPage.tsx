@@ -30,8 +30,8 @@ export default function LoginPage() {
         password: String(form.get("password")),
       });
       saveSession(data.access_token, data.organization_id ?? null);
-      if (data.is_platform_admin && (nextPath === "/platform-admin" || !data.organization_id)) {
-        navigate("/platform-admin");
+      if (data.is_platform_admin && (nextPath.includes("master-admin") || !data.organization_id)) {
+        navigate("/master-admin");
       } else if (data.must_change_password) {
         navigate("/change-password");
       } else {

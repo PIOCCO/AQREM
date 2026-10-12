@@ -1,0 +1,131 @@
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { useAuth } from "../lib/authContext";
+import { fetchOrgOverview, type SetupStep } from "../lib/orgAdminApi";
+
+function StepIcon({ status }: { status: string }) {
+  if (status === "complete") {
+    return (
+      <span className="w-6 h-6 rounded-full bg-[var(--admin-status-active-bg)] text-[var(--admin-status-active-text)] flex items-center justify-center text-xs">
+        ✓
+      </span>
+    );
+  }
+  if (status === "in_progress") {
+    return <span className="w-6 h-6 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" aria-hidden />;
+  }
+  return <span className="w-6 h-6 rounded-full border-2 border-chat-border" aria-hidden />;
+}
+
+function SetupRow({ step }: { step: SetupStep }) {
+  return (
+    <li className="flex gap-4 py-4 border-b border-chat-border last:border-0">
+      <StepIcon status={step.status} />
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-sm">{step.title}</p>
+        <p className="text-sm text-chat-muted mt-0.5">{step.detail}</p>
+      </div>
+      {step.id === "sources" ? (
+        <Link to="/sources" className="text-sm text-[var(--chat-brand-mark)] self-center">
+          View documents
+        </Link>
+      ) : null}
+      {step.id === "employees" ? (
+        <Link to="/admin/users" className="text-sm text-[var(--chat-brand-mark)] self-center">
+          Set up access
+        </Link>
+      ) : null}
+      {step.id === "ai" ? (
+        <Link to="/settings" className="text-sm text-[var(--chat-brand-mark)] self-center">
+          Configure
+        </Link>
+      ) : null}
+    </li>
+  );
+}
+
+export default function ClientAdminSetupPage() {
+  const { session } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [setup, setSetup] = useState<Awaited<ReturnType<typeof fetchOrgOverview>> | null>(null);
+
+  useEffect(() => {
+    if (!session) return;
+    fetchOrgOverview(session)
+      .then(setSetup)
+      .catch((e) => setError(e instanceof Error ? e.message : "Load failed"))
+      .finally(() => setLoading(false));
+  }, [session]);
+
+  if (loading) return <p className="p-8 text-sm text-chat-muted">Loading setup…</p>;
+  if (error) {
+    return (
+      <div className="p-8 admin-inline-alert border rounded-lg m-6" role="alert">
+        {error}
+      </div>
+    );
+  }
+
+  const checklist = setup?.setup;
+  const orgName = setup?.organization?.name ?? "Organization";
+
+  return (
+    <div className="max-w-6xl mx-auto p-6 lg:p-10">
+      <header className="flex flex-wrap items-start justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Set up your private assistant</h1>
+          <p className="text-chat-muted mt-2 max-w-xl">
+            Finish these steps so your employees can start asking questions about your documents in{" "}
+            <strong>{orgName}</strong>.
+          </p>
+        </div>
+        <div className="text-right text-sm">
+          <p className="font-medium">
+            {checklist?.completed_count ?? 0} of {checklist?.total_count ?? 0} steps complete
+          </p>
+          <div className="w-48 h-2 rounded-full bg-chat-surface-subtle mt-2 overflow-hidden">
+            <div
+              className="h-full bg-[var(--chat-brand-mark)]"
+              style={{ width: `${checklist?.percent ?? 0}%` }}
+            />
+          </div>
+          <p className="text-chat-muted text-xs mt-1">{checklist?.percent ?? 0}%</p>
+        </div>
+      </header>
+
+      <div className="grid lg:grid-cols-3 gap-6">
+        <section className="admin-card lg:col-span-2 p-6">
+          <h2 className="font-medium mb-2">Setup checklist</h2>
+          <ul>{checklist?.steps.map((s: SetupStep) => <SetupRow key={s.id} step={s} />)}</ul>
+        </section>
+
+        <aside className="space-y-4">
+          <div className="admin-card p-4">
+            <h3 className="text-sm font-medium">Employee link</h3>
+            <p className="text-xs text-chat-muted mt-1">Share after access is configured.</p>
+            <code className="block mt-2 text-xs bg-chat-surface-subtle p-2 rounded break-all">
+              {window.location.origin}/chat
+            </code>
+            <p className="text-xs admin-inline-alert border rounded px-2 py-1 mt-2" role="status">
+              Employees need accounts before they can sign in.
+            </p>
+          </div>
+          <div className="admin-card p-4">
+            <h3 className="text-sm font-medium">AI provider</h3>
+            <p className="text-sm mt-1 capitalize">{checklist?.ai_provider_status?.replace("_", " ")}</p>
+            <p className="text-xs text-chat-muted mt-2">Secrets are not shown after configuration.</p>
+          </div>
+          <div className="admin-card p-4">
+            <h3 className="text-sm font-medium">Your data stays private</h3>
+            <ul className="text-xs text-chat-muted mt-2 space-y-1 list-disc pl-4">
+              <li>Documents stay in your organization scope.</li>
+              <li>Platform operators see operational metadata only.</li>
+              <li>Questions and answers are not sent to the master console.</li>
+            </ul>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}

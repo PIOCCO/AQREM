@@ -32,7 +32,7 @@ export default function RequirePlatformAdmin({ children }: { children: ReactNode
     );
   }
   if (!loadSession()?.token || !allowed) {
-    return <Navigate to="/login?next=%2Fplatform-admin" replace />;
+    return <Navigate to="/login?next=%2Fmaster-admin" replace />;
   }
   return <>{children}</>;
 }

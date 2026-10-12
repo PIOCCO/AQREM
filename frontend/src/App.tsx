@@ -15,6 +15,10 @@ import EvidencePage from "./pages/EvidencePage";
 import AcceptInvitePage from "./pages/AcceptInvitePage";
 import PlatformAdminPage from "./pages/PlatformAdminPage";
 import RequirePlatformAdmin from "./components/RequirePlatformAdmin";
+import RequireOrgAdmin from "./components/RequireOrgAdmin";
+import ClientAdminShell from "./components/client-admin/ClientAdminShell";
+import ClientAdminSetupPage from "./pages/ClientAdminSetupPage";
+import ClientAdminUsersPage from "./pages/ClientAdminUsersPage";
 import AnswerLibraryDetailPage from "./pages/AnswerLibraryDetailPage";
 import AnswerLibraryPage from "./pages/AnswerLibraryPage";
 import ProjectsPage from "./pages/ProjectsPage";
@@ -37,6 +41,7 @@ function AuthenticatedApp() {
             <Routes>
               <Route element={<AppShell />}>
                 <Route index element={<ChatPage />} />
+                <Route path="chat" element={<ChatPage />} />
                 <Route path="c/:conversationId" element={<ChatPage />} />
                 <Route path="dashboard" element={<DashboardPage />} />
                 <Route path="projects" element={<ProjectsPage />} />
@@ -72,8 +77,9 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginEntryRedirect />} />
       <Route path="/accept-invite" element={<AcceptInvitePage />} />
+      <Route path="/platform-admin" element={<Navigate to="/master-admin" replace />} />
       <Route
-        path="/platform-admin"
+        path="/master-admin"
         element={
           <RequirePlatformAdmin>
             <RouteErrorBoundary>
@@ -82,6 +88,20 @@ export default function App() {
           </RequirePlatformAdmin>
         }
       />
+      <Route
+        path="/admin"
+        element={
+          <RequireAuth>
+            <RequireOrgAdmin>
+              <ClientAdminShell />
+            </RequireOrgAdmin>
+          </RequireAuth>
+        }
+      >
+        <Route index element={<ClientAdminSetupPage />} />
+        <Route path="users" element={<ClientAdminUsersPage />} />
+        <Route path="documents" element={<SourcesPage />} />
+      </Route>
       <Route
         path="/*"
         element={
