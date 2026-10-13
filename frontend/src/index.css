@@ -59,6 +59,10 @@
     --chat-send-ready-bg: var(--color-text-primary);
     --chat-send-ready-fg: var(--color-accent-fg);
     --chat-column-max: 768px;
+    --composer-line: 24px;
+    --composer-min: 56px;
+    --composer-text-max: min(150px, 30dvh);
+    --composer-shell-max: 40dvh;
     --workspace-column-max: 960px;
     --activity-column-max: 880px;
     --sidebar-w-expanded: 272px;
@@ -688,8 +692,13 @@
   }
   .chat-composer {
     @apply flex w-full min-w-0 flex-col gap-2 rounded-[28px] border border-chat-border bg-chat-surface;
-    min-height: 56px;
+    min-height: var(--composer-min);
+    max-height: var(--composer-shell-max);
     padding: 10px 12px;
+    overflow: hidden;
+  }
+  .chat-composer--height-anim {
+    transition: max-height 120ms ease;
   }
   .chat-composer-row {
     @apply flex w-full min-w-0 items-end gap-2;
@@ -707,11 +716,25 @@
     box-shadow: 0 0 0 1px rgb(255 255 255 / 0.06), 0 4px 20px rgb(0 0 0 / 0.35);
   }
   .chat-composer-input {
-    @apply min-h-[24px] flex-1 resize-none border-0 bg-transparent py-0 text-base leading-6 text-chat-fg placeholder:text-chat-muted outline-none;
-    max-height: 200px;
+    @apply flex-1 resize-none border-0 bg-transparent py-0 text-base text-chat-fg placeholder:text-chat-muted outline-none;
+    min-height: var(--composer-line);
+    max-height: var(--composer-text-max);
+    line-height: var(--composer-line);
+    field-sizing: content;
     overflow-y: auto;
+    overflow-x: hidden;
     scrollbar-width: thin;
     scrollbar-color: var(--chat-border) transparent;
+    word-break: break-word;
+  }
+  .chat-composer-input--height-anim {
+    transition: height 120ms ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .chat-composer--height-anim,
+    .chat-composer-input--height-anim {
+      transition: none;
+    }
   }
   .chat-composer-input::-webkit-scrollbar {
     width: 6px;

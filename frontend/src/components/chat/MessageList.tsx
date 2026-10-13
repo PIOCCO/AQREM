@@ -177,6 +177,21 @@ export default function MessageList({
   }, [messages, streamingText, retrievalStatus]);
 
   useEffect(() => {
+    function onComposerResize() {
+      const node = scrollContainerRef.current;
+      if (!node) return;
+      const maxScroll = node.scrollHeight - node.clientHeight;
+      if (maxScroll <= 0) return;
+      const dist = maxScroll - node.scrollTop;
+      if (dist < 120) {
+        node.scrollTop = maxScroll;
+      }
+    }
+    window.addEventListener("aqrem-composer-resize", onComposerResize);
+    return () => window.removeEventListener("aqrem-composer-resize", onComposerResize);
+  }, []);
+
+  useEffect(() => {
     const scrollEl = scrollContainerRef.current;
     if (!scrollEl) return;
     function onScroll() {

@@ -189,7 +189,7 @@ for (const viewport of VIEWPORTS) {
           const inputBox = await page.getByTestId("chat-composer-input").boundingBox();
           expect(inputBox).not.toBeNull();
           if (inputBox) {
-            expect(inputBox.height).toBeLessThanOrEqual(204);
+            expect(inputBox.height).toBeLessThanOrEqual(154);
           }
 
           mkdirSync(SHOT_DIR, { recursive: true });

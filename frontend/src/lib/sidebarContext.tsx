@@ -29,6 +29,10 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     applySidebarCollapsed(collapsed);
+    const t = window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("aqrem-sidebar-transition-end"));
+    }, 220);
+    return () => window.clearTimeout(t);
   }, [collapsed]);
 
   const toggleCollapsed = useCallback(() => {

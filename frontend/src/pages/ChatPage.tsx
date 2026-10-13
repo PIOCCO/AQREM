@@ -377,6 +377,7 @@ export default function ChatPage() {
       onPickFiles={onPickFiles}
       onRemoveAttachment={onRemoveAttachment}
       uploadDisabledReason={uploadDisabledReason}
+      conversationKey={conversationId ?? "home"}
     />
   );
 

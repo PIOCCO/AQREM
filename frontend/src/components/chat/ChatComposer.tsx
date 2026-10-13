@@ -10,6 +10,10 @@ import {
   type KeyboardEvent,
 } from "react";
 import { IconArrowUp, IconPlus, IconStop } from "../icons/Icons";
+import {
+  measureClampedTextareaHeight,
+  scrollTextareaCaretIntoView,
+} from "../../lib/composerGrow";
 import { Tooltip } from "../ui/Tooltip";
 
 export type PendingAttachment = {
@@ -31,11 +35,10 @@ type Props = {
   onPickFiles: (files: FileList | null) => void;
   onRemoveAttachment: (id: string) => void;
   uploadDisabledReason?: string | null;
+  conversationKey?: string | null;
 };
 
-const MAX_LINES = 8;
-const LINE_HEIGHT_PX = 24;
-const MIN_TEXT_HEIGHT_PX = LINE_HEIGHT_PX;
+const COMPOSER_MIN_TEXT_PX = 24;
 
 const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatComposer(
   {
@@ -50,29 +53,98 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
     onPickFiles,
     onRemoveAttachment,
     uploadDisabledReason,
+    conversationKey,
   },
   forwardedRef,
 ) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const typingUntilRef = useRef(0);
+  const resizeFrameRef = useRef<number | null>(null);
+  const lastShellHeightRef = useRef<number | null>(null);
 
   useImperativeHandle(forwardedRef, () => textareaRef.current as HTMLTextAreaElement);
 
-  const resize = useCallback(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    const maxHeight = LINE_HEIGHT_PX * MAX_LINES;
-    const next = Math.max(MIN_TEXT_HEIGHT_PX, Math.min(el.scrollHeight, maxHeight));
-    el.style.height = `${next}px`;
+  const notifyComposerResize = useCallback(() => {
+    const shell = shellRef.current;
+    if (!shell) return;
+    const h = shell.getBoundingClientRect().height;
+    if (lastShellHeightRef.current != null && Math.abs(h - lastShellHeightRef.current) > 0.5) {
+      window.dispatchEvent(new CustomEvent("aqrem-composer-resize"));
+    }
+    lastShellHeightRef.current = h;
   }, []);
 
+  const applyTextareaHeight = useCallback(
+    (opts?: { instant?: boolean }) => {
+      const el = textareaRef.current;
+      const shell = shellRef.current;
+      if (!el || !shell) return;
+
+      const instant = opts?.instant ?? false;
+      const typing = Date.now() < typingUntilRef.current;
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const animate = !instant && !typing && !reduceMotion;
+
+      shell.classList.toggle("chat-composer--height-anim", animate);
+      el.classList.toggle("chat-composer-input--height-anim", animate);
+
+      if (!value.trim()) {
+        el.style.height = `${COMPOSER_MIN_TEXT_PX}px`;
+      } else {
+        el.style.height = `${measureClampedTextareaHeight(el)}px`;
+      }
+
+      scrollTextareaCaretIntoView(el);
+      notifyComposerResize();
+    },
+    [notifyComposerResize, value],
+  );
+
+  const scheduleResize = useCallback(
+    (opts?: { instant?: boolean }) => {
+      if (resizeFrameRef.current != null) cancelAnimationFrame(resizeFrameRef.current);
+      resizeFrameRef.current = requestAnimationFrame(() => {
+        resizeFrameRef.current = requestAnimationFrame(() => {
+          resizeFrameRef.current = null;
+          applyTextareaHeight(opts);
+        });
+      });
+    },
+    [applyTextareaHeight],
+  );
+
   useEffect(() => {
-    resize();
-  }, [value, attachments.length, resize]);
+    scheduleResize({ instant: !value.trim() });
+  }, [value, attachments.length, scheduleResize]);
+
+  useEffect(() => {
+    scheduleResize({ instant: true });
+  }, [conversationKey, scheduleResize]);
+
+  useEffect(() => {
+    const onResize = () => scheduleResize();
+    window.addEventListener("resize", onResize);
+    const onSidebar = () => window.setTimeout(() => scheduleResize(), 220);
+    window.addEventListener("aqrem-sidebar-transition-end", onSidebar);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("aqrem-sidebar-transition-end", onSidebar);
+    };
+  }, [scheduleResize]);
+
+  useEffect(() => {
+    return () => {
+      if (resizeFrameRef.current != null) cancelAnimationFrame(resizeFrameRef.current);
+    };
+  }, []);
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key.length === 1 || e.key === "Backspace" || e.key === "Delete" || e.key === "Enter") {
+      typingUntilRef.current = Date.now() + 160;
+    }
     if (e.key === "Escape") {
       e.preventDefault();
       textareaRef.current?.blur();
@@ -82,9 +154,22 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
       e.preventDefault();
       if (!disabled && !loading && (value.trim() || attachments.some((a) => a.status === "pending"))) {
         onSend();
-        requestAnimationFrame(() => textareaRef.current?.focus());
+        requestAnimationFrame(() => {
+          scheduleResize({ instant: true });
+          textareaRef.current?.focus();
+        });
       }
     }
+  }
+
+  function onInput(e: ChangeEvent<HTMLTextAreaElement>) {
+    onChange(e.target.value);
+    scheduleResize();
+  }
+
+  function onPaste() {
+    typingUntilRef.current = Date.now() + 160;
+    requestAnimationFrame(() => scheduleResize());
   }
 
   function onFileChange(e: ChangeEvent<HTMLInputElement>) {
@@ -117,6 +202,7 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
       onDrop={onDrop}
     >
       <div
+        ref={shellRef}
         className={`chat-composer shadow-composer ${dragOver ? "ring-2 ring-[var(--color-accent)]" : ""}`}
         data-testid="chat-composer-shell"
       >
@@ -168,8 +254,9 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
             ref={textareaRef}
             rows={1}
             value={value}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={onInput}
             onKeyDown={onKeyDown}
+            onPaste={onPaste}
             placeholder="Ask AQREM anything about your documents…"
             disabled={disabled}
             className="chat-composer-input"
