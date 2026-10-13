@@ -71,7 +71,12 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
     audience = "aqrem-org-admin" if member_role == Role.ORG_ADMIN else "aqrem-employee"
     token = create_access_token(
         str(user.id),
-        {"organization_id": str(membership.organization_id), "role": membership.role, "aud": audience},
+        {
+            "organization_id": str(membership.organization_id),
+            "role": membership.role,
+            "aud": audience,
+            "auth_version": membership.auth_version,
+        },
     )
     return TokenResponse(
         access_token=token,
@@ -107,9 +112,16 @@ def accept_invite(
     if not allowed:
         raise HTTPException(status_code=403, detail=reason)
 
+    member_role = Role(membership.role)
+    audience = "aqrem-org-admin" if member_role == Role.ORG_ADMIN else "aqrem-employee"
     token = create_access_token(
         str(user.id),
-        {"organization_id": str(membership.organization_id), "role": membership.role},
+        {
+            "organization_id": str(membership.organization_id),
+            "role": membership.role,
+            "aud": audience,
+            "auth_version": membership.auth_version,
+        },
     )
     return TokenResponse(
         access_token=token,

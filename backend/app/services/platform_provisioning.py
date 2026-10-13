@@ -321,6 +321,7 @@ def set_organization_license(
             "license_limit": org.license_limit,
             "license_status": org.license_status,
             "is_active": org.is_active,
+            "source": "platform_control_plane",
         },
     )
     return org
@@ -333,6 +334,7 @@ def deactivate_membership(
     membership: OrganizationMembership,
 ) -> None:
     membership.is_active = False
+    membership.auth_version = int(membership.auth_version or 1) + 1
     record_audit(
         db,
         organization_id=membership.organization_id,

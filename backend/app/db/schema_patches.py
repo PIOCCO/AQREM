@@ -11,6 +11,7 @@ _ORG_PATCHES = (
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false",
     "ALTER TABLE organization_memberships ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true",
+    "ALTER TABLE organization_memberships ADD COLUMN IF NOT EXISTS auth_version INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS owner_display_name VARCHAR(255)",
     "ALTER TABLE user_invitations ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ",
     """

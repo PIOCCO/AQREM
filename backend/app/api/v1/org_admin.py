@@ -44,7 +44,9 @@ from app.services.setup_checklist import build_setup_checklist
 from app.services.seat_usage import get_seat_usage
 from app.services.storage.factory import get_blob_storage
 from app.services.storage.path_utils import safe_blob_filename
-from app.services.telemetry_schema import TELEMETRY_FIELD_CATALOG, build_telemetry_payload
+from app.services.platform_provisioning import deactivate_membership
+from app.services.telemetry_ingest import ingest_org_telemetry
+from app.services.telemetry_schema import TELEMETRY_FIELD_CATALOG
 
 router = APIRouter()
 
@@ -297,14 +299,13 @@ async def upload_documents(
             enqueue_source_sync(str(job.id))
         except Exception:
             pass
+    ingest_org_telemetry(
+        db,
+        organization_id=tenant.organization_id,
+        event_type="document.indexing_job_completed",
+        payload={"indexed_count": len(created), "failed_count": 0, "indexing_count": len(created)},
+    )
     db.commit()
-    try:
-        build_telemetry_payload(
-            "document.indexing_job_completed",
-            {"indexed_count": len(created), "failed_count": 0, "indexing_count": len(created)},
-        )
-    except Exception:
-        pass
     return {"document_ids": created}
 
 
@@ -430,11 +431,13 @@ def save_model_token(
         resource_id=str(cred.id),
         metadata={"status": cred.status},
     )
-    db.commit()
-    build_telemetry_payload(
-        "credential.expiry_metadata_updated",
-        {"expires_at_iso": expires.date().isoformat(), "status": cred.status},
+    ingest_org_telemetry(
+        db,
+        organization_id=tenant.organization_id,
+        event_type="credential.expiry_metadata_updated",
+        payload={"expires_at_iso": expires.date().isoformat(), "status": cred.status},
     )
+    db.commit()
     return get_model_token(tenant=tenant, db=db)
 
 
@@ -521,7 +524,7 @@ def invite_member(
         role = Role(payload.role.upper())
     except ValueError as exc:
         raise org_admin_error(code="INVALID_ROLE", message="Choose Organization admin, Editor, or Viewer.", field="role") from exc
-    if role == Role.PLATFORM_ADMIN:
+    if payload.role.upper() == "PLATFORM_ADMIN":
         raise org_admin_error(code="INVALID_ROLE", message="Invalid role.", field="role")
     try:
         _user, _membership, invitation, raw_token, expires_at = provision_user_invitation(
@@ -547,8 +550,33 @@ def invite_member(
         resource_id=str(invitation.id),
         metadata={"role": role.value},
     )
+    from app.services.seat_usage import get_seat_usage
+
+    seats = get_seat_usage(db, org)
+    ingest_org_telemetry(
+        db,
+        organization_id=tenant.organization_id,
+        event_type="license.seat_usage_changed",
+        payload={"seats_used": seats.seats_used, "seats_limit": seats.seats_limit},
+    )
     db.commit()
     return {"invitation_setup_path": f"/accept-invite?token={raw_token}", "expires_at": expires_at.isoformat()}
+
+
+@router.post("/members/{membership_id}/deactivate", status_code=204)
+def deactivate_org_member(
+    membership_id: UUID,
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    db: Session = Depends(get_db),
+) -> None:
+    assert_org_admin_action(tenant, action="write", resource_type="member", resource_org_id=tenant.organization_id)
+    membership = db.get(OrganizationMembership, membership_id)
+    if membership is None or membership.organization_id != tenant.organization_id:
+        raise org_admin_error(code="NOT_FOUND", message="Member not found.", status_code=404)
+    if membership.user_id == tenant.user_id:
+        raise org_admin_error(code="INVALID_STATE", message="You cannot deactivate your own membership.", status_code=400)
+    deactivate_membership(db, admin_user_id=tenant.user_id, membership=membership)
+    db.commit()
 
 
 @router.get("/usage", response_model=UsageSummaryResponse)

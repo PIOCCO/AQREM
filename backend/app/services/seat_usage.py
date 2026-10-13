@@ -46,8 +46,11 @@ def count_active_members(db: Session, organization_id: UUID) -> int:
 
 
 def count_pending_invitations(db: Session, organization_id: UUID) -> int:
+    """Pending invites that do not yet occupy an active membership seat."""
     now = _utcnow()
-    return (
+    from app.models.organization import User
+
+    pending = (
         db.query(UserInvitation)
         .filter(
             UserInvitation.organization_id == organization_id,
@@ -55,8 +58,26 @@ def count_pending_invitations(db: Session, organization_id: UUID) -> int:
             UserInvitation.revoked_at.is_(None),
             UserInvitation.expires_at > now,
         )
-        .count()
+        .all()
     )
+    extra = 0
+    for inv in pending:
+        user = db.query(User).filter(User.email == inv.email.lower()).first()
+        if user is None:
+            extra += 1
+            continue
+        active = (
+            db.query(OrganizationMembership)
+            .filter(
+                OrganizationMembership.organization_id == organization_id,
+                OrganizationMembership.user_id == user.id,
+                OrganizationMembership.is_active.is_(True),
+            )
+            .first()
+        )
+        if active is None:
+            extra += 1
+    return extra
 
 
 def get_seat_usage(db: Session, org) -> SeatUsage:

@@ -90,7 +90,11 @@ def build_sentence(action: str, actor_name: str, metadata: dict, resource_type: 
         "member_role_changed": f"{actor_name} changed a member role",
         "membership_deactivated": f"{actor_name} deactivated a member",
         "user_deactivated": f"{actor_name} deactivated a user",
-        "organization_license_updated": f"{actor_name} updated organization licensing",
+        "organization_license_updated": (
+            f"Platform: license {metadata.get('license_status', 'updated')}"
+            if metadata.get("source") == "platform_control_plane"
+            else f"{actor_name} updated organization licensing"
+        ),
         "source_connected": f"{actor_name} connected a source",
         "questionnaire_created": f"{actor_name} created a questionnaire",
         "questionnaire_uploaded": f"{actor_name} uploaded a questionnaire",

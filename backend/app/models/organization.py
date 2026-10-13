@@ -59,6 +59,7 @@ class OrganizationMembership(Base):
     )
     role: Mapped[str] = mapped_column(String(32), nullable=False, default=Role.EDITOR.value)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    auth_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     organization: Mapped["Organization"] = relationship(back_populates="memberships")
     user: Mapped["User"] = relationship(back_populates="memberships")

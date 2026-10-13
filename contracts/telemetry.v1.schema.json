@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aqrem.local/contracts/telemetry.v1.schema.json",
+  "title": "ControlPlaneTelemetryEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_type", "organization_id", "payload"],
+  "properties": {
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "environment.health_changed",
+        "source.configuration_status_changed",
+        "document.indexing_job_completed",
+        "document.indexing_job_failed",
+        "license.seat_usage_changed",
+        "credential.expiry_metadata_updated",
+        "environment.version_changed"
+      ]
+    },
+    "organization_id": { "type": "string", "format": "uuid" },
+    "environment_id": { "type": ["string", "null"] },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false
+    }
+  }
+}

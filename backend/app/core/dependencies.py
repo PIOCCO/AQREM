@@ -32,9 +32,33 @@ def get_authenticated_user(
     return user
 
 
-def require_platform_admin(user: User = Depends(get_authenticated_user)) -> User:
+def _token_payload(credentials: HTTPAuthorizationCredentials | None) -> dict:
+    if credentials is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    try:
+        return decode_access_token(credentials.credentials)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
+
+
+def require_platform_admin(
+    user: User = Depends(get_authenticated_user),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> User:
     if not user.is_platform_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Platform administrator required")
+    payload = _token_payload(credentials)
+    if payload.get("organization_id"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tenant session cannot access the platform console",
+        )
+    aud = payload.get("aud")
+    if aud is not None and aud != "aqrem-master":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Platform console requires a master audience token",
+        )
     return user
 
 
@@ -77,6 +101,13 @@ def get_tenant_context(
     if not allowed:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
 
+    aud = payload.get("aud")
+    if aud == "aqrem-master" or payload.get("role") == "PLATFORM_ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Platform tokens cannot access tenant data plane endpoints",
+        )
+
     membership = (
         db.query(OrganizationMembership)
         .filter(
@@ -87,6 +118,10 @@ def get_tenant_context(
     )
     if membership is None or not membership.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of organization")
+
+    token_ver = payload.get("auth_version")
+    if token_ver is not None and int(token_ver) != int(membership.auth_version):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session revoked")
 
     return TenantContext(
         user_id=user_id,

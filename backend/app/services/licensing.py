@@ -56,6 +56,7 @@ def org_allows_sign_in(org: Organization, settings: Settings | None = None) -> t
 
 def assert_can_add_seat(db: Session, org: Organization, settings: Settings | None = None) -> None:
     settings = settings or get_settings()
+    db.refresh(org)
     allowed, reason = org_allows_sign_in(org, settings)
     if not allowed and org.license_status != LicenseStatus.TEST.value:
         raise LicenseDenied(reason)
