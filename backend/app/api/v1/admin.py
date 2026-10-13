@@ -57,16 +57,19 @@ from app.services.licensing import LicenseDenied, assert_can_add_seat, licensing
 from app.services.platform_provisioning import (
     create_organization_admin,
     deactivate_membership,
-    provision_user_invitation,
-    resend_invitation,
-    revoke_invitation,
     set_organization_license,
     unique_org_slug,
     update_membership_role,
 )
+from app.services.invitations.admin_invitation import provision_admin_invitation, resend_admin_invitation
+from app.services.platform_provisioning import revoke_invitation
+from app.services.access_control.groups import ensure_default_access_groups
+from app.tenant_store.resolver import open_tenant_session
+from app.api.v1 import admin_invitations
 from app.services.seat_usage import get_seat_usage
 
 router = APIRouter()
+router.include_router(admin_invitations.router)
 
 
 def _require_admin_visible_org(db: Session, organization_id: UUID) -> Organization:
@@ -161,6 +164,12 @@ def create_organization(
         license_status=license_status,
         owner_display_name=payload.owner_display_name,
     )
+    tenant_db = open_tenant_session(db, org.id)
+    try:
+        ensure_default_access_groups(tenant_db, org.id)
+        tenant_db.commit()
+    finally:
+        tenant_db.close()
     db.commit()
     db.refresh(org)
     return org_to_admin_response(db, org)
@@ -289,7 +298,7 @@ def organization_directory(
 def list_invitations(
     organization_id: UUID,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_permission("invitation:manage")),
+    admin: User = Depends(require_platform_permission("invitation:read")),
 ) -> list[AdminInvitationResponse]:
     _require_admin_visible_org(db, organization_id)
     now = datetime.now(timezone.utc)
@@ -325,7 +334,7 @@ def provision_user(
     organization_id: UUID,
     payload: AdminProvisionUserRequest,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_permission("org_admin:invite")),
+    admin: User = Depends(require_platform_permission("invitation:create_admin")),
 ) -> AdminProvisionUserResponse:
     _require_admin_visible_org(db, organization_id)
     if payload.role != Role.ORG_ADMIN:
@@ -335,13 +344,12 @@ def provision_user(
             field="role",
         )
     try:
-        user, _membership, invitation, raw_token, expires_at = provision_user_invitation(
+        user, _membership, invitation, raw_token, expires_at, _email_sent = provision_admin_invitation(
             db,
             admin_user_id=admin.id,
             organization_id=organization_id,
             email=payload.email.lower(),
             full_name=payload.full_name,
-            role=payload.role,
         )
     except LicenseDenied as exc:
         reason = exc.detail or ""
@@ -372,13 +380,19 @@ def provision_user(
                 message="A pending invitation already exists for this email",
                 field="email",
             ) from exc
+        if str(exc) == "EMAIL_IN_OTHER_ORG":
+            raise admin_error(
+                code="EMAIL_IN_OTHER_ORG",
+                message="This email already belongs to a user in another organization.",
+                field="email",
+            ) from exc
         raise admin_error(code="VALIDATION_ERROR", message=str(exc)) from exc
     db.commit()
     return AdminProvisionUserResponse(
         user_id=user.id,
         organization_id=organization_id,
         email=user.email,
-        role=payload.role,
+        role=Role.ORG_ADMIN,
         invitation_id=invitation.id,
         invitation_expires_at=expires_at,
         invitation_setup_path=f"/accept-invite?token={raw_token}",
@@ -390,7 +404,7 @@ def resend_user_invitation(
     organization_id: UUID,
     invitation_id: UUID,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_permission("invitation:manage")),
+    admin: User = Depends(require_platform_permission("invitation:create_admin")),
 ) -> AdminProvisionUserResponse:
     invitation = db.get(UserInvitation, invitation_id)
     if invitation is None or invitation.organization_id != organization_id:
@@ -401,7 +415,7 @@ def resend_user_invitation(
     except LicenseDenied:
         raise admin_error(code="SEATS_FULL", message="No seats available", status_code=403) from None
 
-    raw_token, expires_at = resend_invitation(db, admin_user_id=admin.id, invitation=invitation)
+    raw_token, expires_at = resend_admin_invitation(db, admin_user_id=admin.id, invitation=invitation)
     user = db.query(User).filter(User.email == invitation.email).first()
     db.commit()
     return AdminProvisionUserResponse(
@@ -420,7 +434,7 @@ def revoke_user_invitation(
     organization_id: UUID,
     invitation_id: UUID,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_permission("invitation:manage")),
+    admin: User = Depends(require_platform_permission("invitation:revoke")),
 ) -> None:
     _require_admin_visible_org(db, organization_id)
     invitation = db.get(UserInvitation, invitation_id)
@@ -699,16 +713,23 @@ def replace_org_admin(
             metadata={"previous_user_id": str(user.id), "reason": payload.reason, "source": "platform_control_plane"},
         )
     try:
-        user, _membership, invitation, raw_token, expires_at = provision_user_invitation(
+        user, _membership, invitation, raw_token, expires_at, _sent = provision_admin_invitation(
             db,
             admin_user_id=admin.id,
             organization_id=organization_id,
             email=payload.email.lower(),
             full_name=payload.full_name,
-            role=Role.ORG_ADMIN,
         )
     except LicenseDenied as exc:
         raise admin_error(code="SEATS_FULL", message=str(exc.detail or "No seats available"), status_code=403) from exc
+    except ValueError as exc:
+        if str(exc) == "EMAIL_IN_OTHER_ORG":
+            raise admin_error(
+                code="EMAIL_IN_OTHER_ORG",
+                message="This email already belongs to a user in another organization.",
+                field="email",
+            ) from exc
+        raise admin_error(code="VALIDATION_ERROR", message=str(exc)) from exc
     record_audit(
         db,
         organization_id=organization_id,

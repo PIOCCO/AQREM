@@ -12,6 +12,6 @@ def send_password_reset_email(*, to_email: str, reset_url: str) -> None:
         logger.warning("Password reset email not sent: configure EMAIL_DELIVERY_MODE for production")
         return
     if mode == "log":
-        logger.info("Password reset link for %s (dev only): %s", to_email, reset_url)
+        logger.info("Password reset email not sent (delivery mode=log) for recipient")
         return
     logger.warning("Email delivery mode %s not implemented; reset not sent", mode)

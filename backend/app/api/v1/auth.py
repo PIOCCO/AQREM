@@ -22,6 +22,8 @@ from app.core.tenant import TenantContext
 from app.db.session import get_db
 from app.models.organization import Organization, OrganizationMembership, User
 from app.schemas.admin import AcceptInvitationRequest, ChangePasswordRequest
+from app.schemas.invitations import AcceptInvitationPreviewRequest, AcceptInvitationPreviewResponse
+from app.services.invitations.admin_invitation import preview_admin_invitation
 from app.schemas.auth import ForgotPasswordRequest, LoginRequest, ResetPasswordRequest, TokenResponse, UserResponse
 from app.services.licensing import org_allows_sign_in
 from app.services.platform_provisioning import accept_invitation
@@ -97,6 +99,25 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
     )
 
 
+@router.post("/accept-invitation/preview", response_model=AcceptInvitationPreviewResponse)
+@limiter.limit("30/minute")
+def accept_invite_preview(
+    request: Request,
+    payload: AcceptInvitationPreviewRequest,
+    db: Session = Depends(get_db),
+) -> AcceptInvitationPreviewResponse:
+    try:
+        invitation, org = preview_admin_invitation(db, token=payload.token)
+    except ValueError:
+        raise HTTPException(status_code=404, detail={"message": "This invitation is not valid."}) from None
+    return AcceptInvitationPreviewResponse(
+        organization_name=org.name,
+        role=Role(invitation.role),
+        email=invitation.email,
+        invitee_full_name=invitation.invitee_full_name,
+    )
+
+
 @router.post("/accept-invitation", response_model=TokenResponse)
 @limiter.limit(AUTH_LOGIN_LIMIT)
 def accept_invite(
@@ -111,13 +132,13 @@ def accept_invite(
             password=payload.password,
             full_name=payload.full_name,
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError:
+        raise HTTPException(status_code=400, detail={"message": "This invitation is not valid."}) from None
     db.commit()
 
     org = db.get(Organization, membership.organization_id)
     if org is None:
-        raise HTTPException(status_code=400, detail="Organization missing")
+        raise HTTPException(status_code=400, detail={"message": "This invitation is not valid."})
     allowed, reason = org_allows_sign_in(org)
     if not allowed:
         raise HTTPException(status_code=403, detail=reason)

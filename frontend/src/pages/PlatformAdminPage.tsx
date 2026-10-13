@@ -11,6 +11,7 @@ import {
 import { InvitePlatformStaffDialog } from "../components/platform-admin/InvitePlatformStaffDialog";
 import { LicenseSummaryCard } from "../components/platform-admin/LicenseSummaryCard";
 import { RemoveMemberDialog } from "../components/platform-admin/RemoveMemberDialog";
+import { OrgInvitationsPanel } from "../components/platform-admin/OrgInvitationsPanel";
 import {
   createAdminOrganization,
   deactivateMember,
@@ -695,49 +696,9 @@ function PlatformAdminInner() {
                 <LicenseTab org={selected} session={auth} onSaved={refreshOrgs} />
               )}
 
-              {tab === "invitations" && (
-                <div className="admin-card p-4 space-y-3">
-                  {invitations.length === 0 ? (
-                    <p className="text-sm text-chat-muted">No pending invitations.</p>
-                  ) : (
-                    invitations.map((inv) => (
-                      <div key={inv.id} className="flex flex-wrap justify-between gap-2 border-b border-chat-border pb-2">
-                        <div>
-                          <p className="text-sm font-medium">{inv.email}</p>
-                          <p className="text-xs text-chat-muted">
-                            {roleLabel(inv.role)} · Expires {formatDate(inv.expires_at)}
-                          </p>
-                        </div>
-                        <div className="space-x-2">
-                          <button
-                            type="button"
-                            className="text-xs underline"
-                            onClick={() =>
-                              resendInvitation(auth, selectedId, inv.id).then((r) => {
-                                setLastInvite({ path: r.invitation_setup_path, expires: r.invitation_expires_at });
-                                toast.push("Invitation resent", "ok");
-                              })
-                            }
-                          >
-                            Resend
-                          </button>
-                          <button
-                            type="button"
-                            className="text-xs underline"
-                            onClick={() =>
-                              revokeInvitation(auth, selectedId, inv.id).then(() =>
-                                fetchOrgInvitations(auth, selectedId).then(setInvitations),
-                              )
-                            }
-                          >
-                            Revoke
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
+              {tab === "invitations" && selected ? (
+                <OrgInvitationsPanel session={auth} org={selected} onRefreshOrgs={refreshOrgs} />
+              ) : null}
 
               {tab === "audit" && (
                 <div className="admin-card overflow-hidden">
@@ -770,6 +731,23 @@ function PlatformAdminInner() {
 
               {tab === "overview" && (
                 <div className="admin-card p-4 text-sm space-y-3">
+                  <div className="border border-chat-border rounded-lg p-3 space-y-2">
+                    <p className="text-xs font-medium text-chat-muted">Setup status</p>
+                    <ul className="space-y-1 text-sm">
+                      <li className="flex justify-between gap-2">
+                        <span>Admin invited</span>
+                        <button type="button" className="text-xs underline" onClick={() => setTab("invitations")}>
+                          {selected.seats.pending_invitations > 0 ? "Pending" : "Set up"}
+                        </button>
+                      </li>
+                      <li className="flex justify-between gap-2">
+                        <span>Employee link</span>
+                        <button type="button" className="text-xs underline" onClick={() => setTab("invitations")}>
+                          Configure
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
                       <p className="text-xs text-[var(--color-text-muted)]">Organization ID</p>

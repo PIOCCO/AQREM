@@ -399,6 +399,111 @@ export async function updatePlatformStaffRole(
   return res.json();
 }
 
+export type InvitationHistoryRow = {
+  id: string;
+  kind: string;
+  email: string;
+  role: string;
+  status: string;
+  invitee_full_name: string | null;
+  expires_at: string;
+  created_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+};
+
+export type InvitationsSetupStatus = {
+  admin_invitation_status: string;
+  admin_invitation_email: string | null;
+  admin_accepted: boolean;
+  employee_link_status: string | null;
+  employee_link_joined_count: number;
+  employee_link_pending_count: number;
+  seats: SeatUsage;
+};
+
+export type EmployeeLinkSummary = {
+  link_id: string | null;
+  status: string | null;
+  joined_count: number;
+  pending_approval_count: number;
+  max_joins: number | null;
+  expires_at: string | null;
+  allowed_domains: string[];
+  require_admin_approval: boolean;
+};
+
+export async function fetchInvitationsSetup(session: AuthSession, orgId: string) {
+  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/invitations/setup`, {
+    headers: adminHeaders(session),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to load setup status"));
+  return res.json() as Promise<InvitationsSetupStatus>;
+}
+
+export async function fetchInvitationHistory(session: AuthSession, orgId: string, status?: string) {
+  const q = status ? `?status=${encodeURIComponent(status)}` : "";
+  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/invitations/history${q}`, {
+    headers: adminHeaders(session),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to load invitation history"));
+  return res.json() as Promise<InvitationHistoryRow[]>;
+}
+
+export async function createAdminInvitation(
+  session: AuthSession,
+  orgId: string,
+  payload: { email: string; full_name: string; personal_message?: string; expires_days?: number },
+) {
+  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/invitations/admin`, {
+    method: "POST",
+    headers: adminHeaders(session),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await parseError(res, "Failed to create admin invitation");
+  return res.json() as Promise<{
+    invitation_setup_path: string;
+    invitation_expires_at: string;
+    email_sent: boolean;
+  }>;
+}
+
+export async function fetchEmployeeLinkSummary(session: AuthSession, orgId: string) {
+  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/employee-link`, {
+    headers: adminHeaders(session),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to load employee link"));
+  return res.json() as Promise<EmployeeLinkSummary>;
+}
+
+export async function createEmployeeLink(
+  session: AuthSession,
+  orgId: string,
+  payload: {
+    allowed_domains: string[];
+    require_admin_approval?: boolean;
+    max_joins?: number;
+    expires_days?: number | null;
+  },
+) {
+  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/employee-link`, {
+    method: "POST",
+    headers: adminHeaders(session),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await parseError(res, "Failed to create employee link");
+  return res.json() as Promise<{ join_path: string; link_id: string; expires_at: string | null }>;
+}
+
+export async function rotateEmployeeLink(session: AuthSession, orgId: string, linkId: string) {
+  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/employee-link/${linkId}/rotate`, {
+    method: "POST",
+    headers: adminHeaders(session),
+  });
+  if (!res.ok) await parseError(res, "Failed to rotate link");
+  return res.json() as Promise<{ join_path: string }>;
+}
+
 export async function fetchOrgInvitations(session: AuthSession, orgId: string) {
   const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/invitations`, {
     headers: adminHeaders(session),

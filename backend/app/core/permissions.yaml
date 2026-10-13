@@ -11,6 +11,11 @@ platform_roles:
     - org_member:deactivate
     - org:audit_read
     - invitation:manage
+    - invitation:read
+    - invitation:create_admin
+    - invitation:create_employee_link
+    - invitation:revoke
+    - invitation:rotate
     - platform_staff:read
     - platform_staff:invite
     - platform_staff:update
@@ -25,6 +30,7 @@ platform_roles:
   PLATFORM_SUPPORT:
     - org:read
     - org:audit_read
+    - invitation:read
     - platform_permissions:read
     - platform_audit:read
     - deployment:read
@@ -48,10 +54,19 @@ platform_endpoints:
   POST /api/v1/admin/organizations: org:create
   PATCH /api/v1/admin/organizations/{organization_id}: org:update
   GET /api/v1/admin/organizations/{organization_id}/directory: org:read
-  GET /api/v1/admin/organizations/{organization_id}/invitations: invitation:manage
-  POST /api/v1/admin/organizations/{organization_id}/users: org_admin:invite
-  POST /api/v1/admin/organizations/{organization_id}/invitations/{invitation_id}/resend: invitation:manage
-  POST /api/v1/admin/organizations/{organization_id}/invitations/{invitation_id}/revoke: invitation:manage
+  GET /api/v1/admin/organizations/{organization_id}/invitations: invitation:read
+  GET /api/v1/admin/organizations/{organization_id}/invitations/setup: invitation:read
+  GET /api/v1/admin/organizations/{organization_id}/invitations/history: invitation:read
+  POST /api/v1/admin/organizations/{organization_id}/invitations/admin: invitation:create_admin
+  GET /api/v1/admin/organizations/{organization_id}/employee-link: invitation:read
+  POST /api/v1/admin/organizations/{organization_id}/employee-link: invitation:create_employee_link
+  POST /api/v1/admin/organizations/{organization_id}/employee-link/{link_id}/rotate: invitation:rotate
+  POST /api/v1/admin/organizations/{organization_id}/employee-link/{link_id}/pause: invitation:revoke
+  POST /api/v1/admin/organizations/{organization_id}/employee-link/{link_id}/resume: invitation:create_employee_link
+  POST /api/v1/admin/organizations/{organization_id}/employee-link/{link_id}/disable: invitation:revoke
+  POST /api/v1/admin/organizations/{organization_id}/users: invitation:create_admin
+  POST /api/v1/admin/organizations/{organization_id}/invitations/{invitation_id}/resend: invitation:create_admin
+  POST /api/v1/admin/organizations/{organization_id}/invitations/{invitation_id}/revoke: invitation:revoke
   GET /api/v1/admin/organizations/{organization_id}/members: org:read
   PATCH /api/v1/admin/organizations/{organization_id}/members/{membership_id}: org_admin:replace
   POST /api/v1/admin/organizations/{organization_id}/members/{membership_id}/deactivate: org_member:deactivate

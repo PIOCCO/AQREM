@@ -1,0 +1,249 @@
+"""Personal organization admin invitations (platform)."""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from uuid import UUID
+
+from sqlalchemy.orm import Session
+
+from app.audit.service import record_audit
+from app.core.roles import Role
+from app.models.invitation import UserInvitation
+from app.models.organization import Organization, OrganizationMembership, User
+from app.services.email.invitations import send_admin_invitation_email
+from app.services.invitations.tokens import generate_opaque_token, hash_token
+from app.services.licensing import LicenseDenied, assert_can_add_seat
+
+INVITATION_KIND_ORG_ADMIN = "org_admin"
+DEFAULT_EXPIRY_DAYS = 7
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def assert_email_available_for_org(db: Session, *, email: str, organization_id: UUID) -> None:
+    normalized = email.strip().lower()
+    user = db.query(User).filter(User.email == normalized).first()
+    if user is None:
+        return
+    other = (
+        db.query(OrganizationMembership)
+        .filter(
+            OrganizationMembership.user_id == user.id,
+            OrganizationMembership.is_active.is_(True),
+            OrganizationMembership.organization_id != organization_id,
+        )
+        .first()
+    )
+    if other is not None:
+        raise ValueError("EMAIL_IN_OTHER_ORG")
+
+
+def revoke_active_admin_invitations(
+    db: Session,
+    *,
+    organization_id: UUID,
+    admin_user_id: UUID,
+    except_invitation_id: UUID | None = None,
+) -> None:
+    now = _utcnow()
+    q = db.query(UserInvitation).filter(
+        UserInvitation.organization_id == organization_id,
+        UserInvitation.invitation_kind == INVITATION_KIND_ORG_ADMIN,
+        UserInvitation.used_at.is_(None),
+        UserInvitation.revoked_at.is_(None),
+        UserInvitation.expires_at > now,
+    )
+    if except_invitation_id is not None:
+        q = q.filter(UserInvitation.id != except_invitation_id)
+    for inv in q.all():
+        inv.revoked_at = now
+        record_audit(
+            db,
+            organization_id=organization_id,
+            user_id=admin_user_id,
+            action="admin_invitation_revoked",
+            resource_type="invitation",
+            resource_id=str(inv.id),
+            metadata={"email": inv.email, "reason": "replaced"},
+        )
+
+
+def provision_admin_invitation(
+    db: Session,
+    *,
+    admin_user_id: UUID,
+    organization_id: UUID,
+    email: str,
+    full_name: str,
+    personal_message: str | None = None,
+    expires_days: int = DEFAULT_EXPIRY_DAYS,
+    invitation_base_path: str = "/accept-invite",
+) -> tuple[User, OrganizationMembership, UserInvitation, str, datetime, bool]:
+    org = db.get(Organization, organization_id)
+    if org is None or not org.is_active:
+        raise ValueError("Organization not found or inactive")
+
+    expires_days = max(1, min(14, int(expires_days)))
+    normalized_email = email.strip().lower()
+
+    assert_email_available_for_org(db, email=normalized_email, organization_id=organization_id)
+
+    try:
+        assert_can_add_seat(db, org)
+    except LicenseDenied as exc:
+        raise LicenseDenied(exc.detail) from exc
+
+    revoke_active_admin_invitations(db, organization_id=organization_id, admin_user_id=admin_user_id)
+
+    now = _utcnow()
+    pending_same = (
+        db.query(UserInvitation)
+        .filter(
+            UserInvitation.organization_id == organization_id,
+            UserInvitation.email == normalized_email,
+            UserInvitation.used_at.is_(None),
+            UserInvitation.revoked_at.is_(None),
+            UserInvitation.expires_at > now,
+        )
+        .first()
+    )
+    if pending_same:
+        raise ValueError("DUPLICATE_EMAIL")
+
+    user = db.query(User).filter(User.email == normalized_email).first()
+    if user is None:
+        user = User(
+            email=normalized_email,
+            full_name=full_name,
+            hashed_password=None,
+            is_active=True,
+            must_change_password=True,
+        )
+        db.add(user)
+        db.flush()
+    elif not user.is_active:
+        raise ValueError("User account is deactivated")
+    else:
+        user.full_name = full_name or user.full_name
+
+    membership = (
+        db.query(OrganizationMembership)
+        .filter(
+            OrganizationMembership.organization_id == organization_id,
+            OrganizationMembership.user_id == user.id,
+        )
+        .first()
+    )
+    if membership is None:
+        membership = OrganizationMembership(
+            organization_id=organization_id,
+            user_id=user.id,
+            role=Role.ORG_ADMIN.value,
+            is_active=True,
+        )
+        db.add(membership)
+    else:
+        membership.role = Role.ORG_ADMIN.value
+        membership.is_active = True
+
+    raw_token = generate_opaque_token()
+    expires_at = now + timedelta(days=expires_days)
+    invitation = UserInvitation(
+        organization_id=organization_id,
+        email=normalized_email,
+        role=Role.ORG_ADMIN.value,
+        invitation_kind=INVITATION_KIND_ORG_ADMIN,
+        invitee_full_name=full_name,
+        personal_message=(personal_message or "")[:2000] or None,
+        token_hash=hash_token(raw_token),
+        expires_at=expires_at,
+        created_by_user_id=admin_user_id,
+    )
+    db.add(invitation)
+    db.flush()
+
+    record_audit(
+        db,
+        organization_id=organization_id,
+        user_id=admin_user_id,
+        action="admin_invitation_created",
+        resource_type="invitation",
+        resource_id=str(invitation.id),
+        metadata={"email": normalized_email, "expires_days": expires_days},
+    )
+
+    invitation_url = f"{invitation_base_path}?token={raw_token}"
+    email_sent = send_admin_invitation_email(
+        to_email=normalized_email,
+        invitee_name=full_name,
+        organization_name=org.name,
+        invitation_url=invitation_url,
+        personal_message=personal_message,
+    )
+    return user, membership, invitation, raw_token, expires_at, email_sent
+
+
+def resend_admin_invitation(
+    db: Session,
+    *,
+    admin_user_id: UUID,
+    invitation: UserInvitation,
+    expires_days: int = DEFAULT_EXPIRY_DAYS,
+) -> tuple[str, datetime]:
+    if invitation.invitation_kind != INVITATION_KIND_ORG_ADMIN:
+        raise ValueError("Not an admin invitation")
+    if invitation.used_at is not None or invitation.revoked_at is not None:
+        raise ValueError("Invitation is not pending")
+    expires_days = max(1, min(14, int(expires_days)))
+    raw_token = generate_opaque_token()
+    expires_at = _utcnow() + timedelta(days=expires_days)
+    invitation.token_hash = hash_token(raw_token)
+    invitation.expires_at = expires_at
+    record_audit(
+        db,
+        organization_id=invitation.organization_id,
+        user_id=admin_user_id,
+        action="admin_invitation_resent",
+        resource_type="invitation",
+        resource_id=str(invitation.id),
+        metadata={"email": invitation.email},
+    )
+    return raw_token, expires_at
+
+
+def preview_admin_invitation(db: Session, *, token: str) -> tuple[UserInvitation, Organization]:
+    digest = hash_token(token.strip())
+    invitation = db.query(UserInvitation).filter(UserInvitation.token_hash == digest).first()
+    if invitation is None:
+        raise ValueError("Invalid invitation")
+    if invitation.invitation_kind != INVITATION_KIND_ORG_ADMIN:
+        raise ValueError("Invalid invitation")
+    now = _utcnow()
+    if invitation.used_at is not None or invitation.revoked_at is not None:
+        raise ValueError("Invalid invitation")
+    exp = invitation.expires_at
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if exp < now:
+        raise ValueError("Invalid invitation")
+    org = db.get(Organization, invitation.organization_id)
+    if org is None or not org.is_active:
+        raise ValueError("Invalid invitation")
+    return invitation, org
+
+
+def invitation_public_status(inv: UserInvitation, *, now: datetime | None = None) -> str:
+    now = now or _utcnow()
+    if inv.used_at is not None:
+        return "accepted"
+    if inv.revoked_at is not None:
+        return "revoked"
+    exp = inv.expires_at
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if exp < now:
+        return "expired"
+    return "pending"

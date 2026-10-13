@@ -1,14 +1,37 @@
-import { FormEvent, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { Logo } from "../components/brand/Logo";
+import { FormEvent, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { AuthPageShell } from "../components/auth/AuthPageShell";
 import { acceptInvitation, saveSession } from "../lib/api";
+import { previewAcceptInvitation } from "../lib/joinApi";
+import { roleLabel } from "../lib/roleLabels";
+
+function readInitialToken(): string {
+  const params = new URLSearchParams(window.location.search);
+  const t = params.get("token") ?? "";
+  if (t) {
+    window.history.replaceState({}, "", "/accept-invite");
+  }
+  return t;
+}
 
 export default function AcceptInvitePage() {
-  const [searchParams] = useSearchParams();
-  const token = searchParams.get("token") ?? "";
+  const [token] = useState(readInitialToken);
   const navigate = useNavigate();
-  const [error, setError] = useState<string | null>(token ? null : "Missing invitation token.");
+  const [preview, setPreview] = useState<{
+    organization_name: string;
+    role: string;
+    email: string;
+    invitee_full_name: string | null;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(token ? null : "This invitation is not valid.");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    previewAcceptInvitation(token)
+      .then(setPreview)
+      .catch(() => setError("This invitation is not valid."));
+  }, [token]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -20,7 +43,7 @@ export default function AcceptInvitePage() {
       const data = await acceptInvitation({
         token,
         password: String(form.get("password")),
-        full_name: String(form.get("full_name") || "") || undefined,
+        full_name: String(form.get("full_name") || preview?.invitee_full_name || "") || undefined,
       });
       saveSession(data.access_token, data.organization_id ?? null);
       navigate("/");
@@ -32,29 +55,48 @@ export default function AcceptInvitePage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--color-background)] p-6 font-sans">
-      <div className="w-full max-w-md aq-card shadow-panel aq-card-p">
-        <div className="flex flex-col items-center text-center">
-          <Logo variant="mark" size={48} />
-        </div>
-        <h1 className="text-lg font-semibold mt-6 mb-2">Set your password</h1>
-        <p className="text-sm text-fg-muted mb-4">Complete your AQREM account setup using your invitation.</p>
-        <form className="space-y-3" onSubmit={onSubmit}>
-          <input name="full_name" placeholder="Full name (optional)" className="aq-input" />
+    <AuthPageShell
+      title={preview ? `Join ${preview.organization_name}` : "Accept invitation"}
+      subtitle={preview ? `You are invited as ${roleLabel(preview.role)}` : undefined}
+    >
+      {preview ? (
+        <p className="text-sm text-[var(--color-text-muted)] mb-4">
+          Signed in as <span className="text-[var(--color-text-primary)]">{preview.email}</span>
+        </p>
+      ) : null}
+      <form className="space-y-3" onSubmit={onSubmit}>
+        <div>
+          <label htmlFor="inv-full-name" className="text-xs font-medium">
+            Full name
+          </label>
           <input
+            id="inv-full-name"
+            name="full_name"
+            className="aq-input mt-1"
+            defaultValue={preview?.invitee_full_name ?? ""}
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="inv-password" className="text-xs font-medium">
+            New password
+          </label>
+          <input
+            id="inv-password"
             name="password"
             type="password"
-            placeholder="New password (min 8 characters)"
-            className="aq-input"
+            placeholder="At least 8 characters"
+            className="aq-input mt-1"
             required
             minLength={8}
+            autoComplete="new-password"
           />
-          {error && <div className="aq-alert-error">{error}</div>}
-          <button type="submit" disabled={loading || !token} className="aq-btn-primary w-full">
-            {loading ? "Saving…" : "Activate account"}
-          </button>
-        </form>
-      </div>
-    </div>
+        </div>
+        {error ? <div className="aq-alert-error">{error}</div> : null}
+        <button type="submit" disabled={loading || !token || !preview} className="aq-btn-primary w-full">
+          {loading ? "Saving…" : "Activate account"}
+        </button>
+      </form>
+    </AuthPageShell>
   );
 }

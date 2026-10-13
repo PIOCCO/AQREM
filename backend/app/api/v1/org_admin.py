@@ -949,3 +949,70 @@ def employee_link_copied(
         resource_id=str(tenant.organization_id),
     )
     db.commit()
+
+
+@router.get("/employee-join/pending")
+def list_pending_joins(
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    control_db: Session = Depends(get_db),
+) -> list[dict]:
+    from app.models.employee_join import EmployeeJoinPending
+
+    rows = (
+        control_db.query(EmployeeJoinPending)
+        .filter(
+            EmployeeJoinPending.organization_id == tenant.organization_id,
+            EmployeeJoinPending.status == "pending_approval",
+        )
+        .order_by(EmployeeJoinPending.created_at.asc())
+        .all()
+    )
+    return [
+        {
+            "id": str(r.id),
+            "email": r.email,
+            "full_name": r.full_name,
+            "created_at": r.created_at.isoformat(),
+        }
+        for r in rows
+    ]
+
+
+@router.post("/employee-join/pending/{pending_id}/approve", status_code=204)
+def approve_pending(
+    pending_id: UUID,
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    control_db: Session = Depends(get_db),
+) -> None:
+    from app.services.invitations.employee_join import approve_pending_join
+
+    try:
+        approve_pending_join(
+            control_db,
+            approver_user_id=tenant.user_id,
+            organization_id=tenant.organization_id,
+            pending_id=pending_id,
+        )
+    except ValueError as exc:
+        raise org_admin_error(code="NOT_FOUND", message=str(exc)) from exc
+    control_db.commit()
+
+
+@router.post("/employee-join/pending/{pending_id}/reject", status_code=204)
+def reject_pending(
+    pending_id: UUID,
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    control_db: Session = Depends(get_db),
+) -> None:
+    from app.services.invitations.employee_join import reject_pending_join
+
+    try:
+        reject_pending_join(
+            control_db,
+            approver_user_id=tenant.user_id,
+            organization_id=tenant.organization_id,
+            pending_id=pending_id,
+        )
+    except ValueError as exc:
+        raise org_admin_error(code="NOT_FOUND", message=str(exc)) from exc
+    control_db.commit()

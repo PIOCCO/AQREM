@@ -16,6 +16,7 @@ import DashboardPage from "./pages/DashboardPage";
 import EvidenceDetailPage from "./pages/EvidenceDetailPage";
 import EvidencePage from "./pages/EvidencePage";
 import AcceptInvitePage from "./pages/AcceptInvitePage";
+import JoinOrgPage from "./pages/JoinOrgPage";
 import PlatformAdminPage from "./pages/PlatformAdminPage";
 import RequirePlatformAdmin from "./components/RequirePlatformAdmin";
 import RequireOrgAdmin from "./components/RequireOrgAdmin";
@@ -142,6 +143,14 @@ export default function App() {
         element={
           <PublicTheme>
             <AcceptInvitePage />
+          </PublicTheme>
+        }
+      />
+      <Route
+        path="/join"
+        element={
+          <PublicTheme>
+            <JoinOrgPage />
           </PublicTheme>
         }
       />

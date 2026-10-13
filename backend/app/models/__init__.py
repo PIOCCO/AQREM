@@ -9,6 +9,12 @@ from app.models.evidence import EvidenceItem, EvidenceItemVersion
 from app.models.environment import ClientEnvironment, ControlPlaneEvent, ProvisioningJob
 from app.models.tenant_data_store import TenantDataStoreConfig
 from app.models.invitation import UserInvitation
+from app.models.employee_join import (
+    EmployeeJoinLink,
+    EmployeeJoinPending,
+    EmployeeJoinVerification,
+    OrganizationJoinBlocklist,
+)
 from app.models.organization import Organization, OrganizationMembership, User
 from app.models.project import Project
 from app.models.questionnaire import Answer, AnswerEvidenceLink, Question, Questionnaire
@@ -39,6 +45,10 @@ __all__ = [
     "Organization",
     "OrganizationMembership",
     "UserInvitation",
+    "EmployeeJoinLink",
+    "EmployeeJoinPending",
+    "EmployeeJoinVerification",
+    "OrganizationJoinBlocklist",
     "ClientEnvironment",
     "ProvisioningJob",
     "ControlPlaneEvent",

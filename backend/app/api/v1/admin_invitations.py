@@ -1,0 +1,323 @@
+"""Platform organization invitations (admin + employee link)."""
+
+from datetime import datetime, timezone
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy.orm import Session
+
+from app.core.admin_errors import admin_error
+from app.core.platform_access import require_platform_permission
+from app.core.roles import Role
+from app.db.session import get_db
+from app.models.invitation import UserInvitation
+from app.models.organization import User
+from app.models.employee_join import EmployeeJoinLink
+from app.schemas.invitations import (
+    AdminInvitationCreateRequest,
+    AdminInvitationCreateResponse,
+    AdminInvitationHistoryRow,
+    EmployeeLinkCreateRequest,
+    EmployeeLinkCreateResponse,
+    EmployeeLinkSummary,
+    InvitationsSetupStatus,
+)
+from app.services.admin_org import get_admin_visible_org, seat_usage_response
+from app.services.email.invitations import email_delivery_configured
+from app.services.invitations.admin_invitation import (
+    invitation_public_status,
+    provision_admin_invitation,
+    resend_admin_invitation,
+    revoke_active_admin_invitations,
+)
+from app.services.invitations.employee_join import (
+    create_employee_join_link,
+    get_active_link_for_org,
+    rotate_employee_link,
+    set_link_status,
+    LINK_DISABLED,
+    LINK_PAUSED,
+)
+from app.services.licensing import LicenseDenied
+from app.services.platform_provisioning import revoke_invitation
+from app.services.seat_usage import get_seat_usage
+
+router = APIRouter()
+
+
+def _visible_org(db: Session, organization_id: UUID):
+    org = get_admin_visible_org(db, organization_id)
+    if org is None:
+        raise admin_error(code="NOT_FOUND", message="Organization not found", status_code=404)
+    return org
+
+
+@router.get("/organizations/{organization_id}/invitations/setup", response_model=InvitationsSetupStatus)
+def invitations_setup_status(
+    organization_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:read")),
+) -> InvitationsSetupStatus:
+    org = _visible_org(db, organization_id)
+    usage = get_seat_usage(db, org)
+    now = datetime.now(timezone.utc)
+    admin_inv = (
+        db.query(UserInvitation)
+        .filter(
+            UserInvitation.organization_id == organization_id,
+            UserInvitation.invitation_kind == "org_admin",
+        )
+        .order_by(UserInvitation.created_at.desc())
+        .first()
+    )
+    admin_status = "none"
+    admin_email = None
+    admin_accepted = False
+    if admin_inv:
+        admin_status = invitation_public_status(admin_inv, now=now)
+        admin_email = admin_inv.email
+        admin_accepted = admin_inv.used_at is not None
+    link = get_active_link_for_org(db, organization_id)
+    return InvitationsSetupStatus(
+        admin_invitation_status=admin_status,
+        admin_invitation_email=admin_email,
+        admin_accepted=admin_accepted,
+        employee_link_status=link.status if link else None,
+        employee_link_joined_count=link.joined_count if link else 0,
+        employee_link_pending_count=link.pending_approval_count if link else 0,
+        seats=seat_usage_response(org, usage).model_dump(),
+    )
+
+
+@router.get("/organizations/{organization_id}/invitations/history", response_model=list[AdminInvitationHistoryRow])
+def invitation_history(
+    organization_id: UUID,
+    status_filter: str | None = Query(default=None, alias="status"),
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:read")),
+) -> list[AdminInvitationHistoryRow]:
+    _visible_org(db, organization_id)
+    now = datetime.now(timezone.utc)
+    invites = (
+        db.query(UserInvitation)
+        .filter(
+            UserInvitation.organization_id == organization_id,
+            UserInvitation.invitation_kind == "org_admin",
+        )
+        .order_by(UserInvitation.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    rows: list[AdminInvitationHistoryRow] = []
+    for inv in invites:
+        st = invitation_public_status(inv, now=now)
+        if status_filter and status_filter != "all" and st != status_filter:
+            continue
+        rows.append(
+            AdminInvitationHistoryRow(
+                id=inv.id,
+                kind=inv.invitation_kind,
+                email=inv.email,
+                role=Role(inv.role),
+                status=st,
+                invitee_full_name=inv.invitee_full_name,
+                expires_at=inv.expires_at,
+                created_at=inv.created_at,
+                accepted_at=inv.used_at,
+                revoked_at=inv.revoked_at,
+                created_by_user_id=inv.created_by_user_id,
+            )
+        )
+    return rows
+
+
+@router.post(
+    "/organizations/{organization_id}/invitations/admin",
+    response_model=AdminInvitationCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_admin_invitation(
+    organization_id: UUID,
+    payload: AdminInvitationCreateRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:create_admin")),
+) -> AdminInvitationCreateResponse:
+    _visible_org(db, organization_id)
+    try:
+        user, _m, invitation, raw_token, expires_at, email_sent = provision_admin_invitation(
+            db,
+            admin_user_id=admin.id,
+            organization_id=organization_id,
+            email=payload.email.lower(),
+            full_name=payload.full_name,
+            personal_message=payload.personal_message,
+            expires_days=payload.expires_days,
+        )
+    except LicenseDenied:
+        raise admin_error(code="SEATS_FULL", message="No seats left.", status_code=403) from None
+    except ValueError as exc:
+        code = str(exc)
+        if code == "DUPLICATE_EMAIL":
+            raise admin_error(code=code, message="A pending invitation already exists for this email", field="email") from exc
+        if code == "EMAIL_IN_OTHER_ORG":
+            raise admin_error(
+                code=code,
+                message="This email already belongs to a user in another organization.",
+                field="email",
+            ) from exc
+        raise admin_error(code="VALIDATION_ERROR", message=str(exc)) from exc
+    db.commit()
+    return AdminInvitationCreateResponse(
+        user_id=user.id,
+        organization_id=organization_id,
+        email=user.email,
+        role=Role.ORG_ADMIN,
+        invitation_id=invitation.id,
+        invitation_expires_at=expires_at,
+        invitation_setup_path=f"/accept-invite?token={raw_token}",
+        email_sent=email_sent,
+    )
+
+
+@router.get("/organizations/{organization_id}/employee-link", response_model=EmployeeLinkSummary)
+def get_employee_link_summary(
+    organization_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:read")),
+) -> EmployeeLinkSummary:
+    _visible_org(db, organization_id)
+    link = get_active_link_for_org(db, organization_id)
+    if link is None:
+        return EmployeeLinkSummary(
+            link_id=None,
+            status=None,
+            joined_count=0,
+            pending_approval_count=0,
+            max_joins=None,
+            expires_at=None,
+            allowed_domains=[],
+            require_admin_approval=False,
+        )
+    return EmployeeLinkSummary(
+        link_id=link.id,
+        status=link.status,
+        joined_count=link.joined_count,
+        pending_approval_count=link.pending_approval_count,
+        max_joins=link.max_joins,
+        expires_at=link.expires_at,
+        allowed_domains=list(link.allowed_domains or []),
+        require_admin_approval=link.require_admin_approval,
+    )
+
+
+@router.post(
+    "/organizations/{organization_id}/employee-link",
+    response_model=EmployeeLinkCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_employee_link(
+    organization_id: UUID,
+    payload: EmployeeLinkCreateRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:create_employee_link")),
+) -> EmployeeLinkCreateResponse:
+    _visible_org(db, organization_id)
+    require_approval = payload.require_admin_approval
+    if require_approval is None:
+        require_approval = not bool(payload.allowed_domains)
+    try:
+        link, raw = create_employee_join_link(
+            db,
+            admin_user_id=admin.id,
+            organization_id=organization_id,
+            allowed_domains=payload.allowed_domains,
+            require_admin_approval=require_approval,
+            max_joins=payload.max_joins,
+            expires_days=payload.expires_days,
+        )
+    except ValueError as exc:
+        if str(exc) == "DOMAINS_OR_APPROVAL_REQUIRED":
+            raise admin_error(
+                code="POLICY_REQUIRED",
+                message="Set allowed email domains or require admin approval for every joiner.",
+            ) from exc
+        raise admin_error(code="VALIDATION_ERROR", message=str(exc)) from exc
+    db.commit()
+    return EmployeeLinkCreateResponse(
+        link_id=link.id,
+        join_path=f"/join?token={raw}",
+        expires_at=link.expires_at,
+        require_admin_approval=link.require_admin_approval,
+        allowed_domains=list(link.allowed_domains or []),
+        max_joins=link.max_joins,
+        email_delivery_configured=email_delivery_configured(),
+    )
+
+
+@router.post("/organizations/{organization_id}/employee-link/{link_id}/rotate", response_model=EmployeeLinkCreateResponse)
+def rotate_link(
+    organization_id: UUID,
+    link_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:rotate")),
+) -> EmployeeLinkCreateResponse:
+    _visible_org(db, organization_id)
+    link = db.get(EmployeeJoinLink, link_id)
+    if link is None or link.organization_id != organization_id:
+        raise admin_error(code="NOT_FOUND", message="Link not found", status_code=404)
+    raw = rotate_employee_link(db, admin_user_id=admin.id, link=link)
+    db.commit()
+    return EmployeeLinkCreateResponse(
+        link_id=link.id,
+        join_path=f"/join?token={raw}",
+        expires_at=link.expires_at,
+        require_admin_approval=link.require_admin_approval,
+        allowed_domains=list(link.allowed_domains or []),
+        max_joins=link.max_joins,
+        email_delivery_configured=email_delivery_configured(),
+    )
+
+
+@router.post("/organizations/{organization_id}/employee-link/{link_id}/pause", status_code=204)
+def pause_link(
+    organization_id: UUID,
+    link_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:revoke")),
+) -> None:
+    _visible_org(db, organization_id)
+    link = db.get(EmployeeJoinLink, link_id)
+    if link is None or link.organization_id != organization_id:
+        raise admin_error(code="NOT_FOUND", message="Link not found", status_code=404)
+    set_link_status(db, admin_user_id=admin.id, link=link, status=LINK_PAUSED)
+    db.commit()
+
+
+@router.post("/organizations/{organization_id}/employee-link/{link_id}/resume", status_code=204)
+def resume_link(
+    organization_id: UUID,
+    link_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:create_employee_link")),
+) -> None:
+    _visible_org(db, organization_id)
+    link = db.get(EmployeeJoinLink, link_id)
+    if link is None or link.organization_id != organization_id:
+        raise admin_error(code="NOT_FOUND", message="Link not found", status_code=404)
+    set_link_status(db, admin_user_id=admin.id, link=link, status="active")
+    db.commit()
+
+
+@router.post("/organizations/{organization_id}/employee-link/{link_id}/disable", status_code=204)
+def disable_link(
+    organization_id: UUID,
+    link_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:revoke")),
+) -> None:
+    _visible_org(db, organization_id)
+    link = db.get(EmployeeJoinLink, link_id)
+    if link is None or link.organization_id != organization_id:
+        raise admin_error(code="NOT_FOUND", message="Link not found", status_code=404)
+    set_link_status(db, admin_user_id=admin.id, link=link, status=LINK_DISABLED)
+    db.commit()

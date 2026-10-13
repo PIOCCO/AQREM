@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.models.invitation import UserInvitation
+from app.models.employee_join import EmployeeJoinPending
 from app.models.organization import OrganizationMembership
 
 
@@ -40,6 +41,17 @@ def count_active_members(db: Session, organization_id: UUID) -> int:
         .filter(
             OrganizationMembership.organization_id == organization_id,
             OrganizationMembership.is_active.is_(True),
+        )
+        .count()
+    )
+
+
+def count_pending_employee_joins(db: Session, organization_id: UUID) -> int:
+    return (
+        db.query(EmployeeJoinPending)
+        .filter(
+            EmployeeJoinPending.organization_id == organization_id,
+            EmployeeJoinPending.status == "pending_approval",
         )
         .count()
     )
@@ -84,9 +96,10 @@ def get_seat_usage(db: Session, org) -> SeatUsage:
     limit = int(org.license_limit or 0)
     active = count_active_members(db, org.id)
     pending = count_pending_invitations(db, org.id)
+    pending_employees = count_pending_employee_joins(db, org.id)
     return SeatUsage(
         active_members=active,
         pending_invitations=pending,
-        seats_used=active + pending,
+        seats_used=active + pending + pending_employees,
         seats_limit=limit,
     )
