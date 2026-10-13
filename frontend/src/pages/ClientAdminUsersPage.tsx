@@ -1,6 +1,14 @@
 import { FormEvent, useEffect, useState } from "react";
+import { Combobox } from "../components/ui/dialog/Combobox";
+import { Field } from "../components/ui/dialog/Field";
 import { useAuth } from "../lib/authContext";
 import { fetchMembers, fetchOrgOverview, inviteMember } from "../lib/orgAdminApi";
+
+const ROLE_OPTIONS = [
+  { value: "ORG_ADMIN", label: "Organization admin" },
+  { value: "EDITOR", label: "Editor" },
+  { value: "VIEWER", label: "Viewer" },
+];
 
 export default function ClientAdminUsersPage() {
   const { session } = useAuth();
@@ -9,6 +17,7 @@ export default function ClientAdminUsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [role, setRole] = useState("EDITOR");
 
   function reload() {
     if (!session) return;
@@ -72,16 +81,10 @@ export default function ClientAdminUsersPage() {
           </label>
           <input id="inv-email" name="email" type="email" required className="admin-input w-full" />
         </div>
-        <div>
-          <label htmlFor="inv-role" className="block text-sm font-medium mb-1">
-            Role
-          </label>
-          <select id="inv-role" name="role" className="admin-input w-full" defaultValue="EDITOR">
-            <option value="ORG_ADMIN">Organization admin</option>
-            <option value="EDITOR">Editor</option>
-            <option value="VIEWER">Viewer</option>
-          </select>
-        </div>
+        <Field id="inv-role" label="Role">
+          <input type="hidden" name="role" value={role} />
+          <Combobox id="inv-role-ui" value={role} onChange={setRole} options={ROLE_OPTIONS} />
+        </Field>
         {error ? (
           <div className="admin-inline-alert border rounded px-3 py-2 text-sm" role="alert">
             {error}

@@ -1,7 +1,8 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { StatusBadge } from "../ui/Badges";
-import { EmptyState, ErrorState, LoadingState, Modal } from "../ui/States";
+import { EmptyState, ErrorState, LoadingState } from "../ui/States";
+import { Dialog, DialogFooterActions } from "../ui/dialog/Dialog";
 import { useToast } from "../ui/Toast";
 import {
   fetchSources,
@@ -205,19 +206,27 @@ export default function ProjectSourcesSection({
       </div>
 
       {showCreate && editable && (
-        <Modal title="Add source to project" onClose={() => setShowCreate(false)} wide>
-          <form onSubmit={onAddSource} className="space-y-3">
+        <Dialog
+          open
+          title="Add source to project"
+          subtitle="Connect repository, folder, or upload sources for this project."
+          onClose={() => setShowCreate(false)}
+          size="wide"
+          data-testid="add-source-dialog"
+          footer={
+            <DialogFooterActions
+              cancelLabel="Cancel"
+              confirmLabel="Add source"
+              onCancel={() => setShowCreate(false)}
+              confirmType="submit"
+              formId="add-source-form"
+            />
+          }
+        >
+          <form id="add-source-form" onSubmit={onAddSource} className="space-y-3">
             <SourceCreateFields />
-            <div className="flex gap-2 justify-end pt-2">
-              <button type="button" className="aq-btn-ghost" onClick={() => setShowCreate(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="aq-btn-primary">
-                Add source
-              </button>
-            </div>
           </form>
-        </Modal>
+        </Dialog>
       )}
     </section>
   );

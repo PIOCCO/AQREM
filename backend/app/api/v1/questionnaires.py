@@ -31,6 +31,7 @@ from app.services.answering.service import AnsweringService
 from app.services.questionnaire.export import build_export_rows, render_csv_bytes, render_xlsx_bytes
 from app.services.questionnaire.extract import extract_questionnaire_bytes
 from app.services.questionnaire.normalize import normalize_question
+from app.services.org_admin.malware_scan import scan_upload_content
 from app.services.storage.factory import get_blob_storage
 
 router = APIRouter()
@@ -309,6 +310,10 @@ async def upload_questionnaire(
     data = await file.read()
     if len(data) > settings.max_upload_bytes:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File too large")
+
+    scan_status, scan_reason = scan_upload_content(data)
+    if scan_status == "infected":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=scan_reason or "File rejected by scan.")
 
     try:
         extracted = extract_questionnaire_bytes(filename, data)

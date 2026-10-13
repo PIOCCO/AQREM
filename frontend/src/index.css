@@ -339,13 +339,192 @@
     @apply aq-alert border-info-border bg-info-bg text-info-text;
   }
 
-  .aq-modal-backdrop {
-    @apply fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-[1px];
-    background: color-mix(in srgb, var(--color-background) 40%, transparent);
+  .aq-modal-backdrop,
+  .aq-dialog-backdrop {
+    @apply fixed inset-0 z-50 flex items-center justify-center p-6;
+    background: rgba(0, 0, 0, 0.6);
+  }
+
+  @media (max-width: 639px) {
+    .aq-dialog-backdrop {
+      @apply items-end p-0;
+    }
   }
 
   .aq-modal {
     @apply aq-card w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-card p-6;
+  }
+
+  .aq-dialog {
+    @apply flex flex-col w-full max-h-[90dvh] overflow-hidden;
+    width: min(560px, 92vw);
+    border-radius: 16px;
+    padding: 24px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: 0 24px 48px color-mix(in srgb, #000 35%, transparent);
+  }
+
+  @media (max-width: 639px) {
+    .aq-dialog {
+      width: 100%;
+      max-height: 100dvh;
+      height: 100dvh;
+      border-radius: 16px 16px 0 0;
+    }
+  }
+
+  .aq-dialog-wide {
+    width: min(640px, 92vw);
+  }
+
+  .aq-dialog-header {
+    @apply flex items-start gap-3 shrink-0 pb-4 border-b border-[var(--color-border)];
+  }
+
+  .aq-dialog-title {
+    @apply text-lg font-semibold leading-snug;
+    color: var(--color-text-primary);
+  }
+
+  .aq-dialog-subtitle {
+    @apply text-sm mt-1 leading-relaxed;
+    color: var(--color-text-muted);
+  }
+
+  .aq-dialog-close {
+    @apply shrink-0 flex items-center justify-center rounded-md;
+    width: 32px;
+    height: 32px;
+    color: var(--color-text-muted);
+    transition: background-color 140ms ease, color 140ms ease;
+  }
+
+  .aq-dialog-close:hover {
+    background: var(--color-surface-raised);
+    color: var(--color-text-primary);
+  }
+
+  .aq-dialog-body {
+    @apply flex-1 overflow-y-auto py-4 min-h-0;
+  }
+
+  .aq-dialog-footer {
+    @apply shrink-0 flex justify-end gap-2 pt-4 border-t border-[var(--color-border)];
+  }
+
+  .aq-field-label-visible {
+    @apply text-sm font-medium;
+    color: var(--color-text-primary);
+  }
+
+  .aq-field-helper {
+    @apply text-xs mt-1.5;
+    color: var(--color-text-muted);
+  }
+
+  .aq-field-error {
+    @apply text-xs mt-1.5;
+    color: var(--color-danger);
+  }
+
+  .aq-field-warning {
+    @apply text-xs rounded-md px-3 py-2 border;
+    color: var(--color-warning);
+    border-color: var(--color-warning-border);
+    background: var(--color-warning-bg);
+  }
+
+  .aq-input-error,
+  .aq-combobox-trigger.aq-input-error,
+  .aq-dropzone-error {
+    border-color: var(--color-danger) !important;
+  }
+
+  .aq-textarea-autogrow {
+    resize: none;
+    min-height: calc(3 * 1.5rem);
+    max-height: calc(6 * 1.5rem);
+    overflow-y: auto;
+  }
+
+  .aq-combobox-trigger {
+    @apply aq-input flex items-center justify-between gap-2 w-full text-left;
+  }
+
+  .aq-combobox-chevron {
+    @apply inline-block w-2 h-2 border-r-2 border-b-2 rotate-45 shrink-0;
+    border-color: var(--color-text-muted);
+    margin-top: -2px;
+  }
+
+  .aq-combobox-popover {
+    @apply fixed z-[60] rounded-lg border shadow-card py-1;
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    animation: aq-popover-in 140ms ease-out;
+  }
+
+  @keyframes aq-popover-in {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .aq-combobox-popover {
+      animation: none;
+    }
+  }
+
+  .aq-combobox-option {
+    @apply w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left;
+    color: var(--color-text-primary);
+  }
+
+  .aq-combobox-option:hover,
+  .aq-combobox-option-active {
+    background: var(--color-surface-raised);
+  }
+
+  .aq-dropzone {
+    @apply rounded-lg border-2 border-dashed p-6 text-center cursor-pointer transition-colors;
+    border-color: var(--color-border);
+    background: var(--color-surface-raised);
+  }
+
+  .aq-dropzone-active {
+    border-color: var(--color-accent);
+    background: var(--color-accent-bg);
+  }
+
+  .aq-file-chip {
+    @apply flex items-center gap-3 rounded-lg border px-3 py-2;
+    border-color: var(--color-border);
+    background: var(--color-surface-raised);
+  }
+
+  .aq-dialog-banner-error {
+    @apply rounded-lg border px-3 py-2 text-sm flex items-start justify-between gap-3;
+    border-color: var(--color-danger-border);
+    background: var(--color-danger-bg);
+    color: var(--color-danger);
+  }
+
+  .aq-dialog-preview {
+    @apply rounded-lg border p-3 space-y-2;
+    border-color: var(--color-border);
+    background: var(--color-surface-raised);
+  }
+
+  .sr-only {
+    @apply absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0;
+    clip: rect(0, 0, 0, 0);
   }
 
   .aq-code-block {

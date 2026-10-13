@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Dialog } from "./dialog/Dialog";
 
 export function LoadingState({ label = "Loading…" }: { label?: string }) {
   return (
@@ -60,7 +61,6 @@ export function PageHeader({
   title: string;
   subtitle?: string;
   actions?: ReactNode;
-  /** When true, omit the H1 (title shown in app shell top bar). */
   hideTitle?: boolean;
 }) {
   return (
@@ -86,30 +86,25 @@ export function PageLead({ subtitle, actions }: { subtitle?: string; actions?: R
   );
 }
 
+/** @deprecated Prefer Dialog from ./dialog/Dialog */
 export function Modal({
   title,
   children,
   onClose,
   wide,
+  subtitle,
+  footer,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  subtitle?: string;
+  footer?: ReactNode;
 }) {
   return (
-    <div className="aq-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="aq-modal-title">
-      <div className={`aq-modal ${wide ? "max-w-xl" : ""}`}>
-        <div className="flex items-start justify-between gap-4 mb-2">
-          <h2 id="aq-modal-title" className="aq-modal-title mb-0">
-            {title}
-          </h2>
-          <button type="button" onClick={onClose} className="aq-btn-ghost px-2 py-1 text-fg-muted" aria-label="Close">
-            ✕
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
+    <Dialog open title={title} subtitle={subtitle} onClose={onClose} size={wide ? "wide" : "default"} footer={footer}>
+      {children}
+    </Dialog>
   );
 }

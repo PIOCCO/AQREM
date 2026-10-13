@@ -1,10 +1,10 @@
-import { FormEvent, useEffect, useState } from "react";
-import { previewQuestionnaireFile } from "../lib/questionnairePreview";
-import { Link, useNavigate } from "react-router-dom";
-import { useToast } from "../components/ui/Toast";
+import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import NewQuestionnaireDialog from "../components/questionnaires/NewQuestionnaireDialog";
+import { CreateProjectDialog } from "../components/projects/CreateProjectDialog";
 import { StatusBadge } from "../components/ui/Badges";
-import { PageHeader, EmptyState, LoadingState, ErrorState, Modal } from "../components/ui/States";
-import { createQuestionnaire, fetchQuestionnaires, uploadQuestionnaireFile } from "../lib/api";
+import { PageHeader, EmptyState, LoadingState, ErrorState } from "../components/ui/States";
+import { fetchQuestionnaires } from "../lib/api";
 import { useAuth } from "../lib/authContext";
 import { useProjectContext } from "../lib/projectContext";
 import { canEditContent } from "../lib/roles";
@@ -20,14 +20,14 @@ type Questionnaire = {
 
 export default function QuestionnairesPage() {
   const { session, user } = useAuth();
-  const { projectId, projects } = useProjectContext();
-  const toast = useToast();
-  const navigate = useNavigate();
+  const { projectId, projects, reloadProjects } = useProjectContext();
   const [rows, setRows] = useState<Questionnaire[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
+  const createBtnRef = useRef<HTMLButtonElement>(null);
   const editable = user?.role ? canEditContent(user.role) : false;
 
   async function load() {
@@ -48,30 +48,12 @@ export default function QuestionnairesPage() {
     load();
   }, [session?.organizationId, projectId]);
 
-  async function onCreate(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!session || !editable) return;
-    const form = new FormData(e.currentTarget);
-    try {
-      const qn = await createQuestionnaire(session, {
-        name: String(form.get("name")),
-        project_id: (form.get("project_id") as string) || projectId || undefined,
-        recipient: String(form.get("recipient") || "") || undefined,
-        description: String(form.get("description") || "") || undefined,
-      });
-      const file = (form.get("file") as File)?.size ? (form.get("file") as File) : null;
-      if (file) {
-        const result = await uploadQuestionnaireFile(session, qn.id, file);
-        toast.push(`Questionnaire created with ${result.questions_extracted} questions.`);
-      } else {
-        toast.push("Questionnaire created. Upload questions from the detail page.");
-      }
-      setShowCreate(false);
-      navigate(`/questionnaires/${qn.id}`);
-    } catch (err) {
-      toast.push(err instanceof Error ? err.message : "Failed to create questionnaire", "err");
+  useEffect(() => {
+    if (pendingProjectId && projects.some((p) => p.id === pendingProjectId)) {
+      setShowCreate(true);
+      setPendingProjectId(null);
     }
-  }
+  }, [pendingProjectId, projects]);
 
   return (
     <div>
@@ -80,7 +62,13 @@ export default function QuestionnairesPage() {
         subtitle="Upload customer or vendor questionnaires, generate evidence-backed answers, and export results."
         actions={
           editable ? (
-            <button type="button" onClick={() => setShowCreate(true)} className="aq-btn-primary">
+            <button
+              ref={createBtnRef}
+              type="button"
+              onClick={() => setShowCreate(true)}
+              className="aq-btn-primary"
+              data-testid="new-questionnaire-trigger"
+            >
               New questionnaire
             </button>
           ) : undefined
@@ -132,50 +120,43 @@ export default function QuestionnairesPage() {
         </div>
       )}
 
-      {showCreate && editable && (
-        <Modal title="New questionnaire" onClose={() => setShowCreate(false)} wide>
-          <form onSubmit={onCreate} className="space-y-3">
-            <input name="name" required placeholder="Questionnaire name" className="aq-input" />
-            <select name="project_id" className="aq-select" defaultValue={projectId ?? ""}>
-              <option value="">Select project</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <input name="recipient" placeholder="Recipient (optional)" className="aq-input" />
-            <textarea name="description" placeholder="Description (optional)" className="aq-textarea min-h-16" />
-            <label className="block text-sm text-fg-muted">
-              Upload questions (CSV/XLSX)
-              <input
-                name="file"
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                className="mt-1 block w-full text-sm"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) {
-                    setFilePreview(null);
-                    return;
-                  }
-                  const p = await previewQuestionnaireFile(file);
-                  setFilePreview(p.note);
-                }}
-              />
-            </label>
-            {filePreview && <p className="text-xs text-fg-muted aq-alert-info">{filePreview}</p>}
-            <div className="flex gap-2 justify-end pt-2">
-              <button type="button" className="aq-btn-ghost" onClick={() => setShowCreate(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="aq-btn-primary">
-                Create
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
+      {showCreate && editable && session ? (
+        <NewQuestionnaireDialog
+          open={showCreate}
+          onClose={() => setShowCreate(false)}
+          session={session}
+          projects={projects}
+          defaultProjectId={projectId}
+          returnFocusRef={createBtnRef}
+          onRequestCreateProject={() => {
+            setShowCreate(false);
+            setShowCreateProject(true);
+          }}
+        />
+      ) : null}
+
+      {showCreateProject && session ? (
+        <CreateProjectDialog
+          open={showCreateProject}
+          session={session}
+          onClose={() => {
+            setShowCreateProject(false);
+            setShowCreate(true);
+          }}
+          onCreated={async (project) => {
+            await reloadProjects();
+            setPendingProjectId(project.id);
+            setShowCreateProject(false);
+          }}
+          returnFocusRef={createBtnRef}
+        />
+      ) : null}
+
+      <p className="text-xs text-fg-muted mt-4">
+        <Link to="/projects" className="aq-link text-xs">
+          Manage projects
+        </Link>
+      </p>
     </div>
   );
 }

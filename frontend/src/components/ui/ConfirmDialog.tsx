@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { Dialog } from "./dialog/Dialog";
 
 type Props = {
   open: boolean;
@@ -26,30 +27,17 @@ export function ConfirmDialog({
   useEffect(() => {
     if (!open) return;
     cancelRef.current?.focus();
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onCancel();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onCancel]);
-
-  if (!open) return null;
+  }, [open]);
 
   return (
-    <div className="aq-modal-backdrop" role="presentation" onMouseDown={onCancel}>
-      <div
-        className="aq-modal"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="confirm-dialog-title"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <h2 id="confirm-dialog-title" className="aq-modal-title">
-          {title}
-        </h2>
-        <div className="text-sm text-[var(--color-text-secondary)] mb-6">{description}</div>
-        <div className="flex justify-end gap-2">
-          <button ref={cancelRef} type="button" className="aq-btn-secondary" onClick={onCancel}>
+    <Dialog
+      open={open}
+      onClose={onCancel}
+      title={title}
+      data-testid="confirm-dialog"
+      footer={
+        <>
+          <button ref={cancelRef} type="button" className="aq-btn-ghost" onClick={onCancel}>
             {cancelLabel}
           </button>
           <button
@@ -62,8 +50,10 @@ export function ConfirmDialog({
           >
             {confirmLabel}
           </button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <div className="text-sm text-[var(--color-text-secondary)]">{description}</div>
+    </Dialog>
   );
 }

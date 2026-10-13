@@ -584,6 +584,45 @@ export async function uploadQuestionnaireFile(
   return res.json();
 }
 
+export function uploadQuestionnaireFileWithProgress(
+  session: AuthSession,
+  questionnaireId: string,
+  file: File,
+  onProgress: (pct: number) => void,
+): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    form.append("file", file);
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE}/api/v1/questionnaires/${questionnaireId}/upload`);
+    const headers = authOnlyHeaders(session) as Record<string, string>;
+    Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+    xhr.upload.onprogress = (ev) => {
+      if (ev.lengthComputable) onProgress(Math.round((ev.loaded / ev.total) * 100));
+      else onProgress(50);
+    };
+    xhr.onload = () => {
+      if (xhr.status === 401) {
+        handleUnauthorized();
+        reject(new Error("Session expired"));
+        return;
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress(100);
+        try {
+          resolve(JSON.parse(xhr.responseText));
+        } catch {
+          resolve({});
+        }
+        return;
+      }
+      reject(new Error(xhr.responseText || "Failed to upload questionnaire"));
+    };
+    xhr.onerror = () => reject(new Error("Failed to upload questionnaire"));
+    xhr.send(form);
+  });
+}
+
 export async function regenerateQuestionAnswer(session: AuthSession, questionId: string) {
   const res = await authedFetch(
     session,
