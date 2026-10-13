@@ -1,7 +1,12 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-const devPort = Number(process.env.AQREM_WEB_PORT || process.env.VITE_DEV_PORT || 5173);
+/** Dev HMR (local default 5173). */
+const devPort = Number(process.env.VITE_DEV_PORT || 5173);
+/** Preview + Tailscale lab URL (default 4173; matches scripts/start-web-one-port.sh). */
+const previewPort = Number(
+  process.env.VITE_PREVIEW_PORT || process.env.AQREM_WEB_PORT || 4173,
+);
 
 export default defineConfig({
   plugins: [react()],
@@ -19,7 +24,7 @@ export default defineConfig({
   },
   preview: {
     host: true,
-    port: devPort,
+    port: previewPort,
     strictPort: true,
     proxy: {
       "/api": {
