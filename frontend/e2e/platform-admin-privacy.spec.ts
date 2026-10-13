@@ -11,7 +11,7 @@ test("platform console shows org metadata only, not tenant documents", async ({ 
   await page.getByRole("button", { name: /^Sign in$/i }).click();
   await expect(page).toHaveURL(/master-admin/, { timeout: 20_000 });
 
-  await expect(page.getByRole("heading", { name: /Organizations/i })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: /Platform administration/i })).toBeVisible({ timeout: 15_000 });
   await expect(page.locator("body")).not.toContainText("Evidence preview");
   await expect(page.locator("body")).not.toContainText("Questionnaire");
   await page.screenshot({ path: "test-results/platform-admin-console.png", fullPage: true });
