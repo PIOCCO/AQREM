@@ -12,7 +12,7 @@ from app.db.session import get_db
 from app.models.organization import Organization, OrganizationMembership, User
 from app.services.licensing import org_allows_sign_in
 from app.core.platform_access import get_platform_user
-from app.core.uuid_parse import parse_required_uuid
+from app.core.uuid_parse import parse_optional_uuid, parse_required_uuid
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -79,16 +79,22 @@ def get_tenant_context(
             detail="You must change your password before using the application",
         )
 
-    org_id_str = x_organization_id or payload.get("organization_id")
-    if not org_id_str:
+    token_org_raw = payload.get("organization_id")
+    header_org = parse_optional_uuid(x_organization_id) if x_organization_id else None
+    token_org = parse_optional_uuid(str(token_org_raw)) if token_org_raw else None
+
+    if token_org is not None and header_org is not None and token_org != header_org:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Organization context mismatch",
+        )
+
+    organization_id = token_org or header_org
+    if organization_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="X-Organization-Id header or token organization_id required",
         )
-    organization_id = parse_required_uuid(
-        str(org_id_str),
-        detail="X-Organization-Id must be a valid UUID",
-    )
 
     org = db.get(Organization, organization_id)
     if org is None or not org.is_active:

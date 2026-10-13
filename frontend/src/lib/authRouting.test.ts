@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isPlatformSessionToken, resolvePostAuthPath } from "./authRouting";
+import { isPlatformSessionToken, resolvePostAuthPath, SUPER_ADMIN_BASE } from "./authRouting";
 
 function fakeJwt(payload: Record<string, unknown>): string {
   const header = btoa(JSON.stringify({ alg: "none" }));
@@ -22,6 +22,6 @@ describe("resolvePostAuthPath", () => {
   it("sends platform token without org to master admin", () => {
     const token = fakeJwt({ aud: "aqrem-master" });
     expect(isPlatformSessionToken(token)).toBe(true);
-    expect(resolvePostAuthPath({ access_token: token, role: null })).toBe("/master-admin");
+    expect(resolvePostAuthPath({ access_token: token, role: null })).toBe(SUPER_ADMIN_BASE);
   });
 });

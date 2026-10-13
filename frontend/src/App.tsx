@@ -18,8 +18,9 @@ import EvidencePage from "./pages/EvidencePage";
 import AcceptInvitePage from "./pages/AcceptInvitePage";
 import JoinOrgPage from "./pages/JoinOrgPage";
 import PlatformAdminPage from "./pages/PlatformAdminPage";
-import RequirePlatformAdmin from "./components/RequirePlatformAdmin";
-import RequireOrgAdmin from "./components/RequireOrgAdmin";
+import RequireSuperAdmin from "./components/RequireSuperAdmin";
+import RequireOrgAdminOnly from "./components/RequireOrgAdminOnly";
+import RequireTenantWorkspace from "./components/RequireTenantWorkspace";
 import ClientAdminShell from "./components/client-admin/ClientAdminShell";
 import ClientAdminSetupPage from "./pages/ClientAdminSetupPage";
 import ClientAdminDataStoragePage from "./pages/ClientAdminDataStoragePage";
@@ -154,27 +155,28 @@ export default function App() {
           </PublicTheme>
         }
       />
-      <Route path="/platform-admin" element={<Navigate to="/master-admin" replace />} />
+      <Route path="/platform-admin" element={<Navigate to="/super-admin" replace />} />
+      <Route path="/master-admin" element={<Navigate to="/super-admin" replace />} />
       <Route
-        path="/master-admin"
+        path="/super-admin"
         element={
           <PublicTheme>
-            <RequirePlatformAdmin>
+            <RequireSuperAdmin>
               <RouteErrorBoundary>
                 <PlatformAdminPage />
               </RouteErrorBoundary>
-            </RequirePlatformAdmin>
+            </RequireSuperAdmin>
           </PublicTheme>
         }
       />
       <Route
         path="/admin"
         element={
-          <RequireAuth>
-            <RequireOrgAdmin>
+          <RequireTenantWorkspace>
+            <RequireOrgAdminOnly>
               <ClientAdminShell />
-            </RequireOrgAdmin>
-          </RequireAuth>
+            </RequireOrgAdminOnly>
+          </RequireTenantWorkspace>
         }
       >
         <Route index element={<ClientAdminSetupPage />} />
@@ -190,9 +192,9 @@ export default function App() {
       <Route
         path="/*"
         element={
-          <RequireAuth>
+          <RequireTenantWorkspace>
             <AuthenticatedApp />
-          </RequireAuth>
+          </RequireTenantWorkspace>
         }
       />
     </Routes>

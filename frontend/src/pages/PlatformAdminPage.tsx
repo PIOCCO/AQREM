@@ -205,7 +205,7 @@ function PlatformAdminInner() {
   if (!session?.token) {
     return (
       <div className="p-8">
-        <Link to="/login?next=%2Fplatform-admin">Sign in</Link>
+        <Link to="/login?next=%2Fsuper-admin">Sign in</Link>
       </div>
     );
   }
@@ -274,9 +274,9 @@ function PlatformAdminInner() {
       <header className="border-b border-chat-border bg-chat-surface px-6 py-4 flex flex-wrap items-start justify-between gap-4">
         <div>
           <LogoHomeLink variant="full" className="mb-2" />
-          <h1 className="text-xl font-semibold tracking-tight">Platform administration</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Super Admin</h1>
           <p className="text-sm text-chat-muted mt-1">
-            Provision client organizations, licenses, and user invitations.
+            Platform operations only — organizations, licenses, and invitations. No customer workspace data.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

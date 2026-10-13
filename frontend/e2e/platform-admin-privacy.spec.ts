@@ -9,7 +9,7 @@ test("platform console shows org metadata only, not tenant documents", async ({ 
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole("button", { name: /^Sign in$/i }).click();
-  await expect(page).toHaveURL(/master-admin/, { timeout: 20_000 });
+  await expect(page).toHaveURL(/super-admin/, { timeout: 20_000 });
 
   await expect(page.getByRole("heading", { name: /Platform administration/i })).toBeVisible({ timeout: 15_000 });
   await expect(page.locator("body")).not.toContainText("Evidence preview");

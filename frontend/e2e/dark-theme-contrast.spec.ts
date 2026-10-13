@@ -59,7 +59,7 @@ test.describe("dark theme — platform admin", () => {
     });
   });
 
-  test("master-admin has dark canvas and passes axe", async ({ page }) => {
+  test("super-admin has dark canvas and passes axe", async ({ page }) => {
     const password = process.env.QA_PLATFORM_PASSWORD ?? process.env.E2E_PLATFORM_PASSWORD;
     test.skip(!password, "Set QA_PLATFORM_PASSWORD for platform dark-theme check");
     const email = process.env.QA_PLATFORM_EMAIL ?? process.env.E2E_PLATFORM_EMAIL ?? "qa-platform@audit.example";
@@ -68,7 +68,7 @@ test.describe("dark theme — platform admin", () => {
     await page.getByLabel(/email/i).fill(email);
     await page.getByLabel(/password/i).fill(password!);
     await page.getByRole("button", { name: /sign in/i }).click();
-    await expect(page).toHaveURL(/master-admin/, { timeout: 30_000 });
+    await expect(page).toHaveURL(/super-admin/, { timeout: 30_000 });
 
     const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     const rgb = parseRgb(bg);

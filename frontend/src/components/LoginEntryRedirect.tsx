@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { fetchAuthMe, loadSession, saveSession } from "../lib/api";
-import { isPlatformSessionToken, resolveOrganizationIdForSession, resolvePostAuthPath } from "../lib/authRouting";
+import {
+  isPlatformSessionToken,
+  resolveOrganizationIdForSession,
+  resolvePostAuthPath,
+  SUPER_ADMIN_BASE,
+} from "../lib/authRouting";
 import { LoadingState } from "./ui/States";
 import LoginPage from "../pages/LoginPage";
 
@@ -19,7 +24,7 @@ export default function LoginEntryRedirect() {
           saveSession(session.token, orgId);
         }
         if (isPlatformSessionToken(session.token) && !orgId) {
-          setTarget("/master-admin");
+          setTarget(SUPER_ADMIN_BASE);
         } else if (orgId || me.role === "ORG_ADMIN") {
           setTarget(
             resolvePostAuthPath({

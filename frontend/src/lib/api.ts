@@ -47,6 +47,17 @@ export function handleUnauthorized(): void {
   }
 }
 
+/** Platform console session validation — never sends tenant org header. */
+export async function fetchAuthMePlatform(session: AuthSession) {
+  const res = await fetch(`${API_BASE}/api/v1/auth/me`, { headers: authOnlyHeaders(session) });
+  if (res.status === 401) {
+    handleUnauthorized();
+    throw new Error("Session expired");
+  }
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to validate session"));
+  return res.json();
+}
+
 export async function fetchAuthMe(session: AuthSession) {
   const res = await fetch(`${API_BASE}/api/v1/auth/me`, { headers: authHeaders(session) });
   if (res.status === 401) {

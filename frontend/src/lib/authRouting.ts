@@ -20,6 +20,14 @@ export function isPlatformSessionToken(token: string): boolean {
   return tokenAudience(token) === "aqrem-master";
 }
 
+export function isTenantSessionToken(token: string): boolean {
+  const aud = tokenAudience(token);
+  return aud === "aqrem-org-admin" || aud === "aqrem-employee";
+}
+
+/** Canonical platform console path (L1). */
+export const SUPER_ADMIN_BASE = "/super-admin";
+
 export function organizationIdFromToken(token: string): string | null {
   const raw = parseJwtPayload(token)?.organization_id;
   return normalizeOrganizationId(typeof raw === "string" ? raw : null);
@@ -47,8 +55,10 @@ export function resolvePostAuthPath(payload: PostAuthPayload, nextPath = "/"): s
   const orgId = resolveOrganizationIdForSession(payload.access_token, payload.organization_id ?? null);
   const platformToken = isPlatformSessionToken(payload.access_token);
 
-  if (platformToken && !orgId) return "/master-admin";
+  if (platformToken && !orgId) return SUPER_ADMIN_BASE;
   if (payload.role === "ORG_ADMIN") return "/admin";
-  if (platformToken && nextPath.includes("master-admin")) return "/master-admin";
+  if (platformToken && (nextPath.includes("super-admin") || nextPath.includes("master-admin"))) {
+    return SUPER_ADMIN_BASE;
+  }
   return nextPath.startsWith("/") ? nextPath : "/";
 }

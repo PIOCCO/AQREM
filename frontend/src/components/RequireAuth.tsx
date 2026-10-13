@@ -3,7 +3,12 @@ import { Navigate } from "react-router-dom";
 import { AuthProvider } from "../lib/authContext";
 import { LoadingState } from "./ui/States";
 import { clearSession, fetchAuthMe, loadSession, saveSession } from "../lib/api";
-import { isPlatformSessionToken, organizationIdFromToken, resolveOrganizationIdForSession } from "../lib/authRouting";
+import {
+  isPlatformSessionToken,
+  isTenantSessionToken,
+  resolveOrganizationIdForSession,
+  SUPER_ADMIN_BASE,
+} from "../lib/authRouting";
 
 export default function RequireAuth({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -26,14 +31,13 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
           saveSession(session.token, orgId);
         }
 
-        const platformToken = isPlatformSessionToken(session.token);
-        if (platformToken && !orgId) {
-          setRedirectTo("/master-admin");
+        if (isPlatformSessionToken(session.token)) {
+          setRedirectTo(SUPER_ADMIN_BASE);
           setValid(false);
           setReady(true);
           return;
         }
-        if (!platformToken && !orgId && !organizationIdFromToken(session.token)) {
+        if (!isTenantSessionToken(session.token) || !orgId) {
           setValid(false);
           setReady(true);
           return;
