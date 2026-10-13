@@ -101,14 +101,16 @@ function SidebarUserFooter({
 }
 
 function ConversationMenu({
+  conversationId,
   title,
   onRename,
   onDelete,
   onShare,
 }: {
+  conversationId: string;
   title: string;
   onRename: (title: string) => void;
-  onDelete: () => void;
+  onDelete: (conversationId: string) => void;
   onShare: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -173,7 +175,7 @@ function ConversationMenu({
         description={<>This removes “{title}” from your device. This cannot be undone.</>}
         confirmLabel="Delete"
         destructive
-        onConfirm={onDelete}
+        onConfirm={() => onDelete(conversationId)}
         onCancel={() => setConfirmDelete(false)}
       />
       {editing ? (
@@ -327,16 +329,18 @@ export default function ChatSidebar({
                               <span className="truncate">{c.title}</span>
                             </NavLink>
                             <ConversationMenu
+                              conversationId={c.id}
                               title={c.title}
                               onRename={(t) => rename(c.id, t)}
                               onShare={() => {
                                 const url = `${window.location.origin}/c/${c.id}`;
                                 void navigator.clipboard.writeText(url).then(() => toast.push("Conversation link copied"));
                               }}
-                              onDelete={() => {
-                                remove(c.id);
+                              onDelete={(id) => {
+                                const wasActive = activeConversationId === id;
+                                remove(id);
                                 toast.push("Conversation deleted");
-                                if (activeConversationId === c.id) navigate("/");
+                                if (wasActive) navigate("/", { replace: true });
                               }}
                             />
                           </li>

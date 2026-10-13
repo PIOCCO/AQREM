@@ -14,9 +14,7 @@ import { generateAssistantReply } from "../lib/chatAssistant";
 import { classifyChatIntent } from "../lib/chatIntent";
 import { conversationTitleAfterUserMessage } from "../lib/chatTitle";
 import {
-  createConversation,
   getConversation,
-  saveConversation,
   type ChatConversation,
   type ChatMessage,
 } from "../lib/conversations";
@@ -51,7 +49,7 @@ export default function ChatPage() {
   const navigate = useNavigate();
   const { session, user } = useAuth();
   const { projectId, projectName, projects, setProjectId } = useProjectContext();
-  const { upsert } = useConversations();
+  const { upsert, createNew } = useConversations();
 
   const [conversation, setConversation] = useState<ChatConversation | null>(null);
   const [input, setInput] = useState("");
@@ -79,21 +77,26 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!conversationId) {
-      const conv = createConversation(projectId);
-      navigate(`/c/${conv.id}`, { replace: true });
+      setConversation(null);
       return;
     }
-    let conv = getConversation(conversationId);
+    const conv = getConversation(conversationId);
     if (!conv) {
-      conv = createConversation(projectId);
-      navigate(`/c/${conv.id}`, { replace: true });
+      setConversation(null);
+      navigate("/", { replace: true });
       return;
     }
     setConversation(conv);
     if (conv.projectId && conv.projectId !== projectId) {
       setProjectId(conv.projectId);
     }
-  }, [conversationId, navigate, setProjectId]);
+  }, [conversationId, navigate, projectId, setProjectId]);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, [conversationId]);
 
   useEffect(() => {
     function onFill(e: Event) {
@@ -138,7 +141,9 @@ export default function ChatPage() {
   const persist = useCallback(
     (next: ChatConversation) => {
       const saved = upsert(next);
-      setConversation(saved);
+      if (getConversation(next.id)) {
+        setConversation(saved);
+      }
       return saved;
     },
     [upsert],
@@ -270,7 +275,13 @@ export default function ChatPage() {
   }
 
   async function onSend() {
-    if (!session || !conversation) return;
+    if (!session) return;
+    let conv = conversation ?? (conversationId ? getConversation(conversationId) : null);
+    if (!conv) {
+      conv = createNew(projectId);
+      setConversation(conv);
+      if (!conversationId) navigate(`/c/${conv.id}`, { replace: true });
+    }
     const text = input.trim();
     const hasPendingFiles = attachments.some((a) => a.status === "pending");
     if (!text && !hasPendingFiles) return;
@@ -295,7 +306,6 @@ export default function ChatPage() {
       },
     };
 
-    let conv = conversation;
     conv = {
       ...conv,
       title: text ? conversationTitleAfterUserMessage(conv.title, text) : conv.title,
@@ -343,10 +353,43 @@ export default function ChatPage() {
     void streamReply(q, conv);
   }
 
-  if (!session || !conversation) return null;
+  if (!session) return null;
 
-  const empty = conversation.messages.length === 0 && !streamingText && !retrievalStatus;
   const name = greetingName(user?.fullName, user?.email);
+  const atHome = !conversationId || !conversation;
+
+  if (atHome) {
+    return (
+      <div className="grid h-full min-h-0 grid-rows-[auto_1fr_auto] bg-chat-main">
+        <ChatConversationHeader
+          conversationTitle="New chat"
+          onOpenSidebar={outlet?.openMobileSidebar}
+          onExpandSidebar={outlet?.sidebarCollapsed ? outlet.expandSidebar : undefined}
+        />
+        <ChatEmptyState name={name} projectName={projectName} onPickPrompt={setInput} />
+        <div className="w-full shrink-0 ref-composer-dock">
+          <ChatComposer
+            ref={composerRef}
+            value={input}
+            onChange={setInput}
+            onSend={onSend}
+            onStop={onStop}
+            streaming={loading && streamingText != null}
+            loading={loading}
+            disabled={loading}
+            attachments={attachments}
+            onPickFiles={onPickFiles}
+            onRemoveAttachment={onRemoveAttachment}
+            uploadDisabledReason={uploadDisabledReason}
+            scopePicker={scopePicker}
+            centered
+          />
+        </div>
+      </div>
+    );
+  }
+
+  const empty = conversation!.messages.length === 0 && !streamingText && !retrievalStatus;
 
   async function onRegenerate(userQuery: string) {
     if (!conversation || loading) return;
@@ -357,7 +400,7 @@ export default function ChatPage() {
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_1fr_auto] bg-chat-main">
       <ChatConversationHeader
-        conversationTitle={conversation.title}
+        conversationTitle={conversation!.title}
         onOpenSidebar={outlet?.openMobileSidebar}
         onExpandSidebar={outlet?.sidebarCollapsed ? outlet.expandSidebar : undefined}
       />
@@ -387,7 +430,7 @@ export default function ChatPage() {
       ) : (
         <>
           <MessageList
-            messages={conversation.messages}
+            messages={conversation!.messages}
             streamingText={streamingText}
             retrievalStatus={retrievalStatus}
             onRegenerate={onRegenerate}

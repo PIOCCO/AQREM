@@ -103,8 +103,11 @@ export function saveConversation(conversation: ChatConversation) {
   const all = readAll();
   const idx = all.findIndex((c) => c.id === conversation.id);
   const next = { ...conversation, updatedAt: new Date().toISOString() };
-  if (idx >= 0) all[idx] = next;
-  else all.unshift(next);
+  if (idx < 0) {
+    // Avoid resurrecting conversations removed from storage (e.g. after delete).
+    return next;
+  }
+  all[idx] = next;
   writeAll(all);
   return next;
 }

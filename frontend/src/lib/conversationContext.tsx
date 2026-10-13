@@ -62,6 +62,10 @@ export function ConversationProvider({ children }: { children: ReactNode }) {
 
   const upsert = useCallback(
     (conversation: ChatConversation) => {
+      // Do not resurrect conversations removed from storage (e.g. after delete).
+      if (!getConversation(conversation.id)) {
+        return conversation;
+      }
       const saved = saveConversation(conversation);
       refresh();
       return saved;
