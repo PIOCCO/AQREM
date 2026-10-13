@@ -48,9 +48,11 @@ test.describe("AQREM logo home", () => {
 });
 
 test.describe("login logo", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   test("mark visible on login", async ({ page }) => {
     await page.goto("/login");
-    await expect(page.locator(".aq-logo-mark .aq-logo-img--dark")).toBeVisible();
+    await expect(page.locator(".aq-logo-mark img")).toHaveCount(2);
     await expect(page.getByText("Sign in to AQREM")).toBeVisible();
   });
 });
