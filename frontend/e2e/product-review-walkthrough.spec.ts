@@ -28,7 +28,9 @@ test.describe("product review — employee UI", () => {
     await composer.fill("How often are access permissions reviewed?");
     await composer.press("Enter");
 
-    await expect(page.getByText(/90|review|access/i).first()).toBeVisible({ timeout: 45_000 });
+    const assistant = page.locator(".ref-msg-assistant").first();
+    await expect(assistant).toBeVisible({ timeout: 45_000 });
+    await expect(assistant).toContainText(/couldn't find evidence|90 days|Insufficient evidence/i);
     await page.screenshot({ path: "test-results/review-chat-answer.png", fullPage: true });
 
     await composer.fill("hi");
