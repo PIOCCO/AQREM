@@ -364,15 +364,7 @@ export default function ChatPage() {
 
       {empty ? (
         <>
-          <ChatEmptyState
-            name={name}
-            projectName={projectName}
-            projectId={projectId}
-            sourcesCount={sourcesCount}
-            projects={projects}
-            onSelectProject={setProjectId}
-            onPickPrompt={setInput}
-          />
+          <ChatEmptyState name={name} projectName={projectName} onPickPrompt={setInput} />
           <div className="w-full shrink-0 ref-composer-dock">
             <ChatComposer
               ref={composerRef}

@@ -1,23 +1,14 @@
 import { STARTER_PROMPTS } from "../../lib/chatIntent";
-import ChatScopeBar from "./ChatScopeBar";
 
 type Props = {
   name: string;
   projectName: string | null;
-  projectId: string | null;
-  sourcesCount: number | null;
-  projects: { id: string; name: string }[];
-  onSelectProject: (id: string) => void;
   onPickPrompt: (text: string) => void;
 };
 
 export default function ChatEmptyState({
   name,
   projectName,
-  projectId,
-  sourcesCount,
-  projects,
-  onSelectProject,
   onPickPrompt,
 }: Props) {
   return (
@@ -28,15 +19,6 @@ export default function ChatEmptyState({
         <span className="text-chat-fg font-medium">{projectName ?? "your project"}</span>. Citations link to
         evidence in your workspace.
       </p>
-      <div className="w-full mb-6">
-        <ChatScopeBar
-          projectName={projectName}
-          projectId={projectId}
-          sourcesCount={sourcesCount}
-          projects={projects}
-          onSelectProject={onSelectProject}
-        />
-      </div>
       <div className="grid gap-2 w-full sm:grid-cols-2" role="list" aria-label="Suggested prompts">
         {STARTER_PROMPTS.map((prompt) => (
           <button
