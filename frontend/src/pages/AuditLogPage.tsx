@@ -1,195 +1,549 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import ActivityDetailDrawer from "../components/activity/ActivityDetailDrawer";
+import { FilterPopover } from "../components/activity/FilterPopover";
 import WorkspacePage from "../components/layout/WorkspacePage";
-import { CopyButton } from "../components/ui/CopyButton";
-import { EmptyState, ErrorState, LoadingState, PageLead } from "../components/ui/States";
+import { IconRefresh, IconSearch } from "../components/icons/Icons";
+import { EmptyState, ErrorState, PageHeader, SkeletonBlock } from "../components/ui/States";
 import { useToast } from "../components/ui/Toast";
-import { fetchAuditLog } from "../lib/api";
+import { Tooltip } from "../components/ui/Tooltip";
+import { ACTIVITY_ACTION_GROUPS } from "../lib/activityActions";
+import {
+  exportActivity,
+  fetchActivity,
+  fetchActivityActors,
+  type ActivityActor,
+  type ActivityEvent,
+  type ActivityQuery,
+} from "../lib/activityApi";
+import { activityDayLabel, formatActivityTime, initialsFromName } from "../lib/activityFormat";
 import { useProjectContext } from "../lib/projectContext";
-
-type AuditItem = {
-  id: string;
-  action: string;
-  resource_type: string;
-  resource_id?: string;
-  created_at: string;
-};
 
 const PAGE = 50;
 
-function toCsv(rows: AuditItem[]): string {
-  const header = "id,action,resource_type,resource_id,created_at";
-  const lines = rows.map((r) =>
-    [r.id, r.action, r.resource_type, r.resource_id ?? "", r.created_at]
-      .map((c) => `"${String(c).replace(/"/g, '""')}"`)
-      .join(","),
-  );
-  return [header, ...lines].join("\n");
+type DatePreset = "24h" | "7d" | "30d" | "90d" | "custom" | null;
+
+function presetRange(preset: DatePreset): { from?: string; to?: string } {
+  if (!preset || preset === "custom") return {};
+  const now = new Date();
+  const to = now.toISOString();
+  const ms =
+    preset === "24h"
+      ? 86400000
+      : preset === "7d"
+        ? 7 * 86400000
+        : preset === "30d"
+          ? 30 * 86400000
+          : 90 * 86400000;
+  return { from: new Date(now.getTime() - ms).toISOString(), to };
 }
 
 export default function AuditLogPage() {
   const { session } = useProjectContext();
   const toast = useToast();
-  const [items, setItems] = useState<AuditItem[]>([]);
+
+  const [items, setItems] = useState<ActivityEvent[]>([]);
   const [total, setTotal] = useState(0);
-  const [offset, setOffset] = useState(0);
-  const [actionFilter, setActionFilter] = useState("");
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [actors, setActors] = useState<ActivityActor[]>([]);
+
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selectedActions, setSelectedActions] = useState<string[]>([]);
+  const [selectedActors, setSelectedActors] = useState<string[]>([]);
   const [sort, setSort] = useState<"newest" | "oldest">("newest");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [datePreset, setDatePreset] = useState<DatePreset>(null);
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+
+  const [openFilter, setOpenFilter] = useState<"action" | "actor" | "date" | "sort" | "export" | null>(null);
+  const [actionSearch, setActionSearch] = useState("");
+  const [actorSearch, setActorSearch] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [requestId, setRequestId] = useState<string | null>(null);
 
-  async function load(append = false, nextOffset = 0) {
-    if (!session) return;
-    if (append) setLoadingMore(true);
-    else setLoading(true);
-    try {
-      const data = await fetchAuditLog(session, {
-        offset: nextOffset,
-        limit: PAGE,
-        action: actionFilter || undefined,
-      });
-      setTotal(data.total);
-      setOffset(nextOffset);
-      setItems((prev) => (append ? [...prev, ...data.items] : data.items));
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load activity");
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  }
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [focusedIndex, setFocusedIndex] = useState(0);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  const query = useMemo((): ActivityQuery => {
+    const range =
+      datePreset === "custom"
+        ? {
+            date_from: customFrom ? new Date(customFrom).toISOString() : undefined,
+            date_to: customTo ? new Date(`${customTo}T23:59:59`).toISOString() : undefined,
+          }
+        : presetRange(datePreset);
+    return {
+      limit: PAGE,
+      search: debouncedSearch || undefined,
+      actions: selectedActions.length ? selectedActions : undefined,
+      actor_user_id: selectedActors.length ? selectedActors : undefined,
+      sort,
+      ...range,
+    };
+  }, [debouncedSearch, selectedActions, selectedActors, sort, datePreset, customFrom, customTo]);
+
+  const load = useCallback(
+    async (append = false, offset = 0) => {
+      if (!session) return;
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      try {
+        const data = await fetchActivity(session, { ...query, offset });
+        setTotal(data.total);
+        setNextOffset(data.next_offset ?? null);
+        setItems((prev) => (append ? [...prev, ...data.items] : data.items));
+        setError(null);
+        setRequestId(null);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Failed to load activity";
+        setError(msg);
+        setRequestId(crypto.randomUUID());
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [session, query],
+  );
 
   useEffect(() => {
     load(false, 0);
-  }, [session?.organizationId, actionFilter]);
+  }, [load]);
 
-  const filtered = useMemo(() => {
-    let rows = [...items];
-    const q = search.trim().toLowerCase();
-    if (q) {
-      rows = rows.filter(
-        (r) =>
-          r.action.toLowerCase().includes(q) ||
-          r.resource_type.toLowerCase().includes(q) ||
-          (r.resource_id ?? "").toLowerCase().includes(q),
-      );
-    }
-    if (dateFrom) {
-      const from = new Date(dateFrom).getTime();
-      rows = rows.filter((r) => new Date(r.created_at).getTime() >= from);
-    }
-    if (dateTo) {
-      const to = new Date(dateTo).getTime() + 86400000;
-      rows = rows.filter((r) => new Date(r.created_at).getTime() <= to);
-    }
-    rows.sort((a, b) => {
-      const da = new Date(a.created_at).getTime();
-      const db = new Date(b.created_at).getTime();
-      return sort === "newest" ? db - da : da - db;
+  useEffect(() => {
+    if (!session) return;
+    fetchActivityActors(session).then(setActors).catch(() => setActors([]));
+  }, [session?.organizationId, session?.token]);
+
+  const chips = useMemo(() => {
+    const list: { key: string; label: string; clear: () => void }[] = [];
+    selectedActions.forEach((a) =>
+      list.push({
+        key: `a-${a}`,
+        label: a.replaceAll("_", " "),
+        clear: () => setSelectedActions((prev) => prev.filter((x) => x !== a)),
+      }),
+    );
+    selectedActors.forEach((id) => {
+      const actor = actors.find((a) => a.user_id === id);
+      list.push({
+        key: `u-${id}`,
+        label: actor?.name ?? "Actor",
+        clear: () => setSelectedActors((prev) => prev.filter((x) => x !== id)),
+      });
     });
-    return rows;
-  }, [items, search, dateFrom, dateTo, sort]);
+    if (datePreset) {
+      list.push({
+        key: "date",
+        label:
+          datePreset === "custom"
+            ? `Custom${customFrom ? ` from ${customFrom}` : ""}${customTo ? ` to ${customTo}` : ""}`
+            : { "24h": "Last 24 hours", "7d": "Last 7 days", "30d": "Last 30 days", "90d": "Last 90 days" }[
+                datePreset
+              ] ?? "Date",
+        clear: () => {
+          setDatePreset(null);
+          setCustomFrom("");
+          setCustomTo("");
+        },
+      });
+    }
+    if (debouncedSearch) {
+      list.push({ key: "q", label: `Search: ${debouncedSearch}`, clear: () => setSearch("") });
+    }
+    return list;
+  }, [selectedActions, selectedActors, actors, datePreset, customFrom, customTo, debouncedSearch]);
 
-  function exportCsv() {
-    const blob = new Blob([toCsv(filtered)], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "activity-export.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.push(`Exported ${filtered.length} events to CSV`);
+  const grouped = useMemo(() => {
+    const map = new Map<string, ActivityEvent[]>();
+    for (const item of items) {
+      const label = activityDayLabel(item.created_at);
+      if (!map.has(label)) map.set(label, []);
+      map.get(label)!.push(item);
+    }
+    return Array.from(map.entries());
+  }, [items]);
+
+  const selectedEvent = items.find((i) => i.id === selectedId) ?? null;
+  const selectedIndex = items.findIndex((i) => i.id === selectedId);
+
+  async function onExport(format: "csv" | "json") {
+    if (!session) return;
+    setExporting(true);
+    try {
+      const blob = await exportActivity(session, format, query);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `activity-export.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.push(`Exported activity as ${format.toUpperCase()}`);
+    } catch (e) {
+      toast.push(e instanceof Error ? e.message : "Export failed");
+    } finally {
+      setExporting(false);
+      setOpenFilter(null);
+    }
   }
 
+  function clearAllFilters() {
+    setSearch("");
+    setSelectedActions([]);
+    setSelectedActors([]);
+    setDatePreset(null);
+    setCustomFrom("");
+    setCustomTo("");
+  }
+
+  const hasFilters = chips.length > 0;
+  const emptyAll = !loading && !error && total === 0 && !hasFilters;
+  const emptyFiltered = !loading && !error && total === 0 && hasFilters;
+
   return (
-    <WorkspacePage>
-      <PageLead subtitle={`${total} organization events (secrets are never logged).`} />
-      <div className="flex flex-wrap gap-3 mb-4">
-        <input
-          className="aq-input max-w-xs"
-          placeholder="Search activity…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Search activity"
-        />
-        <input
-          className="aq-input max-w-xs"
-          placeholder="Filter action (exact)…"
-          value={actionFilter}
-          onChange={(e) => setActionFilter(e.target.value.trim())}
-          aria-label="Filter by action"
-        />
-        <select className="aq-input max-w-[10rem]" value={sort} onChange={(e) => setSort(e.target.value as "newest" | "oldest")} aria-label="Sort">
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-        </select>
-        <input type="date" className="aq-input" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} aria-label="From date" />
-        <input type="date" className="aq-input" value={dateTo} onChange={(e) => setDateTo(e.target.value)} aria-label="To date" />
-        <button type="button" className="aq-btn-secondary" onClick={exportCsv} disabled={filtered.length === 0}>
-          Export CSV
-        </button>
-      </div>
-      {loading && <LoadingState label="Loading activity…" />}
-      {error && <ErrorState message={error} onRetry={() => load(false, 0)} />}
-      {!loading && !error && filtered.length === 0 && (
-        <EmptyState
-          title="No activity yet"
-          description="Actions such as approvals, exports, and indexing will appear here."
-        />
-      )}
-      <ul className="space-y-2">
-        {filtered.map((item) => {
-          const open = expandedId === item.id;
-          return (
-            <li key={item.id}>
+    <WorkspacePage className="workspace-page-activity">
+      <PageHeader
+        title="Activity"
+        hideTitle={false}
+        subtitle="A record of changes in your organization. Secrets and document contents are never logged."
+        actions={
+          <>
+            <div className="relative">
               <button
                 type="button"
-                className="aq-card w-full px-4 py-3 text-sm text-left aq-interactive-row"
-                onClick={() => setExpandedId(open ? null : item.id)}
-                aria-expanded={open}
+                className="aq-btn-secondary activity-toolbar-btn"
+                aria-haspopup="menu"
+                aria-expanded={openFilter === "export"}
+                disabled={exporting}
+                onClick={() => setOpenFilter(openFilter === "export" ? null : "export")}
               >
-                <div className="flex flex-wrap justify-between gap-2 items-center">
-                  <span className="font-medium capitalize text-[var(--color-text-primary)] flex items-center gap-2">
-                    {item.action.replaceAll("_", " ")}
-                    <span className="text-[var(--color-text-muted)] text-xs">{open ? "▾" : "▸"}</span>
-                  </span>
-                  <time className="text-xs text-[var(--color-text-muted)]" dateTime={item.created_at}>
-                    {new Date(item.created_at).toLocaleString()}
-                  </time>
-                </div>
-                <p className="text-xs text-[var(--color-text-secondary)] mt-1 font-mono truncate">
-                  {item.resource_type}
-                  {item.resource_id ? ` · ${item.resource_id.slice(0, 8)}…` : ""}
-                </p>
-                {open ? (
-                  <div className="mt-3 pt-3 border-t border-border space-y-2" onClick={(e) => e.stopPropagation()}>
-                    <p className="text-xs font-mono break-all text-[var(--color-text-secondary)]">{item.resource_id ?? "—"}</p>
-                    <div className="flex gap-2">
-                      <CopyButton value={item.id} label="Copy event ID" />
-                      {item.resource_id ? <CopyButton value={item.resource_id} label="Copy resource ID" /> : null}
-                    </div>
-                  </div>
-                ) : null}
+                {exporting ? "Exporting…" : "Export"}
               </button>
-            </li>
-          );
-        })}
-      </ul>
-      {items.length < total && !loading && (
-        <button
-          type="button"
-          className="aq-btn-secondary mt-4"
-          disabled={loadingMore}
-          onClick={() => load(true, offset + PAGE)}
-        >
-          {loadingMore ? "Loading…" : `Load more (${items.length} of ${total})`}
+              {openFilter === "export" ? (
+                <div className="aq-dropdown">
+                  <button type="button" className="aq-dropdown-item" onClick={() => void onExport("csv")}>
+                    CSV
+                  </button>
+                  <button type="button" className="aq-dropdown-item" onClick={() => void onExport("json")}>
+                    JSON
+                  </button>
+                </div>
+              ) : null}
+            </div>
+            <Tooltip label="Refresh">
+              <button
+                type="button"
+                className="activity-icon-btn"
+                aria-label="Refresh activity"
+                onClick={() => load(false, 0)}
+              >
+                <IconRefresh className="h-4 w-4" />
+              </button>
+            </Tooltip>
+          </>
+        }
+      />
+
+      <div className="activity-toolbar">
+        <div className="activity-toolbar-search">
+          <IconSearch className="activity-toolbar-search-icon" aria-hidden />
+          <input
+            className="activity-control"
+            placeholder="Search activity"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search activity"
+          />
+        </div>
+        <div className="relative">
+          <button
+            type="button"
+            className="activity-control activity-filter-trigger"
+            aria-expanded={openFilter === "action"}
+            onClick={() => setOpenFilter(openFilter === "action" ? null : "action")}
+          >
+            Action
+          </button>
+          <FilterPopover open={openFilter === "action"} onClose={() => setOpenFilter(null)} label="Filter by action">
+            <input
+              className="activity-control mx-2 mb-2"
+              placeholder="Search actions"
+              value={actionSearch}
+              onChange={(e) => setActionSearch(e.target.value)}
+            />
+            <div className="max-h-64 overflow-y-auto px-2">
+              {ACTIVITY_ACTION_GROUPS.map((group) => {
+                const actions = group.actions.filter((a) => a.includes(actionSearch.trim().toLowerCase()));
+                if (!actions.length) return null;
+                return (
+                  <div key={group.label} className="mb-2">
+                    <p className="text-xs font-medium text-[var(--color-text-muted)] px-1 py-1">{group.label}</p>
+                    {actions.map((action) => (
+                      <label key={action} className="flex items-center gap-2 px-1 py-1 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedActions.includes(action)}
+                          onChange={() =>
+                            setSelectedActions((prev) =>
+                              prev.includes(action) ? prev.filter((a) => a !== action) : [...prev, action],
+                            )
+                          }
+                        />
+                        <span className="capitalize">{action.replaceAll("_", " ")}</span>
+                      </label>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </FilterPopover>
+        </div>
+        <div className="relative">
+          <button
+            type="button"
+            className="activity-control activity-filter-trigger"
+            aria-expanded={openFilter === "actor"}
+            onClick={() => setOpenFilter(openFilter === "actor" ? null : "actor")}
+          >
+            Actor
+          </button>
+          <FilterPopover open={openFilter === "actor"} onClose={() => setOpenFilter(null)} label="Filter by actor">
+            <input
+              className="activity-control mx-2 mb-2"
+              placeholder="Search people"
+              value={actorSearch}
+              onChange={(e) => setActorSearch(e.target.value)}
+            />
+            <div className="max-h-64 overflow-y-auto px-2">
+              {actors
+                .filter(
+                  (a) =>
+                    a.name.toLowerCase().includes(actorSearch.toLowerCase()) ||
+                    a.email.toLowerCase().includes(actorSearch.toLowerCase()),
+                )
+                .map((actor) => (
+                  <label key={actor.user_id} className="flex items-center gap-2 px-1 py-1 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedActors.includes(actor.user_id)}
+                      onChange={() =>
+                        setSelectedActors((prev) =>
+                          prev.includes(actor.user_id)
+                            ? prev.filter((id) => id !== actor.user_id)
+                            : [...prev, actor.user_id],
+                        )
+                      }
+                    />
+                    <span>
+                      {actor.name} <span className="text-[var(--color-text-muted)]">({actor.email})</span>
+                    </span>
+                  </label>
+                ))}
+            </div>
+          </FilterPopover>
+        </div>
+        <div className="relative">
+          <button
+            type="button"
+            className="activity-control activity-filter-trigger"
+            aria-expanded={openFilter === "date"}
+            onClick={() => setOpenFilter(openFilter === "date" ? null : "date")}
+          >
+            Date
+          </button>
+          <FilterPopover open={openFilter === "date"} onClose={() => setOpenFilter(null)} label="Filter by date" widthClass="w-80">
+            {(["24h", "7d", "30d", "90d"] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                className="aq-dropdown-item"
+                onClick={() => {
+                  setDatePreset(p);
+                  setOpenFilter(null);
+                }}
+              >
+                {{ "24h": "Last 24 hours", "7d": "Last 7 days", "30d": "Last 30 days", "90d": "Last 90 days" }[p]}
+              </button>
+            ))}
+            <div className="border-t border-border px-3 py-2 space-y-2">
+              <p className="text-xs text-[var(--color-text-muted)]">Custom range (YYYY-MM-DD)</p>
+              <label className="block text-xs">
+                From
+                <input className="activity-control mt-1 w-full" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+              </label>
+              <label className="block text-xs">
+                To
+                <input className="activity-control mt-1 w-full" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+              </label>
+              <button
+                type="button"
+                className="aq-btn-secondary w-full"
+                onClick={() => {
+                  setDatePreset("custom");
+                  setOpenFilter(null);
+                }}
+              >
+                Apply range
+              </button>
+            </div>
+          </FilterPopover>
+        </div>
+        <div className="relative">
+          <button
+            type="button"
+            className="activity-control activity-filter-trigger"
+            aria-expanded={openFilter === "sort"}
+            onClick={() => setOpenFilter(openFilter === "sort" ? null : "sort")}
+          >
+            Sort
+          </button>
+          {openFilter === "sort" ? (
+            <div className="aq-dropdown">
+              <button type="button" className="aq-dropdown-item" onClick={() => { setSort("newest"); setOpenFilter(null); }}>
+                Newest first
+              </button>
+              <button type="button" className="aq-dropdown-item" onClick={() => { setSort("oldest"); setOpenFilter(null); }}>
+                Oldest first
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="activity-chip-row">
+        <div className="flex flex-wrap gap-2 min-w-0">
+          {chips.map((c) => (
+            <button key={c.key} type="button" className="activity-chip" onClick={c.clear}>
+              {c.label} <span aria-hidden>×</span>
+            </button>
+          ))}
+          {hasFilters ? (
+            <button type="button" className="activity-clear-link" onClick={clearAllFilters}>
+              Clear all
+            </button>
+          ) : null}
+        </div>
+        <p className="activity-count" aria-live="polite">
+          Showing {total} event{total === 1 ? "" : "s"}
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="activity-list" aria-busy="true">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonBlock key={i} className="activity-skeleton-row" />
+          ))}
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="aq-alert-error" role="alert">
+          <p>{error}</p>
+          {requestId ? <p className="text-xs mt-1 font-mono">Request ID: {requestId}</p> : null}
+          <button type="button" className="aq-btn-secondary mt-3" onClick={() => load(false, 0)}>
+            Retry
+          </button>
+        </div>
+      ) : null}
+
+      {emptyAll ? (
+        <EmptyState
+          title="No activity yet"
+          description="When people invite teammates, connect sources, or change settings, those events will show up here."
+        />
+      ) : null}
+
+      {emptyFiltered ? (
+        <EmptyState
+          title="No activity matches these filters"
+          description="Try widening the date range or removing filters."
+          action={
+            <button type="button" className="aq-btn-secondary" onClick={clearAllFilters}>
+              Clear filters
+            </button>
+          }
+        />
+      ) : null}
+
+      {!loading && !error && items.length > 0 ? (
+        <div className="activity-list" role="list">
+          {grouped.map(([day, rows]) => (
+            <section key={day}>
+              <h3 className="activity-day-header">{day}</h3>
+              {rows.map((item, idxInGroup) => {
+                const globalIndex = items.findIndex((x) => x.id === item.id);
+                const time = formatActivityTime(item.created_at);
+                const active = selectedId === item.id;
+                return (
+                  <div key={item.id} role="listitem">
+                    <button
+                      type="button"
+                      className={`activity-row ${active ? "activity-row-active" : ""}`}
+                      aria-expanded={active}
+                      onClick={() => {
+                        setSelectedId(item.id);
+                        setFocusedIndex(globalIndex);
+                      }}
+                      onFocus={() => setFocusedIndex(globalIndex)}
+                    >
+                      <span className="activity-avatar" aria-hidden>
+                        {item.actor_name === "System" ? "⚙" : initialsFromName(item.actor_name)}
+                      </span>
+                      <span className="activity-row-main min-w-0">
+                        <span className="activity-summary">{item.summary}</span>
+                        <span className="activity-secondary">{item.secondary}</span>
+                      </span>
+                      <span className="activity-row-meta">
+                        {(item.is_failure || item.is_security) && (
+                          <span
+                            className={`activity-status-dot ${item.is_failure ? "activity-status-failed" : "activity-status-security"}`}
+                            aria-label={item.is_failure ? "Failed" : "Security-sensitive"}
+                          />
+                        )}
+                        <Tooltip label={time.title}>
+                          <time dateTime={item.created_at} className="activity-time">
+                            {time.relative}
+                          </time>
+                        </Tooltip>
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
+            </section>
+          ))}
+        </div>
+      ) : null}
+
+      {nextOffset != null && !loading ? (
+        <button type="button" className="aq-btn-secondary mt-4 w-full" disabled={loadingMore} onClick={() => load(true, nextOffset)}>
+          {loadingMore ? "Loading…" : "Load more"}
         </button>
-      )}
+      ) : null}
+
+      <ActivityDetailDrawer
+        event={selectedEvent}
+        onClose={() => setSelectedId(null)}
+        onPrev={() => {
+          const next = items[selectedIndex - 1];
+          if (next) setSelectedId(next.id);
+        }}
+        onNext={() => {
+          const next = items[selectedIndex + 1];
+          if (next) setSelectedId(next.id);
+        }}
+        hasPrev={selectedIndex > 0}
+        hasNext={selectedIndex >= 0 && selectedIndex < items.length - 1}
+      />
     </WorkspacePage>
   );
 }

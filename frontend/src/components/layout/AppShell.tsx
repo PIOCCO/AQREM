@@ -61,7 +61,9 @@ export default function AppShell() {
           <header className="chat-topbar flex h-14 shrink-0 items-center gap-3 px-4 lg:px-6 max-w-[var(--workspace-column-max)] w-full mx-auto">
             <ChatMobileMenuButton onClick={() => setMobileOpen(true)} />
             <LogoMark className="h-8 w-8 lg:hidden" />
-            <h1 className="truncate text-sm font-medium">{pageTitleForPath(location.pathname)}</h1>
+            {pageTitleForPath(location.pathname) ? (
+              <h1 className="truncate text-sm font-medium">{pageTitleForPath(location.pathname)}</h1>
+            ) : null}
           </header>
         ) : null}
 

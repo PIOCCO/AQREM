@@ -33,7 +33,7 @@ type ReviewItem = {
   confidence: string;
 };
 
-type AuditItem = { action: string; resource_type: string; created_at: string };
+type AuditItem = { action: string; resource_type: string; created_at: string; summary?: string };
 type LibraryEntry = { id: string; question_text: string; status: string; evidence?: unknown[] };
 
 function greetingName(fullName?: string, email?: string) {
@@ -287,7 +287,7 @@ export default function DashboardPage() {
                 <li key={idx} className="px-5 py-4 flex gap-3">
                   <span className="mt-0.5">{activityIcon(item.action, item.resource_type)}</span>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-fg">{formatActivityTitle(item.action)}</p>
+                    <p className="text-sm font-medium text-fg">{item.summary ?? formatActivityTitle(item.action)}</p>
                     <p className="text-xs text-fg-muted mt-0.5 capitalize">
                       {item.resource_type.replaceAll("_", " ")} · {new Date(item.created_at).toLocaleString()}
                     </p>

@@ -7,7 +7,7 @@ const titles: Record<string, string> = {
   "/review-queue": "Review Queue",
   "/answer-library": "Answer Library",
   "/stale-answers": "Stale Answers",
-  "/audit": "Activity",
+  "/audit": "",
   "/settings": "Settings",
 };
 
