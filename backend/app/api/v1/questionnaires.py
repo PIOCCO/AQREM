@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.audit.service import record_audit
 from app.core.config import get_settings
+from app.core.access_deps import get_user_access
 from app.core.dependencies import get_tenant_context, require_role
+from app.services.access_control.context import UserAccessContext
 from app.core.rate_limit import LLM_GENERATE_LIMIT, limiter
 from app.core.roles import Role
 from app.core.tenant import TenantContext
@@ -362,6 +364,7 @@ async def generate_all_answers(
     request: Request,
     questionnaire_id: UUID,
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
+    access: UserAccessContext = Depends(get_user_access),
     db: Session = Depends(get_tenant_db),
 ) -> GenerateBatchResponse:
     _get_questionnaire(db, tenant, questionnaire_id)
@@ -376,7 +379,9 @@ async def generate_all_answers(
     generated = 0
     insufficient = 0
     for question in questions:
-        answer = await service.generate_for_question(question=question, user_id=tenant.user_id)
+        answer = await service.generate_for_question(
+            question=question, user_id=tenant.user_id, access=access
+        )
         generated += 1
         if answer.evidence_sufficiency == "insufficient":
             insufficient += 1
@@ -407,11 +412,12 @@ async def generate_question_answer(
     request: Request,
     question_id: UUID,
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
+    access: UserAccessContext = Depends(get_user_access),
     db: Session = Depends(get_tenant_db),
 ) -> AnswerResponse:
     question = _get_question(db, tenant, question_id)
     answer = await AnsweringService(db).generate_for_question(
-        question=question, user_id=tenant.user_id
+        question=question, user_id=tenant.user_id, access=access
     )
     db.commit()
     return _build_answer_response(db, answer)
@@ -466,11 +472,12 @@ async def regenerate_answer(
     request: Request,
     question_id: UUID,
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
+    access: UserAccessContext = Depends(get_user_access),
     db: Session = Depends(get_tenant_db),
 ) -> AnswerResponse:
     question = _get_question(db, tenant, question_id)
     answer = await AnsweringService(db).generate_for_question(
-        question=question, user_id=tenant.user_id
+        question=question, user_id=tenant.user_id, access=access
     )
     db.commit()
     return _build_answer_response(db, answer)

@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
+from app.core.access_deps import get_user_access
 from app.core.dependencies import get_tenant_context
+from app.services.access_control.context import UserAccessContext
 from app.core.rate_limit import RETRIEVAL_PREVIEW_LIMIT, limiter
 from app.core.tenant import TenantContext
 from app.db.session import get_db
@@ -19,6 +21,7 @@ async def preview_retrieval(
     request: Request,
     payload: EvidenceSearchRequest,
     tenant: TenantContext = Depends(get_tenant_context),
+    access: UserAccessContext = Depends(get_user_access),
     db: Session = Depends(get_tenant_db),
 ) -> RetrievalPreviewResponse:
     items = await RetrievalService(db).retrieve(
@@ -27,6 +30,7 @@ async def preview_retrieval(
         project_id=payload.project_id,
         source_id=payload.source_id,
         limit=payload.limit,
+        access=access,
     )
     preview_items = [
         EvidenceItemSummaryResponse(

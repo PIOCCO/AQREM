@@ -4,8 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.access_deps import get_user_access
 from app.core.dependencies import get_tenant_context
 from app.core.tenant import TenantContext
+from app.services.access_control.context import UserAccessContext
+from app.services.access_control.policy import can_access_record, evidence_acl_filter
 from app.db.session import get_db
 from app.tenant_store.deps import get_tenant_db
 from app.models.evidence import EvidenceItem
@@ -21,11 +24,11 @@ _LIST_CONTENT_MAX = 2000
 _DETAIL_CONTENT_MAX = 512_000
 
 
-def _list_query(db: Session, tenant: TenantContext):
+def _list_query(db: Session, tenant: TenantContext, access: UserAccessContext):
     content_len = func.length(EvidenceItem.content)
     content_preview = func.left(EvidenceItem.content, _LIST_CONTENT_MAX)
     truncated = content_len > _LIST_CONTENT_MAX
-    return (
+    query = (
         db.query(
             EvidenceItem.id,
             EvidenceItem.organization_id,
@@ -52,6 +55,7 @@ def _list_query(db: Session, tenant: TenantContext):
         )
         .filter(EvidenceItem.organization_id == tenant.organization_id)
     )
+    return evidence_acl_filter(query, access, EvidenceItem)
 
 
 def _row_to_summary(row) -> EvidenceItemSummaryResponse:
@@ -87,6 +91,7 @@ def _row_to_summary(row) -> EvidenceItemSummaryResponse:
 @router.get("", response_model=EvidenceListResponse)
 def list_evidence(
     tenant: TenantContext = Depends(get_tenant_context),
+    access: UserAccessContext = Depends(get_user_access),
     db: Session = Depends(get_tenant_db),
     project_id: UUID | None = Query(default=None),
     source_id: UUID | None = Query(default=None),
@@ -94,7 +99,7 @@ def list_evidence(
     limit: int = Query(default=25, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> EvidenceListResponse:
-    query = _list_query(db, tenant)
+    query = _list_query(db, tenant, access)
     if project_id:
         query = query.filter(
             (EvidenceItem.project_id == project_id) | (EvidenceItem.project_id.is_(None))
@@ -121,6 +126,7 @@ def list_evidence(
 def get_evidence(
     evidence_id: UUID,
     tenant: TenantContext = Depends(get_tenant_context),
+    access: UserAccessContext = Depends(get_user_access),
     db: Session = Depends(get_tenant_db),
 ) -> EvidenceItemResponse:
     content_len = func.length(EvidenceItem.content)
@@ -158,6 +164,14 @@ def get_evidence(
         .one_or_none()
     )
     if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+    item = db.get(EvidenceItem, evidence_id)
+    if item is None or not can_access_record(
+        access,
+        visibility_mode=item.visibility_mode,
+        visibility_group_ids=item.visibility_group_ids,
+        visibility_user_ids=item.visibility_user_ids,
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
     content = row.content or ""
     if row.content_truncated:

@@ -24,6 +24,7 @@ from app.services.rag.behavior import (
     classify_early_behavior,
     compose_employee_answer,
 )
+from app.services.access_control.context import UserAccessContext
 from app.services.retrieval.service import RetrievalService
 
 
@@ -116,6 +117,7 @@ async def generate_grounded_answer(
     question: str,
     project_id: UUID | None,
     limit: int | None = None,
+    access: UserAccessContext | None = None,
 ) -> GroundedAnswer:
     safe_query = clamp_question(question)
     settings = get_settings()
@@ -129,6 +131,7 @@ async def generate_grounded_answer(
             query=safe_query,
             project_id=project_id,
             limit=top_k,
+            access=access,
         )
         items = [i for i in items if i.organization_id == organization_id]
     except Exception:
@@ -160,7 +163,7 @@ async def generate_grounded_answer(
             llm_sufficiency="insufficient",
             retrieval_error=None,
         )
-        base = "No supporting documents were retrieved for this question in your connected, indexed sources."
+        base = "I couldn't find this in the documents you have access to."
         structured = StructuredAnswer(
             answer=base,
             confidence="low",

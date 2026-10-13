@@ -47,6 +47,22 @@ export async function fetchOrgOverview(session: AuthSession): Promise<OrgOvervie
   return res.json();
 }
 
+export async function fetchAccessGroups(session: AuthSession) {
+  const res = await fetch(`${API_BASE}/api/v1/org-admin/access/groups`, { headers: headers(session) });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to load groups"));
+  return res.json() as Promise<
+    Array<{ id: string; name: string; slug: string; is_system: boolean; member_count: number }>
+  >;
+}
+
+export async function fetchDocumentsNeedingReview(session: AuthSession) {
+  const res = await fetch(`${API_BASE}/api/v1/org-admin/access/documents/needs-review/count`, {
+    headers: headers(session),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to load review count"));
+  return res.json() as Promise<{ count: number }>;
+}
+
 export async function fetchDocuments(session: AuthSession, page = 1, pageSize = 10) {
   const res = await fetch(
     `${API_BASE}/api/v1/org-admin/documents?page=${page}&page_size=${pageSize}`,
@@ -56,9 +72,18 @@ export async function fetchDocuments(session: AuthSession, page = 1, pageSize = 
   return res.json();
 }
 
-export async function uploadDocuments(session: AuthSession, files: FileList | File[]) {
+export async function uploadDocuments(
+  session: AuthSession,
+  files: FileList | File[],
+  visibilityMode: string,
+  visibilityGroupIds?: string[],
+) {
   const form = new FormData();
   for (const f of Array.from(files)) form.append("files", f);
+  form.append("visibility_mode", visibilityMode);
+  if (visibilityGroupIds?.length) {
+    form.append("visibility_group_ids", visibilityGroupIds.join(","));
+  }
   const res = await fetch(`${API_BASE}/api/v1/org-admin/documents/upload`, {
     method: "POST",
     headers: { Authorization: `Bearer ${session.token}`, "X-Organization-Id": session.organizationId! },

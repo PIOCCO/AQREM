@@ -26,6 +26,9 @@ class DocumentRowResponse(BaseModel):
     status: str
     index_progress: int
     failure_reason: str | None
+    visibility_mode: str
+    sensitivity_flag: bool
+    acl_reviewed: bool
     created_at: datetime
 
 

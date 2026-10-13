@@ -1,3 +1,4 @@
+from app.models.access_group import AccessGroup, AccessGroupMembership
 from app.models.answer_library import AnswerLibraryEntry, AnswerLibraryEvidenceLink
 from app.models.chat_share import ChatConversationShare
 from app.models.chat_share_index import ChatShareTokenIndex
@@ -21,6 +22,8 @@ from app.models.source import (
 )
 
 __all__ = [
+    "AccessGroup",
+    "AccessGroupMembership",
     "ChatConversationShare",
     "AnswerLibraryEntry",
     "AnswerLibraryEvidenceLink",

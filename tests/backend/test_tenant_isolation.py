@@ -14,6 +14,7 @@ from app.models.project import Project
 from app.models.source import Source, SourceSyncJob
 from app.services.ingestion.indexer import FilePayload, index_files
 from app.services.retrieval.service import RetrievalService
+from tests.backend.helpers_acl import mark_source_visible_to_all_staff
 
 
 def _auth_headers(token: str, org_id: str) -> dict[str, str]:
@@ -45,6 +46,8 @@ async def test_project_scope_isolation(db_session, demo_repo_path: str):
         source_type=SourceType.FOLDER_ARCHIVE.value,
         scope=EvidenceScope.PROJECT.value,
     )
+    mark_source_visible_to_all_staff(source_a)
+    mark_source_visible_to_all_staff(source_b)
     db_session.add_all([source_a, source_b])
     db_session.flush()
     assert source_a.id != source_b.id

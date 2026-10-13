@@ -12,6 +12,7 @@ from app.models.organization import Organization, OrganizationMembership, User
 from app.models.project import Project
 from app.models.source import Source, SourceSyncJob
 from app.services.ingestion.indexer import FilePayload, index_files
+from tests.backend.helpers_acl import mark_source_visible_to_all_staff
 
 
 def _auth_headers(token: str, org_id: str) -> dict[str, str]:
@@ -39,6 +40,7 @@ async def test_chat_ask_returns_evidence_backed_answer(client: TestClient, db_se
         source_type=SourceType.FOLDER_ARCHIVE.value,
         scope=EvidenceScope.PROJECT.value,
     )
+    mark_source_visible_to_all_staff(source)
     db_session.add(source)
     db_session.flush()
     job = SourceSyncJob(organization_id=org.id, source_id=source.id, status=SyncJobStatus.RUNNING.value)

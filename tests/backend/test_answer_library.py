@@ -10,6 +10,7 @@ from app.models.questionnaire import Question, Questionnaire
 from app.models.source import Source, SourceSyncJob
 from app.services.answering.service import AnsweringService
 from app.services.ingestion.indexer import FilePayload, index_files
+from tests.backend.helpers_acl import mark_source_visible_to_all_staff
 from app.services.library.validation import validate_library_evidence
 from app.services.questionnaire.normalize import normalize_question
 
@@ -131,6 +132,7 @@ async def _seed_question_with_evidence(db_session, demo_repo_path: str):
         source_type=SourceType.FOLDER_ARCHIVE.value,
         scope=EvidenceScope.PROJECT.value,
     )
+    mark_source_visible_to_all_staff(source)
     db_session.add(source)
     db_session.flush()
     job = SourceSyncJob(

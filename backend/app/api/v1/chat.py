@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.audit.service import record_audit
+from app.core.access_deps import get_user_access
 from app.core.dependencies import get_tenant_context
+from app.services.access_control.context import UserAccessContext
 from app.core.rate_limit import RETRIEVAL_PREVIEW_LIMIT, limiter
 from app.core.roles import Role
 from app.core.tenant import TenantContext
@@ -27,6 +29,7 @@ async def ask_chat(
     request: Request,
     payload: ChatAskRequest,
     tenant: TenantContext = Depends(get_tenant_context),
+    access: UserAccessContext = Depends(get_user_access),
     db: Session = Depends(get_tenant_db),
 ) -> ChatAskResponse:
     result = await ChatAskService(db).ask(
@@ -34,6 +37,7 @@ async def ask_chat(
         query=payload.query,
         project_id=payload.project_id,
         user_id=tenant.user_id,
+        access=access,
     )
     return ChatAskResponse(**result)
 

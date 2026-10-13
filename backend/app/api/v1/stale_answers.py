@@ -3,7 +3,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.access_deps import get_user_access
 from app.core.dependencies import get_tenant_context, require_role
+from app.services.access_control.context import UserAccessContext
 from app.core.rate_limit import LLM_GENERATE_LIMIT, limiter
 from app.core.roles import Role
 from app.core.tenant import TenantContext
@@ -144,6 +146,7 @@ async def regenerate_stale_answer(
     request: Request,
     answer_id: UUID,
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
+    access: UserAccessContext = Depends(get_user_access),
     db: Session = Depends(get_tenant_db),
 ) -> AnswerResponse:
     answer = db.get(Answer, answer_id)
@@ -161,6 +164,7 @@ async def regenerate_stale_answer(
         user_id=tenant.user_id,
         skip_library_reuse=True,
         stale_regeneration=True,
+        access=access,
     )
     db.commit()
     return _build_answer_response(db, regenerated)

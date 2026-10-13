@@ -214,6 +214,9 @@ async def _index_fixtures(db_session, fixture_names: list[str]):
         source_type=SourceType.FOLDER_ARCHIVE.value,
         scope=EvidenceScope.PROJECT.value,
     )
+    from tests.backend.helpers_acl import mark_source_visible_to_all_staff
+
+    mark_source_visible_to_all_staff(source)
     db_session.add(source)
     db_session.flush()
     job = SourceSyncJob(organization_id=org.id, source_id=source.id, status=SyncJobStatus.RUNNING.value)

@@ -26,6 +26,7 @@ from app.models.source import Source, SourceSyncJob
 from app.services.chat.service import ChatAskService
 from app.services.ingestion.indexer import FilePayload, index_files
 from app.services.retrieval.service import RetrievalService
+from tests.backend.helpers_acl import mark_source_visible_to_all_staff
 
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "rag_eval"
 
@@ -197,6 +198,7 @@ async def _build_kb(db_session) -> dict[str, UUID]:
         source_type=SourceType.FOLDER_ARCHIVE.value,
         scope=EvidenceScope.PROJECT.value,
     )
+    mark_source_visible_to_all_staff(source)
     db_session.add(source)
     db_session.flush()
     job = SourceSyncJob(organization_id=org.id, source_id=source.id, status=SyncJobStatus.RUNNING.value)

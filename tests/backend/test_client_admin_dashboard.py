@@ -109,6 +109,7 @@ def test_upload_rejects_eicar(client: TestClient, db_session, monkeypatch, tmp_p
         "/api/v1/org-admin/documents/upload",
         headers={"Authorization": f"Bearer {token}", "X-Organization-Id": str(org.id)},
         files=[("files", ("eicar.txt", io.BytesIO(eicar), "text/plain"))],
+        data={"visibility_mode": "all_staff"},
     )
     assert res.status_code == 400
     assert res.json()["detail"]["code"] == "MALWARE_DETECTED"

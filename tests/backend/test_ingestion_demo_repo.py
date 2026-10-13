@@ -9,6 +9,7 @@ from app.models.project import Project
 from app.models.source import Source, SourceSyncJob
 from app.services.ingestion.indexer import FilePayload, index_files
 from app.services.retrieval.service import RetrievalService
+from tests.backend.helpers_acl import mark_source_visible_to_all_staff
 
 
 @pytest.mark.asyncio
@@ -27,6 +28,7 @@ async def test_demo_repo_indexes_encryption_evidence(db_session, demo_repo_path:
         source_type=SourceType.FOLDER_ARCHIVE.value,
         scope=EvidenceScope.PROJECT.value,
     )
+    mark_source_visible_to_all_staff(source)
     db_session.add(source)
     db_session.flush()
     job = SourceSyncJob(

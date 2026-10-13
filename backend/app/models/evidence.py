@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.config import get_settings
@@ -47,6 +47,13 @@ class EvidenceItem(TenantBase):
     evidence_strength: Mapped[str | None] = mapped_column(String(32), nullable=True)
     item_metadata: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, default=dict)
 
+    visibility_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="admins_only")
+    visibility_group_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(UUID(as_uuid=True)), nullable=False, server_default="{}"
+    )
+    visibility_user_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(UUID(as_uuid=True)), nullable=False, server_default="{}"
+    )
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
     search_vector: Mapped[str | None] = mapped_column(TSVECTOR, nullable=True)
 

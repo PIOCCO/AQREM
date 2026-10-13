@@ -7,6 +7,7 @@ from app.audit.service import record_audit
 from app.models.enums import AnswerGenerationSource, AnswerOutcome, AnswerStatus, QuestionnaireStatus
 from app.models.evidence import EvidenceItem
 from app.models.questionnaire import Answer, AnswerEvidenceLink, Question, Questionnaire
+from app.services.access_control.context import UserAccessContext
 from app.services.library.service import AnswerLibraryService
 from app.services.rag.grounding import generate_grounded_answer
 
@@ -29,6 +30,7 @@ class AnsweringService:
         top_k: int = 6,
         skip_library_reuse: bool = False,
         stale_regeneration: bool = False,
+        access: UserAccessContext | None = None,
     ) -> Answer:
         questionnaire = self.db.get(Questionnaire, question.questionnaire_id)
         if questionnaire is None:
@@ -53,6 +55,7 @@ class AnsweringService:
                 question=question,
                 questionnaire=questionnaire,
                 user_id=user_id,
+                access=access,
             )
             if reused is not None:
                 return reused
@@ -63,6 +66,7 @@ class AnsweringService:
             question=question.text,
             project_id=questionnaire.project_id,
             limit=top_k,
+            access=access,
         )
         structured = grounded.structured
         evidence_items = grounded.evidence_items

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.tenant_base import TenantBase
@@ -22,6 +22,13 @@ class Source(TenantBase):
     scope: Mapped[str] = mapped_column(String(32), nullable=False, default=EvidenceScope.PROJECT.value)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=SourceStatus.PENDING.value)
     config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    visibility_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="admins_only")
+    visibility_group_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(UUID(as_uuid=True)), nullable=False, server_default="{}"
+    )
+    visibility_user_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(UUID(as_uuid=True)), nullable=False, server_default="{}"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

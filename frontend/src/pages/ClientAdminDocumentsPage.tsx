@@ -5,6 +5,21 @@ import { fetchDocuments, removeDocument, retryDocument, uploadDocuments } from "
 const ALLOWED_HINT = "PDF, Markdown, plain text, and .tar.gz archives";
 const MAX_MB = 50;
 
+function visibilityLabel(mode: string) {
+  switch (mode) {
+    case "all_staff":
+      return "All staff";
+    case "admins_only":
+      return "Admins only";
+    case "groups":
+      return "Specific groups";
+    case "users":
+      return "Specific people";
+    default:
+      return mode;
+  }
+}
+
 function statusLabel(status: string) {
   switch (status) {
     case "uploading":
@@ -34,11 +49,15 @@ export default function ClientAdminDocumentsPage() {
       status: string;
       index_progress: number;
       failure_reason: string | null;
+      visibility_mode: string;
+      sensitivity_flag: boolean;
+      acl_reviewed: boolean;
     }>;
     total: number;
     counts: Record<string, number>;
   } | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [visibilityMode, setVisibilityMode] = useState("admins_only");
 
   const load = useCallback(() => {
     if (!session) return;
@@ -58,7 +77,7 @@ export default function ClientAdminDocumentsPage() {
     setError(null);
     setUploading(true);
     try {
-      await uploadDocuments(session, files);
+      await uploadDocuments(session, files, visibilityMode);
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
@@ -84,6 +103,20 @@ export default function ClientAdminDocumentsPage() {
           void onFiles(e.dataTransfer.files);
         }}
       >
+        <label className="block text-sm text-left max-w-md mx-auto mb-4">
+          <span className="font-medium">Who can see uploaded files?</span>
+          <select
+            className="mt-1 w-full rounded-lg border border-chat-border bg-chat-surface px-3 py-2 text-sm"
+            value={visibilityMode}
+            onChange={(e) => setVisibilityMode(e.target.value)}
+          >
+            <option value="admins_only">Admins only</option>
+            <option value="all_staff">All staff</option>
+          </select>
+          <span className="text-xs text-chat-muted mt-1 block">
+            Sensitive file names may be kept admins-only automatically.
+          </span>
+        </label>
         <p className="text-sm font-medium">Drag and drop files here</p>
         <p className="text-xs text-chat-muted mt-1">or</p>
         <button
@@ -114,6 +147,9 @@ export default function ClientAdminDocumentsPage() {
         <p className="text-sm text-chat-muted mb-4">
           {data.counts.total} total · {data.counts.indexed} indexed · {data.counts.indexing} indexing ·{" "}
           {data.counts.failed} failed
+          {typeof data.counts.needs_visibility_review === "number" && data.counts.needs_visibility_review > 0
+            ? ` · ${data.counts.needs_visibility_review} need visibility review`
+            : ""}
         </p>
       ) : null}
 
@@ -129,6 +165,7 @@ export default function ClientAdminDocumentsPage() {
             <thead>
               <tr className="border-b border-chat-border text-left text-chat-muted">
                 <th className="p-3 font-medium">File</th>
+                <th className="p-3 font-medium">Who can see</th>
                 <th className="p-3 font-medium">Status</th>
                 <th className="p-3 font-medium">Actions</th>
               </tr>
@@ -143,6 +180,15 @@ export default function ClientAdminDocumentsPage() {
                       <p className="text-xs text-red-700 mt-1" role="alert">
                         {row.failure_reason}
                       </p>
+                    ) : null}
+                  </td>
+                  <td className="p-3">
+                    {visibilityLabel(row.visibility_mode)}
+                    {row.sensitivity_flag ? (
+                      <span className="block text-xs text-amber-400">Sensitive</span>
+                    ) : null}
+                    {!row.acl_reviewed ? (
+                      <span className="block text-xs text-amber-400">Needs review</span>
                     ) : null}
                   </td>
                   <td className="p-3">

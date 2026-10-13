@@ -30,6 +30,22 @@ _ORG_PATCHES = (
     """,
 )
 
+_ACL_PATCHES = (
+    "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS visibility_mode VARCHAR(32) NOT NULL DEFAULT 'admins_only'",
+    "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS visibility_group_ids UUID[] NOT NULL DEFAULT '{}'",
+    "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS visibility_user_ids UUID[] NOT NULL DEFAULT '{}'",
+    "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS sensitivity_flag BOOLEAN NOT NULL DEFAULT false",
+    "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS acl_reviewed BOOLEAN NOT NULL DEFAULT false",
+    "ALTER TABLE sources ADD COLUMN IF NOT EXISTS visibility_mode VARCHAR(32) NOT NULL DEFAULT 'admins_only'",
+    "ALTER TABLE sources ADD COLUMN IF NOT EXISTS visibility_group_ids UUID[] NOT NULL DEFAULT '{}'",
+    "ALTER TABLE sources ADD COLUMN IF NOT EXISTS visibility_user_ids UUID[] NOT NULL DEFAULT '{}'",
+    "ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS visibility_mode VARCHAR(32) NOT NULL DEFAULT 'admins_only'",
+    "ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS visibility_group_ids UUID[] NOT NULL DEFAULT '{}'",
+    "ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS visibility_user_ids UUID[] NOT NULL DEFAULT '{}'",
+    "UPDATE client_documents SET visibility_mode = 'admins_only', acl_reviewed = false WHERE visibility_mode IS NULL OR visibility_mode = 'unset'",
+    "UPDATE evidence_items SET visibility_mode = 'admins_only' WHERE visibility_mode IS NULL OR visibility_mode = 'unset'",
+)
+
 _ANSWER_PATCHES = (
     "ALTER TABLE answers ADD COLUMN IF NOT EXISTS potentially_stale BOOLEAN NOT NULL DEFAULT false",
     "ALTER TABLE answers ADD COLUMN IF NOT EXISTS stale_detected_at TIMESTAMPTZ",
@@ -42,6 +58,8 @@ _ANSWER_PATCHES = (
 
 def apply_schema_patches(conn: Connection) -> None:
     for stmt in _ORG_PATCHES:
+        conn.execute(text(stmt))
+    for stmt in _ACL_PATCHES:
         conn.execute(text(stmt))
     for stmt in _ANSWER_PATCHES:
         conn.execute(text(stmt))

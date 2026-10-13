@@ -23,6 +23,7 @@ import ClientAdminShell from "./components/client-admin/ClientAdminShell";
 import ClientAdminSetupPage from "./pages/ClientAdminSetupPage";
 import ClientAdminDataStoragePage from "./pages/ClientAdminDataStoragePage";
 import ClientAdminUsersPage from "./pages/ClientAdminUsersPage";
+import ClientAdminAccessPage from "./pages/ClientAdminAccessPage";
 import ClientAdminDocumentsPage from "./pages/ClientAdminDocumentsPage";
 import ClientAdminModelTokenPage from "./pages/ClientAdminModelTokenPage";
 import ClientAdminUsagePage from "./pages/ClientAdminUsagePage";
@@ -167,6 +168,7 @@ export default function App() {
       >
         <Route index element={<ClientAdminSetupPage />} />
         <Route path="documents" element={<ClientAdminDocumentsPage />} />
+        <Route path="access" element={<ClientAdminAccessPage />} />
         <Route path="data-storage" element={<ClientAdminDataStoragePage />} />
         <Route path="model-token" element={<ClientAdminModelTokenPage />} />
         <Route path="users" element={<ClientAdminUsersPage />} />

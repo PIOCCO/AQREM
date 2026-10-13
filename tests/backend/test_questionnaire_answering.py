@@ -10,6 +10,7 @@ from app.models.questionnaire import AnswerEvidenceLink, Question, Questionnaire
 from app.models.source import Source, SourceSyncJob
 from app.services.answering.service import AnsweringService
 from app.services.ingestion.indexer import FilePayload, index_files
+from tests.backend.helpers_acl import mark_source_visible_to_all_staff
 from app.services.questionnaire.extract import extract_from_csv
 from app.services.questionnaire.normalize import normalize_question
 
@@ -38,6 +39,7 @@ async def test_generate_answer_with_evidence_citations(db_session, demo_repo_pat
         source_type=SourceType.FOLDER_ARCHIVE.value,
         scope=EvidenceScope.PROJECT.value,
     )
+    mark_source_visible_to_all_staff(source)
     db_session.add(source)
     db_session.flush()
     job = SourceSyncJob(
@@ -105,4 +107,9 @@ async def test_insufficient_evidence_without_sources(db_session):
 
     answer = await AnsweringService(db_session).generate_for_question(question=question)
     assert answer.evidence_sufficiency == "insufficient"
-    assert "could not find" in answer.draft_text.lower() or "no supporting documents" in answer.draft_text.lower()
+    lower = answer.draft_text.lower()
+    assert (
+        "could not find" in lower
+        or "no supporting documents" in lower
+        or "documents you have access to" in lower
+    )

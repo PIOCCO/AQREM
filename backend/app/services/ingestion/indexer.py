@@ -13,8 +13,27 @@ from app.services.ingestion.code_metadata import detect_language, extract_symbol
 from app.services.ingestion.ignore import build_pathspec, should_ignore
 from app.services.ingestion.parsers import parse_bytes
 from app.services.ingestion.strength import classify_evidence_strength
+from app.services.access_control.document_acl import resolve_document_acl
 from app.services.library.invalidate import mark_evidence_changed
 from app.services.llm.factory import get_llm_provider
+
+
+def _apply_chunk_visibility(
+    db: Session,
+    *,
+    source: Source,
+    file_name: str,
+    item: EvidenceItem,
+) -> None:
+    mode, group_ids, user_ids = resolve_document_acl(
+        db,
+        organization_id=source.organization_id,
+        source_id=source.id,
+        file_name=file_name,
+    )
+    item.visibility_mode = mode
+    item.visibility_group_ids = group_ids
+    item.visibility_user_ids = user_ids
 
 
 @dataclass
@@ -90,6 +109,7 @@ async def index_files(
             strength = classify_evidence_strength(rel, content_type, source.source_type)
 
             if existing and existing.content_hash == c_hash:
+                _apply_chunk_visibility(db, source=source, file_name=rel.split("/")[-1], item=existing)
                 indexed += 1
                 continue
 
@@ -127,6 +147,7 @@ async def index_files(
                 existing.symbol_name = symbol.name if symbol else None
                 existing.symbol_kind = symbol.kind if symbol else None
                 existing.evidence_strength = strength
+                _apply_chunk_visibility(db, source=source, file_name=rel.split("/")[-1], item=existing)
                 db.execute(
                     text(
                         "UPDATE evidence_items SET search_vector = to_tsvector('english', :content) WHERE id = :id"
@@ -163,6 +184,7 @@ async def index_files(
             )
             db.add(item)
             db.flush()
+            _apply_chunk_visibility(db, source=source, file_name=rel.split("/")[-1], item=item)
             db.execute(
                 text("UPDATE evidence_items SET search_vector = to_tsvector('english', :content) WHERE id = :id"),
                 {"content": chunk.content, "id": str(item.id)},

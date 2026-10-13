@@ -12,6 +12,10 @@ from app.services.chat.messages import format_insufficient_evidence_message
 from app.services.library.service import AnswerLibraryService
 from app.services.llm.guardrails import clamp_question, sanitize_evidence_content
 from app.services.rag.behavior import BehaviorResult
+from app.core.roles import Role
+from app.core.tenant import TenantContext
+from app.models.organization import OrganizationMembership
+from app.services.access_control.context import UserAccessContext, build_access_context
 from app.services.rag.grounding import generate_grounded_answer, selected_evidence_ids
 
 
@@ -45,6 +49,35 @@ def _count_project_sources(db: Session, organization_id: UUID, project_id: UUID 
 class ChatAskService:
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def _resolve_access(
+        self,
+        *,
+        organization_id: UUID,
+        user_id: UUID | None,
+        access: UserAccessContext | None,
+    ) -> UserAccessContext | None:
+        if access is not None:
+            return access
+        if user_id is None:
+            return None
+        membership = (
+            self.db.query(OrganizationMembership)
+            .filter(
+                OrganizationMembership.organization_id == organization_id,
+                OrganizationMembership.user_id == user_id,
+            )
+            .first()
+        )
+        if membership is None:
+            return None
+        tenant = TenantContext(
+            user_id=user_id,
+            organization_id=organization_id,
+            role=Role(membership.role),
+            email="",
+        )
+        return build_access_context(self.db, tenant)
 
     def _build_citations(
         self,
@@ -90,8 +123,12 @@ class ChatAskService:
         query: str,
         project_id: UUID | None,
         user_id: UUID | None = None,
+        access: UserAccessContext | None = None,
     ) -> dict:
         safe_query = clamp_question(query)
+        access = self._resolve_access(
+            organization_id=organization_id, user_id=user_id, access=access
+        )
         project_name = _project_label(self.db, project_id)
         sources_searched = _count_project_sources(self.db, organization_id, project_id)
 
@@ -125,6 +162,7 @@ class ChatAskService:
             query=safe_query,
             project_id=project_id,
             limit=3,
+            access=access,
         )
         approved = next((e for e in entries if e.status == "approved"), None)
         if approved and approved.answer_text.strip():
@@ -155,6 +193,7 @@ class ChatAskService:
             organization_id=organization_id,
             question=safe_query,
             project_id=project_id,
+            access=access,
         )
         query_time_ms = int((time.perf_counter() - started) * 1000)
 

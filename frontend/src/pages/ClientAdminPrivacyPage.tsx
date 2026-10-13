@@ -7,17 +7,45 @@ export default function ClientAdminPrivacyPage() {
   const { session } = useAuth();
   const [schema, setSchema] = useState<{ title: string; description: string; fields: Array<{ field: string; description: string }> } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sharingEnabled, setSharingEnabled] = useState(false);
+  const [sharingBusy, setSharingBusy] = useState(false);
 
   useEffect(() => {
     if (!session) return;
     fetchTelemetrySchema(session)
       .then(setSchema)
       .catch((e) => setError(e instanceof Error ? e.message : "Load failed"));
+    fetchChatSharing(session)
+      .then((s) => setSharingEnabled(s.enabled))
+      .catch(() => undefined);
   }, [session]);
+
+  async function toggleSharing() {
+    if (!session) return;
+    setSharingBusy(true);
+    setError(null);
+    try {
+      const next = await updateChatSharing(session, { enabled: !sharingEnabled });
+      setSharingEnabled(next.enabled);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update sharing");
+    } finally {
+      setSharingBusy(false);
+    }
+  }
 
   return (
     <div className="max-w-3xl mx-auto p-6 lg:p-10">
       <h1 className="text-2xl font-semibold tracking-tight">Privacy</h1>
+      <section className="admin-card p-6 mt-6 space-y-3 text-sm">
+        <h2 className="font-medium">Conversation sharing</h2>
+        <p className="text-chat-muted">
+          Sharing is off by default. When enabled, employees can create read-only links that expire automatically.
+        </p>
+        <button type="button" className="admin-btn-secondary" disabled={sharingBusy} onClick={() => void toggleSharing()}>
+          {sharingEnabled ? "Disable share links" : "Enable share links"}
+        </button>
+      </section>
       <section className="admin-card p-6 mt-6 space-y-3 text-sm">
         <h2 className="font-medium">Your data stays in your environment</h2>
         <ul className="list-disc pl-5 text-chat-muted space-y-2">

@@ -10,6 +10,8 @@ from app.models.answer_library import AnswerLibraryEntry, AnswerLibraryEvidenceL
 from app.models.enums import AnswerGenerationSource, AnswerStatus, EvidenceScope, LibraryEntryStatus
 from app.models.evidence import EvidenceItem
 from app.models.questionnaire import Answer, AnswerEvidenceLink, Question, Questionnaire
+from app.services.access_control.context import UserAccessContext
+from app.services.access_control.library import library_entry_visible
 from app.services.library.validation import evidence_item_in_project_scope, validate_library_evidence
 from app.services.llm.factory import get_llm_provider
 from app.services.questionnaire.normalize import normalize_question
@@ -149,6 +151,7 @@ class AnswerLibraryService:
         question: Question,
         questionnaire: Questionnaire,
         user_id: UUID | None,
+        access: UserAccessContext | None = None,
     ) -> Answer | None:
         candidates = await self.find_similar_entries(
             organization_id=question.organization_id,
@@ -160,6 +163,8 @@ class AnswerLibraryService:
             return None
 
         for entry, score in candidates:
+            if not library_entry_visible(self.db, access, entry):
+                continue
             validation = validate_library_evidence(self.db, entry)
             if not validation.valid:
                 entry.status = LibraryEntryStatus.NEEDS_REVIEW.value
@@ -256,6 +261,7 @@ class AnswerLibraryService:
         query: str | None = None,
         project_id: UUID | None = None,
         limit: int = 50,
+        access: UserAccessContext | None = None,
     ) -> list[AnswerLibraryEntry]:
         q = self.db.query(AnswerLibraryEntry).filter(
             AnswerLibraryEntry.organization_id == organization_id
@@ -274,4 +280,11 @@ class AnswerLibraryService:
                 AnswerLibraryEntry.normalized_question.contains(normalized[:120])
                 | AnswerLibraryEntry.question_text.ilike(f"%{query[:120]}%")
             )
-        return q.order_by(AnswerLibraryEntry.updated_at.desc()).limit(limit).all()
+        rows = q.order_by(AnswerLibraryEntry.updated_at.desc()).limit(limit * 3).all()
+        visible: list[AnswerLibraryEntry] = []
+        for entry in rows:
+            if library_entry_visible(self.db, access, entry):
+                visible.append(entry)
+            if len(visible) >= limit:
+                break
+        return visible

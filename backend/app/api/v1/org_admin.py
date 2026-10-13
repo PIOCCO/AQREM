@@ -6,7 +6,7 @@ import hashlib
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.audit.service import record_audit
@@ -54,6 +54,9 @@ from app.services.storage.path_utils import safe_blob_filename
 from app.services.platform_provisioning import deactivate_membership
 from app.services.telemetry_ingest import ingest_org_telemetry
 from app.services.telemetry_schema import TELEMETRY_FIELD_CATALOG
+from app.services.access_control.constants import VISIBILITY_ADMINS_ONLY, VISIBILITY_ALL_STAFF, VISIBILITY_GROUPS, VISIBILITY_USERS
+from app.services.access_control.groups import ensure_default_access_groups
+from app.services.access_control.sensitivity import detect_sensitive
 
 router = APIRouter()
 
@@ -199,6 +202,7 @@ def list_documents(
         "indexed": org_docs.filter(ClientDocument.status == "indexed").count(),
         "indexing": org_docs.filter(ClientDocument.status.in_(("uploading", "indexing"))).count(),
         "failed": org_docs.filter(ClientDocument.status == "failed").count(),
+        "needs_visibility_review": org_docs.filter(ClientDocument.acl_reviewed.is_(False)).count(),
     }
     return DocumentListResponse(
         items=[
@@ -210,6 +214,9 @@ def list_documents(
                 status=r.status,
                 index_progress=r.index_progress,
                 failure_reason=r.failure_reason,
+                visibility_mode=r.visibility_mode,
+                sensitivity_flag=r.sensitivity_flag,
+                acl_reviewed=r.acl_reviewed,
                 created_at=r.created_at,
             )
             for r in rows
@@ -228,8 +235,21 @@ async def upload_documents(
     tenant: TenantContext = Depends(_require_org_admin_surface),
     db: Session = Depends(get_tenant_db),
     files: list[UploadFile] = File(...),
+    visibility_mode: str = Form(...),
+    visibility_group_ids: str | None = Form(default=None),
 ) -> dict:
     assert_org_admin_action(tenant, action="write", resource_type="document", resource_org_id=tenant.organization_id)
+    ensure_default_access_groups(db, tenant.organization_id)
+    if visibility_mode not in {VISIBILITY_ALL_STAFF, VISIBILITY_GROUPS, VISIBILITY_USERS, VISIBILITY_ADMINS_ONLY}:
+        raise org_admin_error(code="VISIBILITY_REQUIRED", message="Choose who can see these files.", field="visibility_mode")
+    group_ids: list[UUID] = []
+    if visibility_group_ids:
+        for part in visibility_group_ids.split(","):
+            part = part.strip()
+            if part:
+                group_ids.append(UUID(part))
+    if visibility_mode == VISIBILITY_GROUPS and not group_ids:
+        raise org_admin_error(code="GROUPS_REQUIRED", message="Pick at least one group.", field="visibility_mode")
     settings = get_settings()
     source = _ensure_document_source(db, tenant)
     storage = get_blob_storage()
@@ -278,6 +298,10 @@ async def upload_documents(
             )
         blob_path = f"{tenant.organization_id}/{source.id}/{safe_name}"
         storage.upload_bytes(blob_path, data, upload.content_type or "application/octet-stream")
+        sensitive, _reason = detect_sensitive(file_name=safe_name, content_sample=data)
+        effective_mode = visibility_mode
+        if sensitive and visibility_mode == VISIBILITY_ALL_STAFF:
+            effective_mode = VISIBILITY_ADMINS_ONLY
         doc = ClientDocument(
             organization_id=tenant.organization_id,
             source_id=source.id,
@@ -289,6 +313,11 @@ async def upload_documents(
             index_progress=5,
             malware_scan_status=scan_status,
             content_hash=content_hash,
+            visibility_mode=effective_mode,
+            visibility_group_ids=group_ids if effective_mode == VISIBILITY_GROUPS else [],
+            visibility_user_ids=[],
+            sensitivity_flag=sensitive,
+            acl_reviewed=True,
         )
         db.add(doc)
         db.flush()
