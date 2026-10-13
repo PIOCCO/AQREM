@@ -26,7 +26,7 @@ export default defineConfig({
     },
     {
       name: "sidebar-layout",
-      testMatch: /sidebar-layout\.spec\.ts/,
+      testMatch: /sidebar-layout\.spec\.ts|chat-share\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         storageState: "e2e/.auth/employee.json",
