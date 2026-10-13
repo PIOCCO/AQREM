@@ -2,7 +2,13 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const FORBIDDEN = ["PLATFORM_ADMIN_EMAIL", "backend/.env", "Platform operators:"];
+const FORBIDDEN = [
+  "PLATFORM_ADMIN_EMAIL",
+  "backend/.env",
+  "Platform operators:",
+  "Create account",
+  "registerUser",
+];
 
 describe("public surface leaks", () => {
   it("login page source contains no operator hints", () => {

@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Logo } from "../components/brand/Logo";
 import { changePassword, loadSession } from "../lib/api";
 
 export default function ChangePasswordPage() {
@@ -35,10 +36,15 @@ export default function ChangePasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface-canvas p-6 font-sans">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--color-background)] p-6 font-sans">
       <div className="w-full max-w-md aq-card shadow-panel aq-card-p">
-        <h1 className="text-lg font-semibold mb-2">Set a new password</h1>
-        <p className="text-sm text-fg-muted mb-4">Your administrator requires a password change before you continue.</p>
+        <div className="mb-6 flex flex-col items-center text-center">
+          <Logo variant="mark" size={48} />
+        </div>
+        <h1 className="text-lg font-semibold mb-2 text-[var(--color-text-primary)]">Set a new password</h1>
+        <p className="text-sm text-[var(--color-text-muted)] mb-4">
+          Your administrator requires a password change before you continue.
+        </p>
         <form className="space-y-3" onSubmit={onSubmit}>
           <input
             name="current_password"

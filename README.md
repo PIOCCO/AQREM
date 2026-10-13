@@ -97,7 +97,16 @@ If startup still fails with `Connection refused` on `127.0.0.1:5432`, run manual
 docker compose up -d postgres redis azurite
 ```
 
-Use `DATABASE_URL=...@localhost:5432/...` in `.env` for host-run uvicorn (not `@postgres:5432`, which is only valid inside Docker). On Tailscale, open **`http://<tailscale-ip>:4173`** and **sign in on that URL** (browser storage is per host; tokens from `:5173` or `:8000` do not apply). If you see “Invalid token”, use **Sign out** or open `/login?expired=1` and log in again. API docs: `/docs` on the same port.
+Use `DATABASE_URL=...@localhost:5432/...` in `.env` for host-run `./scripts/start-web-one-port.sh` (not `@postgres:5432`, which is only valid inside Docker). On Tailscale, open **`http://<tailscale-ip>:4173`** and **sign in on that URL** (browser storage is per host; tokens from `:5173` or `:8000` do not apply). If you see “Invalid token”, use **Sign out** or open `/login?expired=1` and log in again. API docs: `/docs` on the same port.
+
+**Avoid stale UI:** Vite hashes JS/CSS filenames on each production build. After pulling login or branding changes, rebuild and restart the server that serves `frontend/dist` (do not rely on an old `vite preview` or a long-running uvicorn from before the build):
+
+```bash
+cd frontend && rm -rf dist node_modules/.vite && npm ci && npm run build
+./scripts/start-web-one-port.sh
+```
+
+There is no service worker; a hard refresh (`Ctrl+Shift+R`) is enough if the browser cached an old `index.html`. Prefer **one** lab entry point (`:4173` via the script above) instead of mixing `:5173` preview and `:4173` API-only servers.
 
 ### Access via Tailscale
 

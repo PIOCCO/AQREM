@@ -16,6 +16,13 @@ test.describe("login without public registration", () => {
     await expect(page.getByRole("heading", { name: /Sign in to AQREM/i })).toBeVisible();
   });
 
+  test("registration API returns 404", async ({ request }) => {
+    const res = await request.post("/api/v1/auth/register", {
+      data: { email: "nobody@example.com", password: "not-a-real-password" },
+    });
+    expect(res.status()).toBe(404);
+  });
+
   test("accept invitation page still loads", async ({ page }) => {
     await page.goto("/accept-invite?token=test-token");
     await expect(page.getByRole("heading", { name: /Set your password/i })).toBeVisible();

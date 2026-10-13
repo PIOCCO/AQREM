@@ -39,7 +39,11 @@ export default defineConfig({
       testMatch: /login-no-registration\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], colorScheme: "dark" },
     },
-    { name: "public-dark", testMatch: /public-a11y|dead-controls/, use: { ...devices["Desktop Chrome"], colorScheme: "dark" } },
+    {
+      name: "public-dark",
+      testMatch: /public-a11y|dead-controls|login-brand|login-no-registration/,
+      use: { ...devices["Desktop Chrome"], colorScheme: "dark" },
+    },
     { name: "public-light", testMatch: /public-a11y|dead-controls/, use: { ...devices["Desktop Chrome"], colorScheme: "light" } },
   ],
 });

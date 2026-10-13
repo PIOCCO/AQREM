@@ -32,7 +32,7 @@ export default function AcceptInvitePage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface-canvas p-6 font-sans">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--color-background)] p-6 font-sans">
       <div className="w-full max-w-md aq-card shadow-panel aq-card-p">
         <div className="flex flex-col items-center text-center">
           <Logo variant="mark" size={48} />
