@@ -6,7 +6,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.db.base import Base
+from app.db.control_base import ControlBase
+from app.db.tenant_base import TenantBase
 from app.main import create_app
 import app.models  # noqa: F401
 
@@ -21,11 +22,14 @@ def engine():
     eng = create_engine(DATABASE_URL, pool_pre_ping=True)
     with eng.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        Base.metadata.drop_all(bind=conn)
-        Base.metadata.create_all(bind=conn)
+        ControlBase.metadata.drop_all(bind=conn)
+        TenantBase.metadata.drop_all(bind=conn)
+        ControlBase.metadata.create_all(bind=conn)
+        TenantBase.metadata.create_all(bind=conn)
     yield eng
     with eng.begin() as conn:
-        Base.metadata.drop_all(bind=conn)
+        ControlBase.metadata.drop_all(bind=conn)
+        TenantBase.metadata.drop_all(bind=conn)
 
 
 @pytest.fixture()
@@ -76,8 +80,10 @@ def client(db_session: Session, monkeypatch) -> Generator[TestClient, None, None
         yield db_session
 
     from app.db.session import get_db
+    from app.tenant_store.deps import get_tenant_db
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_tenant_db] = override_get_db
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

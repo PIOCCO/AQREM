@@ -7,18 +7,17 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.config import get_settings
-from app.db.base import Base
+from app.db.tenant_base import TenantBase
 
 _settings = get_settings()
 EMBEDDING_DIM = _settings.embedding_dimensions
 
 
-class AnswerLibraryEntry(Base):
+class AnswerLibraryEntry(TenantBase):
     __tablename__ = "answer_library_entries"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True
     )
     project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
@@ -35,9 +34,7 @@ class AnswerLibraryEntry(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     reuse_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
-    reviewer_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
+    reviewer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     question_embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
     entry_metadata: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, default=dict)
@@ -52,7 +49,7 @@ class AnswerLibraryEntry(Base):
     )
 
 
-class AnswerLibraryEvidenceLink(Base):
+class AnswerLibraryEvidenceLink(TenantBase):
     __tablename__ = "answer_library_evidence_links"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

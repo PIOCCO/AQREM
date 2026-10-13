@@ -1,5 +1,5 @@
-from sqlalchemy.orm import DeclarativeBase
+"""Backward-compatible alias: control-plane models inherit from Base."""
 
+from app.db.control_base import ControlBase
 
-class Base(DeclarativeBase):
-    pass
+Base = ControlBase

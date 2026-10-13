@@ -7,10 +7,10 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base
+from app.db.control_base import ControlBase
 
 
-class ClientEnvironment(Base):
+class ClientEnvironment(ControlBase):
     __tablename__ = "client_environments"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -33,7 +33,7 @@ class ClientEnvironment(Base):
     )
 
 
-class ProvisioningJob(Base):
+class ProvisioningJob(ControlBase):
     __tablename__ = "provisioning_jobs"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -52,7 +52,7 @@ class ProvisioningJob(Base):
     )
 
 
-class ControlPlaneEvent(Base):
+class ControlPlaneEvent(ControlBase):
     __tablename__ = "control_plane_events"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

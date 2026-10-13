@@ -8,6 +8,7 @@ from app.core.rate_limit import LLM_GENERATE_LIMIT, limiter
 from app.core.roles import Role
 from app.core.tenant import TenantContext
 from app.db.session import get_db
+from app.tenant_store.deps import get_tenant_db
 from app.models.questionnaire import Answer, Question
 from app.models.staleness import AnswerStalenessEvent
 from app.models.enums import StalenessEventStatus
@@ -29,7 +30,7 @@ router = APIRouter()
 @router.get("", response_model=StaleAnswerListResponse)
 def list_stale_answers(
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     project_id: UUID | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
     search: str | None = Query(default=None),
@@ -88,7 +89,7 @@ def list_stale_answers(
 def get_stale_answer(
     answer_id: UUID,
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> StaleAnswerDetailResponse:
     detail = StalenessService(db).get_stale_answer_detail(
         organization_id=tenant.organization_id, answer_id=answer_id
@@ -123,7 +124,7 @@ def get_stale_answer(
 def revalidate_stale_answer(
     answer_id: UUID,
     tenant: TenantContext = Depends(require_role(Role.REVIEWER)),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> RevalidateResponse:
     try:
         result = StalenessService(db).revalidate(
@@ -143,7 +144,7 @@ async def regenerate_stale_answer(
     request: Request,
     answer_id: UUID,
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> AnswerResponse:
     answer = db.get(Answer, answer_id)
     if answer is None or answer.organization_id != tenant.organization_id:

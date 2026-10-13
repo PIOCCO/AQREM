@@ -28,7 +28,6 @@ class Organization(Base):
     )
 
     memberships: Mapped[list["OrganizationMembership"]] = relationship(back_populates="organization")
-    projects: Mapped[list["Project"]] = relationship(back_populates="organization")  # noqa: F821
 
 
 class User(Base):

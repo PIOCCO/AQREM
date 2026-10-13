@@ -17,9 +17,10 @@ from app.core.config import get_settings
 from app.core.llm_config import inspect_azure_openai, llm_provider_summary
 from app.core.rate_limit import limiter
 from app.core.security_middleware import SecurityHeadersMiddleware
-from app.db.base import Base
+from app.db.control_base import ControlBase
 from app.db.schema_patches import apply_schema_patches
 from app.db.session import engine
+from app.db.tenant_base import TenantBase
 import app.models  # noqa: F401
 
 
@@ -45,7 +46,8 @@ async def lifespan(_: FastAPI):
             )
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        Base.metadata.create_all(bind=conn)
+        ControlBase.metadata.create_all(bind=conn)
+        TenantBase.metadata.create_all(bind=conn)
         apply_schema_patches(conn)
     from app.db.session import SessionLocal
     from app.services.bootstrap import ensure_platform_admin

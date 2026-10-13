@@ -12,17 +12,20 @@ from app.models.source import GitHubRepoConfig, Source, SourceSyncJob
 from app.services.github.client import GitHubClient, GitHubRepoRef, extract_archive_bytes
 from app.services.ingestion.indexer import FilePayload, index_files
 from app.services.storage.factory import get_blob_storage
+from app.tenant_store.resolver import open_tenant_session
 from worker.app.celery_app import celery_app
 
 
-def enqueue_source_sync(job_id: str) -> None:
-    run_source_sync.delay(job_id)
+def enqueue_source_sync(job_id: str, organization_id: str) -> None:
+    run_source_sync.delay(job_id, organization_id)
 
 
 @celery_app.task(name="worker.app.tasks.ingestion.run_source_sync")
-def run_source_sync(job_id: str) -> dict:
-    db: Session = SessionLocal()
+def run_source_sync(job_id: str, organization_id: str) -> dict:
+    control: Session = SessionLocal()
+    db: Session | None = None
     try:
+        db = open_tenant_session(control, UUID(organization_id))
         job = db.get(SourceSyncJob, UUID(job_id))
         if job is None:
             return {"error": "job_not_found"}
@@ -84,13 +87,16 @@ def run_source_sync(job_id: str) -> dict:
         db.commit()
         return stats
     except Exception as exc:  # noqa: BLE001
-        db.rollback()
-        job = db.get(SourceSyncJob, UUID(job_id))
-        if job:
-            job.status = SyncJobStatus.FAILED.value
-            job.error_message = str(exc)[:2000]
-            job.completed_at = datetime.now(UTC)
-            db.commit()
+        if db is not None:
+            db.rollback()
+            job = db.get(SourceSyncJob, UUID(job_id))
+            if job:
+                job.status = SyncJobStatus.FAILED.value
+                job.error_message = str(exc)[:2000]
+                job.completed_at = datetime.now(UTC)
+                db.commit()
         return {"error": str(exc)}
     finally:
-        db.close()
+        if db is not None:
+            db.close()
+        control.close()

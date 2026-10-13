@@ -5,6 +5,7 @@ from app.core.dependencies import get_tenant_context
 from app.core.rate_limit import RETRIEVAL_PREVIEW_LIMIT, limiter
 from app.core.tenant import TenantContext
 from app.db.session import get_db
+from app.tenant_store.deps import get_tenant_db
 from app.schemas.evidence import EvidenceItemSummaryResponse, EvidenceSearchRequest, RetrievalPreviewResponse
 from app.services.llm.guardrails import sanitize_evidence_content
 from app.services.retrieval.service import RetrievalService
@@ -18,7 +19,7 @@ async def preview_retrieval(
     request: Request,
     payload: EvidenceSearchRequest,
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> RetrievalPreviewResponse:
     items = await RetrievalService(db).retrieve(
         organization_id=tenant.organization_id,

@@ -12,6 +12,7 @@ from app.core.rate_limit import LLM_GENERATE_LIMIT, limiter
 from app.core.roles import Role
 from app.core.tenant import TenantContext
 from app.db.session import get_db
+from app.tenant_store.deps import get_tenant_db
 from app.models.evidence import EvidenceItem
 from app.models.project import Project
 from app.models.questionnaire import Answer, AnswerEvidenceLink, Question, Questionnaire
@@ -115,7 +116,7 @@ def _get_question(db: Session, tenant: TenantContext, question_id: UUID) -> Ques
 @router.get("", response_model=list[QuestionnaireResponse])
 def list_questionnaires(
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     project_id: UUID | None = Query(default=None),
 ) -> list[QuestionnaireResponse]:
     query = db.query(Questionnaire).filter(Questionnaire.organization_id == tenant.organization_id)
@@ -129,7 +130,7 @@ def list_questionnaires(
 def create_questionnaire(
     payload: QuestionnaireCreate,
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> QuestionnaireResponse:
     if payload.project_id:
         project = db.get(Project, payload.project_id)
@@ -161,7 +162,7 @@ def create_questionnaire(
 def get_questionnaire(
     questionnaire_id: UUID,
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> QuestionnaireResponse:
     return _questionnaire_response(db, _get_questionnaire(db, tenant, questionnaire_id))
 
@@ -170,7 +171,7 @@ def get_questionnaire(
 def list_questions(
     questionnaire_id: UUID,
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     status_filter: str | None = Query(default=None, alias="status"),
     search: str | None = Query(default=None),
 ) -> list[QuestionWithAnswerResponse]:
@@ -225,7 +226,7 @@ def list_questions(
 def export_questionnaire_csv(
     questionnaire_id: UUID,
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     approved_only: bool = Query(default=False),
     needs_review_only: bool = Query(default=False),
 ) -> Response:
@@ -263,7 +264,7 @@ def export_questionnaire_csv(
 def export_questionnaire_xlsx(
     questionnaire_id: UUID,
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     approved_only: bool = Query(default=False),
     needs_review_only: bool = Query(default=False),
 ) -> Response:
@@ -302,7 +303,7 @@ async def upload_questionnaire(
     questionnaire_id: UUID,
     file: UploadFile = File(...),
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> dict:
     settings = get_settings()
     questionnaire = _get_questionnaire(db, tenant, questionnaire_id)
@@ -361,7 +362,7 @@ async def generate_all_answers(
     request: Request,
     questionnaire_id: UUID,
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> GenerateBatchResponse:
     _get_questionnaire(db, tenant, questionnaire_id)
     questions = (
@@ -391,7 +392,7 @@ async def generate_all_answers(
 def get_question_detail(
     question_id: UUID,
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> QuestionDetailResponse:
     question = _get_question(db, tenant, question_id)
     return QuestionDetailResponse(
@@ -406,7 +407,7 @@ async def generate_question_answer(
     request: Request,
     question_id: UUID,
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> AnswerResponse:
     question = _get_question(db, tenant, question_id)
     answer = await AnsweringService(db).generate_for_question(
@@ -420,7 +421,7 @@ async def generate_question_answer(
 async def approve_answer(
     answer_id: UUID,
     tenant: TenantContext = Depends(require_role(Role.REVIEWER)),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> AnswerResponse:
     answer = db.get(Answer, answer_id)
     if answer is None or answer.organization_id != tenant.organization_id:
@@ -435,7 +436,7 @@ async def edit_answer(
     answer_id: UUID,
     payload: AnswerEditRequest,
     tenant: TenantContext = Depends(require_role(Role.REVIEWER)),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> AnswerResponse:
     answer = db.get(Answer, answer_id)
     if answer is None or answer.organization_id != tenant.organization_id:
@@ -449,7 +450,7 @@ async def edit_answer(
 def reject_answer(
     answer_id: UUID,
     tenant: TenantContext = Depends(require_role(Role.REVIEWER)),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> AnswerResponse:
     answer = db.get(Answer, answer_id)
     if answer is None or answer.organization_id != tenant.organization_id:
@@ -465,7 +466,7 @@ async def regenerate_answer(
     request: Request,
     question_id: UUID,
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> AnswerResponse:
     question = _get_question(db, tenant, question_id)
     answer = await AnsweringService(db).generate_for_question(

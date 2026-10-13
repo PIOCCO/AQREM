@@ -5,15 +5,14 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstr
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base
+from app.db.tenant_base import TenantBase
 
 
-class Questionnaire(Base):
+class Questionnaire(TenantBase):
     __tablename__ = "questionnaires"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True
     )
     project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
@@ -30,13 +29,12 @@ class Questionnaire(Base):
     questions: Mapped[list["Question"]] = relationship(back_populates="questionnaire", cascade="all, delete-orphan")
 
 
-class Question(Base):
+class Question(TenantBase):
     __tablename__ = "questions"
     __table_args__ = (UniqueConstraint("questionnaire_id", "external_id", name="uq_questionnaire_external_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True
     )
     questionnaire_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("questionnaires.id", ondelete="CASCADE"), nullable=False, index=True
@@ -54,13 +52,12 @@ class Question(Base):
     answer: Mapped["Answer | None"] = relationship(back_populates="question", uselist=False)
 
 
-class Answer(Base):
+class Answer(TenantBase):
     __tablename__ = "answers"
     __table_args__ = (UniqueConstraint("question_id", name="uq_answer_question"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True
     )
     question_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("questions.id", ondelete="CASCADE"), nullable=False, unique=True
@@ -72,9 +69,7 @@ class Answer(Base):
     reasoning_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    reviewer_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
+    reviewer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     potentially_stale: Mapped[bool] = mapped_column(nullable=False, default=False)
     stale_detected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -93,7 +88,7 @@ class Answer(Base):
     )
 
 
-class AnswerEvidenceLink(Base):
+class AnswerEvidenceLink(TenantBase):
     __tablename__ = "answer_evidence_links"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

@@ -4,6 +4,7 @@ from app.models.audit import AuditEvent
 from app.models.client_admin import ClientCredentialMetadata, ClientDocument
 from app.models.evidence import EvidenceItem, EvidenceItemVersion
 from app.models.environment import ClientEnvironment, ControlPlaneEvent, ProvisioningJob
+from app.models.tenant_data_store import TenantDataStoreConfig
 from app.models.invitation import UserInvitation
 from app.models.organization import Organization, OrganizationMembership, User
 from app.models.project import Project
@@ -36,6 +37,7 @@ __all__ = [
     "ClientEnvironment",
     "ProvisioningJob",
     "ControlPlaneEvent",
+    "TenantDataStoreConfig",
     "Answer",
     "AnswerEvidenceLink",
     "Project",

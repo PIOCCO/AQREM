@@ -9,10 +9,11 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base
+from app.db.control_base import ControlBase
+from app.db.tenant_base import TenantBase
 
 
-class ClientCredentialMetadata(Base):
+class ClientCredentialMetadata(ControlBase):
     """Azure OpenAI / model token metadata. Secret value lives in Key Vault only."""
 
     __tablename__ = "client_credential_metadata"
@@ -31,15 +32,13 @@ class ClientCredentialMetadata(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
-class ClientDocument(Base):
+class ClientDocument(TenantBase):
     """Per-file upload status for the client admin documents table."""
 
     __tablename__ = "client_documents"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organization_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     source_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("sources.id"), nullable=True)
     sync_job_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("source_sync_jobs.id"), nullable=True)
     file_name: Mapped[str] = mapped_column(String(512), nullable=False)

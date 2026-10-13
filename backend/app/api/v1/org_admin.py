@@ -18,6 +18,7 @@ from app.core.roles import Role
 from app.core.security import decode_access_token
 from app.core.tenant import TenantContext
 from app.db.session import get_db
+from app.tenant_store.deps import get_tenant_db
 from app.models.client_admin import ClientCredentialMetadata, ClientDocument
 from app.models.enums import EvidenceScope, SourceType, SyncJobStatus
 from app.models.invitation import UserInvitation
@@ -25,6 +26,11 @@ from app.models.organization import Organization, OrganizationMembership, User
 from app.models.project import Project
 from app.models.source import Source, SourceSyncJob
 from app.models.audit import AuditEvent
+from app.schemas.tenant_storage import (
+    PreflightReportResponse,
+    TenantStorageConfigureRequest,
+    TenantStorageResponse,
+)
 from app.schemas.org_admin import (
     AuditRowResponse,
     DocumentListResponse,
@@ -119,7 +125,7 @@ def _ensure_document_source(db: Session, tenant: TenantContext) -> Source:
 def admin_console_enter(
     request: Request,
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> dict[str, bool]:
     record_audit(
         db,
@@ -137,7 +143,7 @@ def admin_console_enter(
 @router.get("/setup")
 def get_setup_checklist(
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> dict:
     assert_org_admin_action(tenant, action="read", resource_type="setup", resource_org_id=tenant.organization_id)
     return build_setup_checklist(db, organization_id=tenant.organization_id)
@@ -146,7 +152,7 @@ def get_setup_checklist(
 @router.get("/overview")
 def org_admin_overview(
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> dict:
     org = db.get(Organization, tenant.organization_id)
     checklist = build_setup_checklist(db, organization_id=tenant.organization_id)
@@ -176,7 +182,7 @@ def org_admin_overview(
 @router.get("/documents", response_model=DocumentListResponse)
 def list_documents(
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=10, ge=1, le=50),
 ) -> DocumentListResponse:
@@ -226,7 +232,7 @@ def list_documents(
 async def upload_documents(
     request: Request,
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     files: list[UploadFile] = File(...),
 ) -> dict:
     assert_org_admin_action(tenant, action="write", resource_type="document", resource_org_id=tenant.organization_id)
@@ -315,7 +321,7 @@ async def upload_documents(
         try:
             from worker.app.tasks.ingestion import enqueue_source_sync
 
-            enqueue_source_sync(str(job.id))
+            enqueue_source_sync(str(job.id), str(tenant.organization_id))
         except Exception:
             pass
     ingest_org_telemetry(
@@ -332,7 +338,7 @@ async def upload_documents(
 def remove_document(
     document_id: UUID,
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> None:
     assert_org_admin_action(tenant, action="delete", resource_type="document", resource_org_id=tenant.organization_id)
     doc = db.get(ClientDocument, document_id)
@@ -355,7 +361,7 @@ def remove_document(
 def retry_document(
     document_id: UUID,
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> dict:
     doc = db.get(ClientDocument, document_id)
     if doc is None or doc.organization_id != tenant.organization_id:
@@ -379,7 +385,7 @@ def retry_document(
 @router.get("/model-token", response_model=ModelTokenResponse)
 def get_model_token(
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> ModelTokenResponse:
     assert_org_admin_action(tenant, action="read", resource_type="credential", resource_org_id=tenant.organization_id)
     cred = db.query(ClientCredentialMetadata).filter(ClientCredentialMetadata.organization_id == tenant.organization_id).first()
@@ -416,7 +422,7 @@ def save_model_token(
     request: Request,
     payload: ModelTokenSaveRequest,
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> ModelTokenResponse:
     assert_org_admin_action(tenant, action="write", resource_type="credential", resource_org_id=tenant.organization_id)
     store = get_client_secret_store()
@@ -465,7 +471,7 @@ def save_model_token(
 def test_model_token(
     request: Request,
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> dict:
     cred = db.query(ClientCredentialMetadata).filter(ClientCredentialMetadata.organization_id == tenant.organization_id).first()
     if cred is None:
@@ -489,7 +495,7 @@ def test_model_token(
 @router.post("/model-token/rotate", response_model=ModelTokenResponse)
 def rotate_model_token(
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> ModelTokenResponse:
     raise org_admin_error(
         code="ROTATION_REQUIRES_NEW_TOKEN",
@@ -501,7 +507,7 @@ def rotate_model_token(
 @router.get("/members", response_model=list[MemberRow])
 def list_members(
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> list[MemberRow]:
     assert_org_admin_action(tenant, action="read", resource_type="member", resource_org_id=tenant.organization_id)
     rows = (
@@ -529,7 +535,7 @@ def invite_member(
     request: Request,
     payload: MemberInviteRequest,
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> dict:
     assert_org_admin_action(tenant, action="write", resource_type="member", resource_org_id=tenant.organization_id)
     org = db.get(Organization, tenant.organization_id)
@@ -586,7 +592,7 @@ def invite_member(
 def deactivate_org_member(
     membership_id: UUID,
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> None:
     assert_org_admin_action(tenant, action="write", resource_type="member", resource_org_id=tenant.organization_id)
     membership = db.get(OrganizationMembership, membership_id)
@@ -601,7 +607,7 @@ def deactivate_org_member(
 @router.get("/usage", response_model=UsageSummaryResponse)
 def usage_summary(
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> UsageSummaryResponse:
     assert_org_admin_action(tenant, action="read", resource_type="usage", resource_org_id=tenant.organization_id)
     members = (
@@ -626,7 +632,7 @@ def usage_summary(
 @router.get("/audit", response_model=list[AuditRowResponse])
 def list_audit(
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> list[AuditRowResponse]:
     assert_org_admin_action(tenant, action="read", resource_type="audit", resource_org_id=tenant.organization_id)
@@ -667,10 +673,174 @@ def telemetry_schema(
     }
 
 
+@router.get("/data-storage", response_model=TenantStorageResponse)
+def get_data_storage(
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    control_db: Session = Depends(get_db),
+) -> TenantStorageResponse:
+    from app.tenant_store.resolver import ensure_managed_config
+
+    cfg = ensure_managed_config(control_db, tenant.organization_id)
+    return TenantStorageResponse(
+        storage_mode=cfg.storage_mode,
+        connection_method=cfg.connection_method,
+        status=cfg.status,
+        host=cfg.host,
+        port=cfg.port,
+        database_name=cfg.database_name,
+        schema_name=cfg.schema_name,
+        ssl_mode=cfg.ssl_mode,
+        username=cfg.username,
+        has_credentials=bool(cfg.secret_reference),
+        schema_version=cfg.schema_version,
+        last_health_status=cfg.last_health_status,
+        last_health_summary=cfg.last_health_summary,
+        last_latency_ms=cfg.last_latency_ms,
+        last_health_check_at=cfg.last_health_check_at.isoformat() if cfg.last_health_check_at else None,
+        paused=cfg.paused,
+    )
+
+
+@router.post("/data-storage/preflight", response_model=PreflightReportResponse)
+def preflight_data_storage(
+    payload: TenantStorageConfigureRequest,
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+) -> PreflightReportResponse:
+    from app.schemas.tenant_storage import PreflightCheckResponse
+    from app.tenant_store.preflight import run_preflight
+
+    if payload.storage_mode != "customer_postgres":
+        return PreflightReportResponse(
+            ok=True,
+            checks=[
+                PreflightCheckResponse(
+                    id="managed",
+                    title="Managed storage",
+                    status="pass",
+                    detail="AQREM-managed storage uses the platform database. No customer connection test is required.",
+                )
+            ],
+        )
+    if not payload.password or not payload.host or not payload.database_name or not payload.username:
+        return PreflightReportResponse(
+            ok=False,
+            checks=[
+                PreflightCheckResponse(
+                    id="fields",
+                    title="Connection details",
+                    status="fail",
+                    detail="Enter host, database name, username, and password before running preflight.",
+                )
+            ],
+        )
+    report = run_preflight(
+        host=payload.host,
+        port=payload.port,
+        database_name=payload.database_name,
+        username=payload.username,
+        password=payload.password,
+        ssl_mode=payload.ssl_mode,
+        connection_method=payload.connection_method,
+        schema_name=payload.schema_name,
+    )
+    return PreflightReportResponse(
+        ok=report.ok,
+        latency_ms=report.latency_ms,
+        checks=[PreflightCheckResponse(id=c.id, title=c.title, status=c.status, detail=c.detail) for c in report.checks],
+    )
+
+
+@router.put("/data-storage", response_model=TenantStorageResponse)
+def configure_data_storage(
+    payload: TenantStorageConfigureRequest,
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    control_db: Session = Depends(get_db),
+) -> TenantStorageResponse:
+    from app.audit.service import record_audit
+    from app.models.tenant_data_store import TenantDataStoreConfig
+    from app.tenant_store.migrations import migrate_tenant_engine
+    from app.tenant_store.pool import tenant_pool_manager
+    from app.tenant_store.preflight import run_preflight
+    from app.tenant_store.resolver import (
+        CUSTOMER_POSTGRES,
+        MANAGED_COLOCATED,
+        build_database_url,
+        default_secret_reference,
+        ensure_managed_config,
+    )
+    from app.tenant_store.secrets import default_secret_store
+
+    cfg = ensure_managed_config(control_db, tenant.organization_id)
+    before_mode = cfg.storage_mode
+    if payload.storage_mode == MANAGED_COLOCATED:
+        cfg.storage_mode = MANAGED_COLOCATED
+        cfg.connection_method = "managed"
+        cfg.host = None
+        cfg.port = None
+        cfg.database_name = None
+        cfg.username = None
+        cfg.secret_reference = None
+        cfg.status = "active"
+    elif payload.storage_mode == CUSTOMER_POSTGRES:
+        secrets = default_secret_store()
+        ref = cfg.secret_reference or default_secret_reference(tenant.organization_id)
+        password = payload.password or secrets.get(ref)
+        if not password:
+            raise org_admin_error(code="PASSWORD_REQUIRED", message="Password is required for your database.", field="password")
+        report = run_preflight(
+            host=payload.host or "",
+            port=payload.port,
+            database_name=payload.database_name or "",
+            username=payload.username or "",
+            password=password,
+            ssl_mode=payload.ssl_mode,
+            connection_method=payload.connection_method,
+        )
+        if not report.ok:
+            raise org_admin_error(
+                code="PREFLIGHT_FAILED",
+                message="Preflight did not pass. Fix the issues listed in the preflight results and try again.",
+            )
+        if payload.password:
+            secrets.put(ref, payload.password)
+        cfg.storage_mode = CUSTOMER_POSTGRES
+        cfg.connection_method = payload.connection_method
+        cfg.host = payload.host
+        cfg.port = payload.port
+        cfg.database_name = payload.database_name
+        cfg.schema_name = payload.schema_name
+        cfg.ssl_mode = payload.ssl_mode
+        cfg.username = payload.username
+        cfg.secret_reference = ref
+        cfg.status = "active"
+        cfg.last_health_check_at = datetime.now(UTC)
+        cfg.last_health_status = "healthy"
+        cfg.last_health_summary = "Preflight passed."
+        cfg.last_latency_ms = report.latency_ms
+        url = build_database_url(cfg, default_secret_store())
+        engine = tenant_pool_manager.get_engine(str(tenant.organization_id), url)
+        migrate_tenant_engine(engine)
+    else:
+        raise org_admin_error(code="INVALID_MODE", message="Choose managed or customer PostgreSQL.", field="storage_mode")
+
+    control_db.flush()
+    record_audit(
+        control_db,
+        organization_id=tenant.organization_id,
+        user_id=tenant.user_id,
+        action="tenant_storage_configured",
+        resource_type="tenant_data_store",
+        resource_id=str(cfg.id),
+        metadata={"before_mode": before_mode, "after_mode": cfg.storage_mode, "connection_method": cfg.connection_method},
+    )
+    control_db.commit()
+    return get_data_storage(tenant, control_db)
+
+
 @router.post("/employee-link/copied", status_code=204)
 def employee_link_copied(
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> None:
     checklist = build_setup_checklist(db, organization_id=tenant.organization_id)
     if not checklist.get("employee_link_enabled"):

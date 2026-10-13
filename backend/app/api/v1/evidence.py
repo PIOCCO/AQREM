@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import get_tenant_context
 from app.core.tenant import TenantContext
 from app.db.session import get_db
+from app.tenant_store.deps import get_tenant_db
 from app.models.evidence import EvidenceItem
 from app.schemas.evidence import (
     EvidenceItemResponse,
@@ -86,7 +87,7 @@ def _row_to_summary(row) -> EvidenceItemSummaryResponse:
 @router.get("", response_model=EvidenceListResponse)
 def list_evidence(
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     project_id: UUID | None = Query(default=None),
     source_id: UUID | None = Query(default=None),
     search: str | None = Query(default=None),
@@ -120,7 +121,7 @@ def list_evidence(
 def get_evidence(
     evidence_id: UUID,
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> EvidenceItemResponse:
     content_len = func.length(EvidenceItem.content)
     content_preview = func.left(EvidenceItem.content, _DETAIL_CONTENT_MAX)

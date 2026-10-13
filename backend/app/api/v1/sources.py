@@ -9,6 +9,7 @@ from app.core.dependencies import get_tenant_context, require_role
 from app.core.roles import Role
 from app.core.tenant import TenantContext
 from app.db.session import get_db
+from app.tenant_store.deps import get_tenant_db
 from app.models.enums import SourceType, SyncJobStatus
 from app.models.source import Source, SourceSyncJob
 from app.schemas.source import GitHubRepoConnectRequest, SourceCreate, SourceResponse, SyncJobResponse
@@ -33,7 +34,7 @@ def _validate_extension(filename: str) -> None:
 @router.get("", response_model=list[SourceResponse])
 def list_sources(
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     project_id: UUID | None = Query(default=None),
 ) -> list[Source]:
     query = db.query(Source).filter(Source.organization_id == tenant.organization_id)
@@ -48,7 +49,7 @@ def list_sources(
 def create_source(
     payload: SourceCreate,
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> Source:
     return create_source_record(db, tenant, payload)
 
@@ -58,7 +59,7 @@ async def upload_files(
     source_id: UUID,
     files: list[UploadFile] = File(...),
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> SourceSyncJob:
     settings = get_settings()
     source = db.get(Source, source_id)
@@ -93,7 +94,7 @@ async def upload_files(
 
     from worker.app.tasks.ingestion import enqueue_source_sync
 
-    enqueue_source_sync(str(job.id))
+    enqueue_source_sync(str(job.id), str(tenant.organization_id))
     return job
 
 
@@ -101,7 +102,7 @@ async def upload_files(
 def trigger_sync(
     source_id: UUID,
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> SourceSyncJob:
     source = db.get(Source, source_id)
     if source is None or source.organization_id != tenant.organization_id:
@@ -118,7 +119,7 @@ def trigger_sync(
 
     from worker.app.tasks.ingestion import enqueue_source_sync
 
-    enqueue_source_sync(str(job.id))
+    enqueue_source_sync(str(job.id), str(tenant.organization_id))
     return job
 
 
@@ -126,7 +127,7 @@ def trigger_sync(
 def connect_github_repo(
     payload: GitHubRepoConnectRequest,
     tenant: TenantContext = Depends(require_role(Role.EDITOR)),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> Source:
     source = db.get(Source, payload.source_id)
     if source is None or source.organization_id != tenant.organization_id:
@@ -143,7 +144,7 @@ def connect_github_repo(
 def list_source_jobs(
     source_id: UUID,
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     limit: int = Query(default=10, ge=1, le=50),
 ) -> list[SourceSyncJob]:
     source = db.get(Source, source_id)
@@ -162,7 +163,7 @@ def list_source_jobs(
 def get_job(
     job_id: UUID,
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> SourceSyncJob:
     job = db.get(SourceSyncJob, job_id)
     if job is None or job.organization_id != tenant.organization_id:

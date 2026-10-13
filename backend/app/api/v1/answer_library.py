@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import get_tenant_context
 from app.core.tenant import TenantContext
 from app.db.session import get_db
+from app.tenant_store.deps import get_tenant_db
 from app.models.answer_library import AnswerLibraryEntry, AnswerLibraryEvidenceLink
 from app.schemas.answer_library import (
     AnswerLibraryEntryResponse,
@@ -52,7 +53,7 @@ def _entry_response(db: Session, entry: AnswerLibraryEntry) -> AnswerLibraryEntr
 @router.get("", response_model=list[AnswerLibraryEntryResponse])
 def list_library_entries(
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     project_id: UUID | None = Query(default=None),
     query: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
@@ -70,7 +71,7 @@ def list_library_entries(
 def search_library(
     payload: AnswerLibrarySearchRequest,
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> list[AnswerLibraryEntryResponse]:
     entries = AnswerLibraryService(db).search_entries(
         organization_id=tenant.organization_id,
@@ -85,7 +86,7 @@ def search_library(
 def get_library_entry(
     entry_id: UUID,
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> AnswerLibraryEntryResponse:
     entry = db.get(AnswerLibraryEntry, entry_id)
     if entry is None or entry.organization_id != tenant.organization_id:
@@ -97,7 +98,7 @@ def get_library_entry(
 def validate_entry(
     entry_id: UUID,
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> dict:
     entry = db.get(AnswerLibraryEntry, entry_id)
     if entry is None or entry.organization_id != tenant.organization_id:

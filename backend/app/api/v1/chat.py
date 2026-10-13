@@ -6,6 +6,7 @@ from app.core.rate_limit import RETRIEVAL_PREVIEW_LIMIT, limiter
 from app.core.roles import Role
 from app.core.tenant import TenantContext
 from app.db.session import get_db
+from app.tenant_store.deps import get_tenant_db
 from app.schemas.chat import (
     ChatAskRequest,
     ChatAskResponse,
@@ -25,7 +26,7 @@ async def ask_chat(
     request: Request,
     payload: ChatAskRequest,
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> ChatAskResponse:
     result = await ChatAskService(db).ask(
         organization_id=tenant.organization_id,
@@ -40,7 +41,7 @@ async def ask_chat(
 async def create_chat_share(
     payload: CreateChatShareRequest,
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> CreateChatShareResponse:
     messages = [m.model_dump() for m in payload.messages]
     share = ChatShareService(db).create_or_update_share(
@@ -58,7 +59,7 @@ async def create_chat_share(
 async def get_chat_share(
     token: str,
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> ChatShareViewResponse:
     share = ChatShareService(db).get_share_for_tenant(token=token, organization_id=tenant.organization_id)
     return ChatShareViewResponse(
@@ -72,7 +73,7 @@ async def get_chat_share(
 async def revoke_chat_share(
     token: str,
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> None:
     is_admin = tenant.role == Role.ORG_ADMIN
     ChatShareService(db).revoke_share(

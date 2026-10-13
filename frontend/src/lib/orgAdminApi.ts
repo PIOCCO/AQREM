@@ -164,3 +164,70 @@ export async function recordEmployeeLinkCopied(session: AuthSession) {
   });
   if (!res.ok) throw new Error(await readApiError(res, "Could not record link copy"));
 }
+
+export type DataStorageConfig = {
+  storage_mode: string;
+  connection_method: string;
+  status: string;
+  host: string | null;
+  port: number | null;
+  database_name: string | null;
+  schema_name: string;
+  ssl_mode: string;
+  username: string | null;
+  has_credentials: boolean;
+  schema_version: number;
+  last_health_status: string | null;
+  last_health_summary: string | null;
+  last_latency_ms: number | null;
+  last_health_check_at: string | null;
+  paused: boolean;
+};
+
+export type PreflightCheck = { id: string; title: string; status: string; detail: string };
+
+export type PreflightReport = { ok: boolean; latency_ms?: number | null; checks: PreflightCheck[] };
+
+export type DataStoragePayload = {
+  storage_mode: string;
+  connection_method?: string;
+  host?: string | null;
+  port?: number | null;
+  database_name?: string | null;
+  schema_name?: string;
+  ssl_mode?: string;
+  username?: string | null;
+  password?: string | null;
+};
+
+export async function fetchDataStorage(session: AuthSession): Promise<DataStorageConfig> {
+  const res = await fetch(`${API_BASE}/api/v1/org-admin/data-storage`, { headers: headers(session) });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to load data storage"));
+  return res.json();
+}
+
+export async function runDataStoragePreflight(
+  session: AuthSession,
+  payload: DataStoragePayload,
+): Promise<PreflightReport> {
+  const res = await fetch(`${API_BASE}/api/v1/org-admin/data-storage/preflight`, {
+    method: "POST",
+    headers: headers(session),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Preflight request failed"));
+  return res.json();
+}
+
+export async function configureDataStorage(
+  session: AuthSession,
+  payload: DataStoragePayload,
+): Promise<DataStorageConfig> {
+  const res = await fetch(`${API_BASE}/api/v1/org-admin/data-storage`, {
+    method: "PUT",
+    headers: headers(session),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to save data storage"));
+  return res.json();
+}

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import get_tenant_context
 from app.core.tenant import TenantContext
 from app.db.session import get_db
+from app.tenant_store.deps import get_tenant_db
 from app.models.enums import AnswerStatus, SourceStatus
 from app.models.evidence import EvidenceItem
 from app.models.project import Project
@@ -83,7 +84,7 @@ def _metrics_for_org(db: Session, org_id: UUID, project_id: UUID | None = None) 
 @router.get("/metrics")
 def dashboard_metrics(
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     project_id: UUID | None = Query(default=None),
 ) -> dict:
     return _metrics_for_org(db, tenant.organization_id, project_id)
@@ -92,7 +93,7 @@ def dashboard_metrics(
 @router.get("/overview")
 def dashboard_overview(
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     project_id: UUID | None = Query(default=None),
 ) -> dict:
     metrics = _metrics_for_org(db, tenant.organization_id, project_id)

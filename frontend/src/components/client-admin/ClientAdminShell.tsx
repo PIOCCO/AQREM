@@ -8,6 +8,7 @@ import { fetchOrgOverview } from "../../lib/orgAdminApi";
 const NAV = [
   { to: "/admin", end: true, label: "Setup" },
   { to: "/admin/documents", label: "Documents" },
+  { to: "/admin/data-storage", label: "Data storage" },
   { to: "/admin/model-token", label: "Model token" },
   { to: "/admin/users", label: "Users & access" },
   { to: "/admin/usage", label: "Usage" },

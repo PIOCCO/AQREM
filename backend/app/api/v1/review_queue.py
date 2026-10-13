@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.dependencies import get_tenant_context
 from app.core.tenant import TenantContext
 from app.db.session import get_db
+from app.tenant_store.deps import get_tenant_db
 from app.models.enums import AnswerStatus
 from app.models.project import Project
 from app.models.questionnaire import Answer, Question, Questionnaire
@@ -29,7 +30,7 @@ def _review_reason(answer: Answer) -> str:
 @router.get("", response_model=ReviewQueueResponse)
 def list_review_queue(
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     project_id: UUID | None = Query(default=None),
     search: str | None = Query(default=None),
     offset: int = Query(default=0, ge=0),

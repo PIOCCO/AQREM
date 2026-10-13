@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import get_tenant_context
 from app.core.tenant import TenantContext
 from app.db.session import get_db
+from app.tenant_store.deps import get_tenant_db
 from app.models.audit import AuditEvent
 from app.models.organization import User
 from app.schemas.audit import ActivityActorOption, ActivityActorsResponse, ActivityEventResponse, AuditListResponse
@@ -30,7 +31,7 @@ def _parse_dt(value: str | None) -> datetime | None:
 @router.get("", response_model=AuditListResponse)
 def list_audit_events(
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     search: str | None = Query(default=None, max_length=200),
     action: str | None = Query(default=None),
     actions: list[str] | None = Query(default=None),
@@ -74,7 +75,7 @@ def list_audit_events(
 @router.get("/actors", response_model=ActivityActorsResponse)
 def list_activity_actors(
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
 ) -> ActivityActorsResponse:
     subq = (
         select(AuditEvent.user_id)
@@ -99,7 +100,7 @@ def list_activity_actors(
 @router.get("/export")
 def export_audit_events(
     tenant: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     format: str = Query(default="csv", pattern="^(csv|json)$"),
     search: str | None = Query(default=None, max_length=200),
     actions: list[str] | None = Query(default=None),

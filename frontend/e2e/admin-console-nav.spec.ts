@@ -90,6 +90,47 @@ test.describe("admin console nav", () => {
     await expect(page.getByText("Back to assistant")).toBeVisible();
   });
 
+  test("org admin data storage page loads with keyboard nav", async ({ page }) => {
+    await mockAuthMe(page, ["admin_console:access"], "ORG_ADMIN");
+    await mockTenantMe(page, ["admin_console:access"], "ORG_ADMIN");
+    await page.route("**/api/v1/org-admin/console-enter**", async (route) => {
+      await route.fulfill({ status: 200, contentType: "application/json", body: '{"ok":true}' });
+    });
+    await page.route("**/api/v1/org-admin/data-storage**", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            storage_mode: "managed_colocated",
+            connection_method: "managed",
+            status: "active",
+            host: null,
+            port: null,
+            database_name: null,
+            schema_name: "public",
+            ssl_mode: "verify-full",
+            username: null,
+            has_credentials: false,
+            schema_version: 1,
+            last_health_status: "healthy",
+            last_health_summary: "Managed storage",
+            last_latency_ms: null,
+            last_health_check_at: null,
+            paused: false,
+          }),
+        });
+        return;
+      }
+      await route.fallback();
+    });
+    await page.goto("/admin/data-storage");
+    await expect(page.getByRole("heading", { name: "Data storage" })).toBeVisible();
+    await expect(page.getByRole("radio", { name: /Managed by AQREM/i })).toBeFocused({ timeout: 5000 }).catch(() => {});
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: /Save storage settings/i })).toBeVisible();
+  });
+
   test("employee direct /admin shows access denied", async ({ page }) => {
     await mockAuthMe(page, [], "EDITOR");
     await mockTenantMe(page, [], "EDITOR");

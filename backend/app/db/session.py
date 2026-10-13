@@ -12,6 +12,9 @@ engine = create_engine(
     pool_pre_ping=True,
 )
 
+# Control-plane SQLAlchemy engine (alias kept for existing imports).
+control_engine = engine
+
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
