@@ -19,10 +19,12 @@ from app.api.v1 import (
     retrieval,
     review_queue,
     sources,
+    meta,
 )
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(meta.router, prefix="/meta", tags=["meta"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(master.router, prefix="/master", tags=["master"])
 api_router.include_router(org_admin.router, prefix="/org-admin", tags=["org-admin"])

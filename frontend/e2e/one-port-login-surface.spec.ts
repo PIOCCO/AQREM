@@ -23,8 +23,17 @@ test.describe("one-port login surface", () => {
     await expect(page.getByText("Create account")).toHaveCount(0);
     await expect(page.getByText("Register", { exact: true })).toHaveCount(0);
     await expect(page.locator(".aq-logo-mark img.aq-logo-img--dark").first()).toBeVisible();
+    await expect(page.getByTestId("ui-build-label")).toBeVisible();
+    await expect(page.getByTestId("ui-build-label")).not.toHaveText(/UI build unknown/);
     const html = await page.content();
     expect(html).not.toContain("Create account");
+    expect(html).not.toMatch(/>Register</);
+
+    const meta = await page.request.get(`${base}/api/v1/meta/frontend-build`);
+    expect(meta.ok()).toBeTruthy();
+    const body = await meta.json();
+    expect(body.auth_surface).toBe("AuthPageShell");
+    expect(body.build_id).not.toBe("missing");
     await page.screenshot({ path: "test-results/one-port-login-dark.png", fullPage: true });
     await context.close();
   });

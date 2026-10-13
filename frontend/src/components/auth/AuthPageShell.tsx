@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Logo } from "../brand/Logo";
+import { getUiBuildLabel } from "../../lib/buildInfo";
 
 type AuthPageShellProps = {
   title: string;
@@ -22,6 +23,9 @@ export function AuthPageShell({ title, subtitle, children, footer }: AuthPageShe
         <h1 className="text-lg font-semibold mb-4 text-[var(--color-text-primary)]">{title}</h1>
         {children}
         {footer ? <div className="mt-4">{footer}</div> : null}
+        <p className="text-[10px] text-[var(--color-text-muted)] mt-6 text-center font-mono" data-testid="ui-build-label">
+          UI build {getUiBuildLabel()}
+        </p>
       </div>
     </div>
   );

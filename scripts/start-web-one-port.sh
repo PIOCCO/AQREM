@@ -173,20 +173,13 @@ build_frontend() {
   (cd "$FRONTEND" && npm install && npm run build)
 }
 
-frontend_build_stale() {
-  local dist_index="$FRONTEND/dist/index.html"
-  [[ -f "$dist_index" ]] || return 0
-  if find "$FRONTEND/src" "$FRONTEND/index.html" "$FRONTEND/package.json" "$FRONTEND/tailwind.config.js" \
-    -type f -newer "$dist_index" 2>/dev/null | grep -q .; then
-    return 0
-  fi
-  return 1
-}
-
-if [[ "${AQREM_FORCE_FRONTEND_BUILD:-0}" == "1" ]] || [[ ! -f "$FRONTEND/dist/index.html" ]] || frontend_build_stale; then
-  if [[ -f "$FRONTEND/dist/index.html" ]] && frontend_build_stale; then
-    echo "Frontend sources changed since last build — rebuilding dist for one-port serve…"
-  fi
+# One-port lab always serves a fresh production build (4173/Tailscale) unless explicitly skipped.
+if [[ "${AQREM_SKIP_FRONTEND_BUILD:-0}" == "1" ]]; then
+  echo "AQREM_SKIP_FRONTEND_BUILD=1 — using existing frontend/dist (may be stale)." >&2
+elif [[ "${AQREM_FORCE_FRONTEND_BUILD:-0}" == "1" ]] || [[ ! -f "$FRONTEND/dist/index.html" ]]; then
+  build_frontend
+else
+  echo "Rebuilding frontend for one-port serve (set AQREM_SKIP_FRONTEND_BUILD=1 to skip)…" >&2
   build_frontend
 fi
 
@@ -239,8 +232,21 @@ if command -v tailscale >/dev/null 2>&1; then
   TS_IP="$(tailscale ip -4 2>/dev/null | head -n1 || true)"
 fi
 
+BUILD_INFO="$FRONTEND/dist/build-info.json"
+if [[ -f "$BUILD_INFO" ]]; then
+  UI_BUILD_ID="$(python3 -c "import json; print(json.load(open('$BUILD_INFO'))['build_id'])" 2>/dev/null || echo '?')"
+  UI_BUILT_AT="$(python3 -c "import json; print(json.load(open('$BUILD_INFO'))['built_at'][:19])" 2>/dev/null || echo '?')"
+  MAIN_JS="$(ls -1 "$FRONTEND/dist/assets"/index-*.js 2>/dev/null | head -n1 | xargs -r basename)"
+else
+  UI_BUILD_ID="missing"
+  UI_BUILT_AT="—"
+  MAIN_JS="—"
+fi
+
 echo "=============================================="
 echo "  AQREM — http://127.0.0.1:${PORT}"
+echo "  UI bundle: ${MAIN_JS}  build: ${UI_BUILD_ID}  (${UI_BUILT_AT})"
+echo "  Login must show dark AuthPageShell + “UI build ${UI_BUILD_ID}” footer"
 if [[ -n "$TS_IP" ]]; then
   echo "  Tailscale — http://${TS_IP}:${PORT}"
 fi
