@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { fetchAuthMe, loadSession, type AuthSession } from "./api";
 import type { UserRole } from "./roles";
 
@@ -9,6 +9,7 @@ type AuthUser = {
   organizationId: string | null;
   role: UserRole | null;
   isPlatformAdmin: boolean;
+  permissions: string[];
 };
 
 type AuthContextValue = {
@@ -30,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(!!session);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     const s = loadSession();
     if (!s) {
       setUser(null);
@@ -47,17 +48,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         organizationId: me.organization_id ?? null,
         role: (me.role as UserRole) ?? null,
         isPlatformAdmin: Boolean(me.is_platform_admin),
+        permissions: Array.isArray(me.permissions) ? me.permissions : [],
       });
     } catch {
       setUser(null);
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
-    refresh();
-  }, []);
+    void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    function onFocus() {
+      void refresh();
+    }
+    window.addEventListener("focus", onFocus);
+    const timer = window.setInterval(() => void refresh(), 60_000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.clearInterval(timer);
+    };
+  }, [refresh]);
 
   return (
     <AuthContext.Provider value={{ session, user, loading, refresh }}>{children}</AuthContext.Provider>

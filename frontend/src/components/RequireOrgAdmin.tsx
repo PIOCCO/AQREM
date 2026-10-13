@@ -1,40 +1,75 @@
 import { ReactNode, useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { clearSession, fetchAuthMeTenant, loadSession } from "../lib/api";
-import { canManageOrg } from "../lib/roles";
-import type { UserRole } from "../lib/roles";
+import { hasAdminConsoleAccess } from "../lib/permissions";
+import { recordAdminConsoleEnter } from "../lib/orgAdminApi";
+import AdminAccessDenied from "../pages/AdminAccessDenied";
 import { LoadingState } from "./ui/States";
 
 export default function RequireOrgAdmin({ children }: { children: ReactNode }) {
+  const location = useLocation();
   const [ready, setReady] = useState(false);
   const [allowed, setAllowed] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
-    const session = loadSession();
-    if (!session?.token || !session.organizationId) {
-      setReady(true);
-      return;
-    }
-    fetchAuthMeTenant(session)
-      .then((me) => {
-        setAllowed(canManageOrg((me.role as UserRole) ?? "VIEWER"));
-        setReady(true);
-      })
-      .catch(() => {
+    let cancelled = false;
+    async function verify() {
+      const session = loadSession();
+      if (!session?.token || !session.organizationId) {
+        if (!cancelled) {
+          setSignedIn(false);
+          setAllowed(false);
+          setReady(true);
+        }
+        return;
+      }
+      setSignedIn(true);
+      try {
+        const me = await fetchAuthMeTenant(session);
+        const ok = hasAdminConsoleAccess(me.permissions);
+        if (!cancelled) {
+          setAllowed(ok);
+          setReady(true);
+        }
+        if (ok) {
+          try {
+            await recordAdminConsoleEnter(session);
+          } catch {
+            /* audit failure must not block access after server verified role */
+          }
+        }
+      } catch {
         clearSession();
-        setReady(true);
-      });
-  }, []);
+        if (!cancelled) {
+          setSignedIn(false);
+          setAllowed(false);
+          setReady(true);
+        }
+      }
+    }
+    setReady(false);
+    void verify();
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname]);
 
   if (!ready) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-        <LoadingState label="Checking organization admin access…" />
+      <div className="min-h-screen flex items-center justify-center bg-[var(--color-background)] p-6">
+        <LoadingState label="Verifying admin access…" />
       </div>
     );
   }
-  if (!loadSession()?.organizationId || !allowed) {
-    return <Navigate to="/login?next=%2Fadmin" replace />;
+
+  if (!signedIn) {
+    return <Navigate to={`/login?next=${encodeURIComponent(location.pathname)}`} replace />;
   }
+
+  if (!allowed) {
+    return <AdminAccessDenied />;
+  }
+
   return <>{children}</>;
 }

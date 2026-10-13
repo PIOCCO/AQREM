@@ -36,6 +36,11 @@ export type OrgOverview = {
   employee_link: { url_path: string; enabled: boolean };
 };
 
+export async function recordAdminConsoleEnter(session: AuthSession): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/org-admin/console-enter`, { headers: headers(session) });
+  if (!res.ok) throw new Error(await readApiError(res, "Admin console access denied"));
+}
+
 export async function fetchOrgOverview(session: AuthSession): Promise<OrgOverview> {
   const res = await fetch(`${API_BASE}/api/v1/org-admin/overview`, { headers: headers(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load overview"));

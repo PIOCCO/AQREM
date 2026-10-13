@@ -30,8 +30,15 @@ export default function ClientAdminShell() {
     <div className="min-h-screen flex bg-[var(--admin-canvas,#f5f5f4)] text-chat-fg">
       <aside className="w-64 shrink-0 border-r border-chat-border bg-chat-surface flex flex-col min-h-screen">
         <div className="p-5 border-b border-chat-border space-y-2">
-          <LogoHomeLink variant="full" />
-          <p className="text-xs text-chat-muted">Client admin</p>
+          <div className="flex items-center justify-between gap-2">
+            <LogoHomeLink variant="full" />
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-chat-muted border border-chat-border rounded px-1.5 py-0.5">
+              Admin
+            </span>
+          </div>
+          <Link to="/" className="text-xs text-[var(--color-link)] hover:underline">
+            Back to assistant
+          </Link>
         </div>
         <nav className="flex-1 p-3 space-y-0.5" aria-label="Client administration">
           {NAV.map((item) => (

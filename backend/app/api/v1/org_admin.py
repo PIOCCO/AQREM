@@ -115,6 +115,25 @@ def _ensure_document_source(db: Session, tenant: TenantContext) -> Source:
     return source
 
 
+@router.get("/console-enter")
+def admin_console_enter(
+    request: Request,
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    db: Session = Depends(get_db),
+) -> dict[str, bool]:
+    record_audit(
+        db,
+        organization_id=tenant.organization_id,
+        user_id=tenant.user_id,
+        action="admin_console_entered",
+        resource_type="admin_console",
+        resource_id=str(tenant.organization_id),
+        metadata={"request_id": request.headers.get("X-Request-Id")},
+    )
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/setup")
 def get_setup_checklist(
     tenant: TenantContext = Depends(_require_org_admin_surface),

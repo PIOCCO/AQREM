@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_authenticated_user, get_tenant_context
+from app.core.permissions import permissions_for_role
 from app.core.rate_limit import AUTH_LOGIN_LIMIT, limiter
 from app.core.roles import Role
 from app.core.security import create_access_token, hash_password, verify_password
@@ -187,6 +188,7 @@ def me(
         role=role,
         is_platform_admin=user.is_platform_admin,
         must_change_password=user.must_change_password,
+        permissions=permissions_for_role(role),
     )
 
 
@@ -202,4 +204,5 @@ def me_tenant(tenant: TenantContext = Depends(get_tenant_context), db: Session =
         role=tenant.role,
         is_platform_admin=user.is_platform_admin,
         must_change_password=user.must_change_password,
+        permissions=permissions_for_role(tenant.role),
     )

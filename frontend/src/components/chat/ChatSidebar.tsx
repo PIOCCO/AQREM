@@ -30,6 +30,8 @@ import { useProjectContext } from "../../lib/projectContext";
 import { roleDisplayLabel } from "../../lib/roleLabels";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Tooltip } from "../ui/Tooltip";
+import { AdminConsoleLink } from "../nav/AdminConsoleLink";
+import { hasAdminConsoleAccess } from "../../lib/permissions";
 
 const primaryNav = [
   { to: "/projects", label: "Projects", Icon: IconFolder },
@@ -58,6 +60,7 @@ function SidebarUserFooter({
   email,
   onLogout,
   compact,
+  showAdminConsole,
 }: {
   initials: string;
   name: string;
@@ -65,6 +68,7 @@ function SidebarUserFooter({
   email?: string;
   onLogout: () => void;
   compact?: boolean;
+  showAdminConsole?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const { resolved, toggle } = useTheme();
@@ -92,6 +96,7 @@ function SidebarUserFooter({
               <Link to="/settings" className="chat-menu-item" onClick={() => setOpen(false)}>
                 Settings
               </Link>
+              {showAdminConsole ? <AdminConsoleLink variant="menu" onNavigate={() => setOpen(false)} /> : null}
               <button type="button" className="chat-menu-item w-full text-left" onClick={() => { toggle(); setOpen(false); }}>
                 Theme: {resolved === "dark" ? "Dark" : "Light"}
               </button>
@@ -132,6 +137,7 @@ function SidebarUserFooter({
             <Link to="/settings" className="chat-menu-item" onClick={() => setOpen(false)}>
               Settings
             </Link>
+            {showAdminConsole ? <AdminConsoleLink variant="menu" onNavigate={() => setOpen(false)} /> : null}
             <button type="button" className="chat-menu-item w-full text-left" onClick={() => { toggle(); setOpen(false); }}>
               Theme: {resolved === "dark" ? "Dark" : "Light"}
             </button>
@@ -248,7 +254,8 @@ export default function ChatSidebar({
   onOpenCommandPalette,
 }: Props) {
   const navigate = useNavigate();
-  const { user, session } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
+  const showAdminConsole = !authLoading && hasAdminConsoleAccess(user?.permissions);
   const { projectId } = useProjectContext();
   const { conversations, remove, rename } = useConversations();
   const toast = useToast();
@@ -339,20 +346,25 @@ export default function ChatSidebar({
                 <IconSearch className="h-5 w-5" />
               </button>
             </Tooltip>
-            {primaryNav.map(({ to, label, Icon, badge }) => (
-              <Tooltip key={label} label={label}>
-                <NavLink
-                  to={to}
-                  onClick={onCloseMobile}
-                  className={({ isActive }) => `sidebar-rail-btn ${isActive ? "sidebar-rail-btn-active" : ""}`}
-                  aria-label={label}
-                >
-                  <Icon className="h-5 w-5" />
-                  {badge && reviewCount != null && reviewCount > 0 ? (
-                    <span className="sr-only">{reviewCount} in review queue</span>
-                  ) : null}
-                </NavLink>
-              </Tooltip>
+            {primaryNav.map(({ to, label, Icon, badge }, index) => (
+              <span key={label} className="contents">
+                {index === primaryNav.length - 1 && showAdminConsole ? (
+                  <AdminConsoleLink variant="rail" onNavigate={onCloseMobile} />
+                ) : null}
+                <Tooltip label={label}>
+                  <NavLink
+                    to={to}
+                    onClick={onCloseMobile}
+                    className={({ isActive }) => `sidebar-rail-btn ${isActive ? "sidebar-rail-btn-active" : ""}`}
+                    aria-label={label}
+                  >
+                    <Icon className="h-5 w-5" />
+                    {badge && reviewCount != null && reviewCount > 0 ? (
+                      <span className="sr-only">{reviewCount} in review queue</span>
+                    ) : null}
+                  </NavLink>
+                </Tooltip>
+              </span>
             ))}
           </nav>
           <SidebarUserFooter
@@ -365,6 +377,7 @@ export default function ChatSidebar({
               clearSession();
               navigate("/login", { replace: true });
             }}
+            showAdminConsole={showAdminConsole}
           />
         </div>
 
@@ -392,19 +405,23 @@ export default function ChatSidebar({
             </div>
 
             <nav className="px-2 pb-3 space-y-0.5" aria-label="Workspace">
-              {primaryNav.map(({ to, label, Icon, badge }) => (
-                <NavLink
-                  key={label}
-                  to={to}
-                  onClick={onCloseMobile}
-                  className={({ isActive }) => `ref-nav-item ${isActive ? "ref-nav-item-active" : ""}`}
-                >
-                  <Icon className="h-[18px] w-[18px] shrink-0 opacity-80" />
-                  <span className="flex-1 truncate">{label}</span>
-                  {badge && reviewCount != null && reviewCount > 0 ? (
-                    <span className="ref-nav-badge">{reviewCount > 99 ? "99+" : reviewCount}</span>
+              {primaryNav.map(({ to, label, Icon, badge }, index) => (
+                <span key={label} className="contents">
+                  {index === primaryNav.length - 1 && showAdminConsole ? (
+                    <AdminConsoleLink variant="sidebar" onNavigate={onCloseMobile} />
                   ) : null}
-                </NavLink>
+                  <NavLink
+                    to={to}
+                    onClick={onCloseMobile}
+                    className={({ isActive }) => `ref-nav-item ${isActive ? "ref-nav-item-active" : ""}`}
+                  >
+                    <Icon className="h-[18px] w-[18px] shrink-0 opacity-80" />
+                    <span className="flex-1 truncate">{label}</span>
+                    {badge && reviewCount != null && reviewCount > 0 ? (
+                      <span className="ref-nav-badge">{reviewCount > 99 ? "99+" : reviewCount}</span>
+                    ) : null}
+                  </NavLink>
+                </span>
               ))}
             </nav>
 
@@ -462,6 +479,7 @@ export default function ChatSidebar({
                 clearSession();
                 navigate("/login", { replace: true });
               }}
+              showAdminConsole={showAdminConsole}
             />
         </div>
       </aside>
