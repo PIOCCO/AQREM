@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { fetchAuthMe, loadSession, type AuthSession } from "./api";
+import { normalizeOrganizationId } from "./uuid";
 import type { UserRole } from "./roles";
 
 type AuthUser = {
@@ -23,9 +24,9 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const token = localStorage.getItem("aqrem_token");
-  const organizationId = localStorage.getItem("aqrem_org");
+  const organizationId = normalizeOrganizationId(localStorage.getItem("aqrem_org"));
   const session = useMemo(
-    () => (token ? { token, organizationId: organizationId ?? null } : null),
+    () => (token ? { token, organizationId } : null),
     [token, organizationId],
   );
   const [user, setUser] = useState<AuthUser | null>(null);

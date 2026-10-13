@@ -5,6 +5,14 @@ export function isUuid(value: string | null | undefined): value is string {
   return typeof value === "string" && UUID_RE.test(value);
 }
 
+/** Drop stale localStorage values (e.g. literal "null") and non-UUID strings. */
+export function normalizeOrganizationId(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "null" || trimmed === "undefined") return null;
+  return isUuid(trimmed) ? trimmed : null;
+}
+
 export function newUuid(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();

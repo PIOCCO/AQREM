@@ -21,4 +21,41 @@ def test_login_accepts_local_domain_email(client: TestClient, db_session):
         json={"email": "admin@lab.local", "password": "secret-pass-123"},
     )
     assert res.status_code == 200, res.text
-    assert res.json().get("access_token")
+    body = res.json()
+    assert body.get("access_token")
+    token = body["access_token"]
+
+    me = client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {token}", "X-Organization-Id": "null"},
+    )
+    assert me.status_code == 200, me.text
+    me_body = me.json()
+    assert me_body["is_platform_admin"] is True
+    assert me_body["organization_id"] is None
+    assert me_body.get("permissions")
+
+
+def test_auth_me_ignores_invalid_organization_header(client: TestClient, db_session):
+    user = User(
+        email="admin2@lab.local",
+        full_name="Lab Admin 2",
+        hashed_password=hash_password("secret-pass-123"),
+        is_platform_admin=True,
+        platform_role="SUPER_ADMIN",
+        is_active=True,
+    )
+    db_session.add(user)
+    db_session.flush()
+
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin2@lab.local", "password": "secret-pass-123"},
+    )
+    token = login.json()["access_token"]
+
+    me = client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {token}", "X-Organization-Id": "not-a-valid-uuid"},
+    )
+    assert me.status_code == 200, me.text

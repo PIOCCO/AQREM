@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_authenticated_user, get_tenant_context
+from app.core.uuid_parse import parse_optional_uuid
 from app.core.permissions import permissions_for_role
 from app.core.permissions_catalog import platform_permissions_for_role
 from app.core.platform_access import resolve_platform_role
@@ -192,8 +193,9 @@ def me(
     organization_id: UUID | None = None
     role: Role | None = None
 
-    if x_organization_id:
-        organization_id = UUID(x_organization_id)
+    parsed_org_header = parse_optional_uuid(x_organization_id)
+    if parsed_org_header is not None:
+        organization_id = parsed_org_header
         membership = (
             db.query(OrganizationMembership)
             .filter(
@@ -218,7 +220,7 @@ def me(
             role = Role(membership.role)
 
     platform_role = resolve_platform_role(user)
-    if platform_role is not None and x_organization_id is None and organization_id is None:
+    if platform_role is not None and parsed_org_header is None and organization_id is None:
         perms = sorted(platform_permissions_for_role(platform_role))
     else:
         perms = permissions_for_role(role)

@@ -1,4 +1,5 @@
 import { readApiError } from "./errors";
+import { normalizeOrganizationId } from "./uuid";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -12,8 +13,9 @@ function authHeaders(session: AuthSession): HeadersInit {
     Authorization: `Bearer ${session.token}`,
     "Content-Type": "application/json",
   };
-  if (session.organizationId) {
-    headers["X-Organization-Id"] = session.organizationId;
+  const orgId = normalizeOrganizationId(session.organizationId);
+  if (orgId) {
+    headers["X-Organization-Id"] = orgId;
   }
   return headers;
 }
@@ -21,13 +23,14 @@ function authHeaders(session: AuthSession): HeadersInit {
 export function loadSession(): AuthSession | null {
   const token = localStorage.getItem("aqrem_token");
   if (!token) return null;
-  const organizationId = localStorage.getItem("aqrem_org");
-  return { token, organizationId: organizationId ?? null };
+  const organizationId = normalizeOrganizationId(localStorage.getItem("aqrem_org"));
+  return { token, organizationId };
 }
 
 export function saveSession(token: string, organizationId: string | null) {
   localStorage.setItem("aqrem_token", token);
-  if (organizationId) localStorage.setItem("aqrem_org", organizationId);
+  const orgId = normalizeOrganizationId(organizationId);
+  if (orgId) localStorage.setItem("aqrem_org", orgId);
   else localStorage.removeItem("aqrem_org");
 }
 
@@ -91,8 +94,9 @@ function authOnlyHeaders(session: AuthSession): HeadersInit {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${session.token}`,
   };
-  if (session.organizationId) {
-    headers["X-Organization-Id"] = session.organizationId;
+  const orgId = normalizeOrganizationId(session.organizationId);
+  if (orgId) {
+    headers["X-Organization-Id"] = orgId;
   }
   return headers;
 }

@@ -12,6 +12,7 @@ from app.db.session import get_db
 from app.models.organization import Organization, OrganizationMembership, User
 from app.services.licensing import org_allows_sign_in
 from app.core.platform_access import get_platform_user
+from app.core.uuid_parse import parse_required_uuid
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -84,7 +85,10 @@ def get_tenant_context(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="X-Organization-Id header or token organization_id required",
         )
-    organization_id = UUID(org_id_str)
+    organization_id = parse_required_uuid(
+        str(org_id_str),
+        detail="X-Organization-Id must be a valid UUID",
+    )
 
     org = db.get(Organization, organization_id)
     if org is None or not org.is_active:

@@ -49,7 +49,7 @@ class ResetPasswordRequest(BaseModel):
 
 class UserResponse(BaseModel):
     id: UUID
-    email: EmailStr
+    email: str = Field(min_length=3, max_length=320)
     full_name: str
     organization_id: UUID | None = None
     role: Role | None = None
