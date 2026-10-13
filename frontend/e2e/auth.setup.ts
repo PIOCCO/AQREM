@@ -10,8 +10,8 @@ setup("employee session", async ({ page }) => {
     employee_password: string;
   };
   await page.goto("/login");
-  await page.getByPlaceholder("Email").fill(cred.employee_email);
-  await page.getByPlaceholder("Password").fill(cred.employee_password);
+  await page.locator('input[name="email"]').fill(cred.employee_email);
+  await page.locator('input[name="password"]').fill(cred.employee_password);
   await page.getByRole("button", { name: /sign in/i }).click();
   await expect(page.locator("aside.chat-sidebar")).toBeVisible({ timeout: 20_000 });
   await page.context().storageState({ path: join(import.meta.dirname, ".auth/employee.json") });

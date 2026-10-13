@@ -475,16 +475,17 @@ export default function AuditLogPage() {
       ) : null}
 
       {!loading && !error && items.length > 0 ? (
-        <div className="activity-list" role="list">
+        <div className="activity-list">
           {grouped.map(([day, rows]) => (
-            <section key={day}>
+            <section key={day} aria-label={day}>
               <h3 className="activity-day-header">{day}</h3>
+              <ul className="activity-day-rows">
               {rows.map((item, idxInGroup) => {
                 const globalIndex = items.findIndex((x) => x.id === item.id);
                 const time = formatActivityTime(item.created_at);
                 const active = selectedId === item.id;
                 return (
-                  <div key={item.id} role="listitem">
+                  <li key={item.id}>
                     <button
                       type="button"
                       className={`activity-row ${active ? "activity-row-active" : ""}`}
@@ -516,9 +517,10 @@ export default function AuditLogPage() {
                         </Tooltip>
                       </span>
                     </button>
-                  </div>
+                  </li>
                 );
               })}
+              </ul>
             </section>
           ))}
         </div>
