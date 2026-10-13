@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { AuthProvider } from "../lib/authContext";
 import { LoadingState } from "./ui/States";
 import { clearSession, fetchAuthMe, loadSession, saveSession } from "../lib/api";
+import { isPlatformSessionToken, organizationIdFromToken, resolveOrganizationIdForSession } from "../lib/authRouting";
 
 export default function RequireAuth({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -18,22 +19,24 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
     }
     fetchAuthMe(session)
       .then((me) => {
-        if (me.is_platform_admin && !me.organization_id) {
-          if (session.organizationId) {
-            saveSession(session.token, null);
-          }
+        const orgId =
+          resolveOrganizationIdForSession(session.token, session.organizationId) ??
+          resolveOrganizationIdForSession(session.token, me.organization_id ?? null);
+        if (orgId && orgId !== session.organizationId) {
+          saveSession(session.token, orgId);
+        }
+
+        const platformToken = isPlatformSessionToken(session.token);
+        if (platformToken && !orgId) {
           setRedirectTo("/master-admin");
           setValid(false);
           setReady(true);
           return;
         }
-        if (!me.is_platform_admin && !session.organizationId && !me.organization_id) {
+        if (!platformToken && !orgId && !organizationIdFromToken(session.token)) {
           setValid(false);
           setReady(true);
           return;
-        }
-        if (!session.organizationId && me.organization_id) {
-          saveSession(session.token, me.organization_id);
         }
         if (me.must_change_password && !window.location.pathname.startsWith("/change-password")) {
           window.location.assign("/change-password");

@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AuthPageShell } from "../components/auth/AuthPageShell";
 import { clearSession, loginUser, saveSession } from "../lib/api";
+import { resolveOrganizationIdForSession, resolvePostAuthPath } from "../lib/authRouting";
 
 const LOGIN_ERROR_GENERIC = "Incorrect email or password.";
 
@@ -49,14 +50,9 @@ export default function LoginPage() {
         email: String(form.get("email")),
         password: String(form.get("password")),
       });
-      saveSession(data.access_token, data.organization_id ?? null);
-      if (data.is_platform_admin && (nextPath.includes("master-admin") || !data.organization_id)) {
-        navigate("/master-admin");
-      } else if (data.must_change_password) {
-        navigate("/change-password");
-      } else {
-        navigate(nextPath.startsWith("/") ? nextPath : "/");
-      }
+      const orgId = resolveOrganizationIdForSession(data.access_token, data.organization_id ?? null);
+      saveSession(data.access_token, orgId);
+      navigate(resolvePostAuthPath({ ...data, organization_id: orgId }, nextPath));
     } catch {
       setError(LOGIN_ERROR_GENERIC);
     } finally {

@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_authenticated_user, get_tenant_context
@@ -11,8 +12,8 @@ from app.core.platform_access import resolve_platform_role
 from app.core.platform_roles import PlatformRole
 from app.core.rate_limit import AUTH_LOGIN_LIMIT, limiter
 from app.core.roles import Role
-from app.core.jwt_audiences import AUD_EMPLOYEE, AUD_ORG_ADMIN, AUD_PLATFORM
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.jwt_audiences import AUD_EMPLOYEE, AUD_ORG_ADMIN, AUD_PLATFORM, TENANT_AUDIENCES, ALL_AUDIENCES
+from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
 from app.services.auth.password_reset import (
     PASSWORD_RESET_GENERIC_MESSAGE,
     request_password_reset,
@@ -29,6 +30,7 @@ from app.services.licensing import org_allows_sign_in
 from app.services.platform_provisioning import accept_invitation
 
 router = APIRouter()
+_me_bearer = HTTPBearer(auto_error=False)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -210,11 +212,23 @@ def me(
     user: User = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
     x_organization_id: str | None = Header(default=None, alias="X-Organization-Id"),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_me_bearer),
 ) -> UserResponse:
     organization_id: UUID | None = None
     role: Role | None = None
 
-    parsed_org_header = parse_optional_uuid(x_organization_id)
+    token_org_hint: UUID | None = None
+    token_aud: str | None = None
+    if credentials is not None:
+        try:
+            payload = decode_access_token(credentials.credentials, audiences=ALL_AUDIENCES)
+            token_aud = payload.get("aud")
+            if token_aud in TENANT_AUDIENCES and payload.get("organization_id"):
+                token_org_hint = parse_optional_uuid(str(payload.get("organization_id")))
+        except ValueError:
+            token_org_hint = None
+
+    parsed_org_header = parse_optional_uuid(x_organization_id) or token_org_hint
     if parsed_org_header is not None:
         organization_id = parsed_org_header
         membership = (

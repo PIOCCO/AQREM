@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthPageShell } from "../components/auth/AuthPageShell";
 import { acceptInvitation, saveSession } from "../lib/api";
+import { resolveOrganizationIdForSession, resolvePostAuthPath } from "../lib/authRouting";
 import { previewAcceptInvitation } from "../lib/joinApi";
 import { roleLabel } from "../lib/roleLabels";
 
@@ -45,8 +46,9 @@ export default function AcceptInvitePage() {
         password: String(form.get("password")),
         full_name: String(form.get("full_name") || preview?.invitee_full_name || "") || undefined,
       });
-      saveSession(data.access_token, data.organization_id ?? null);
-      navigate("/");
+      const orgId = resolveOrganizationIdForSession(data.access_token, data.organization_id ?? null);
+      saveSession(data.access_token, orgId);
+      navigate(resolvePostAuthPath({ ...data, organization_id: orgId }));
     } catch {
       setError("Could not accept invitation. The link may be expired or already used.");
     } finally {
