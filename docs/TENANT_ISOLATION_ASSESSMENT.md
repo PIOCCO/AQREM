@@ -8,6 +8,7 @@
 4. **Membership:** Active `OrganizationMembership` required; role comes from membership, not client-supplied body fields on ordinary APIs.
 5. **Query scoping:** Services and repositories filter by `tenant.organization_id` / resource ownership; cross-tenant IDs typically yield **404** (no existence leak) on evidence, projects, and questionnaires.
 6. **Org availability:** Inactive organizations and license/sign-in guards return **403** before business logic.
+7. **Background ingestion:** Celery `run_source_sync` validates `job.organization_id`, `source.organization_id`, and blob path prefix `{organization_id}/` before indexing (see `worker/app/tasks/ingestion.py`, tests in `tests/backend/test_worker_ingestion_isolation.py`).
 
 **Row-Level Security (PostgreSQL RLS):** Not enabled. All isolation is application-layer via SQLAlchemy sessions and explicit `organization_id` filters. Connection pooling uses a shared DB role; tenant context is not propagated via `SET app.current_org` today.
 

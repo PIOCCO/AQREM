@@ -16,6 +16,25 @@ from app.tenant_store.resolver import open_tenant_session
 from worker.app.celery_app import celery_app
 
 
+def _validate_blob_paths_for_org(blob_paths: list, organization_id: UUID) -> None:
+    prefix = f"{organization_id}/"
+    for raw in blob_paths:
+        if not isinstance(raw, str):
+            raise ValueError("invalid blob reference")
+        if ".." in raw or "\0" in raw:
+            raise ValueError("invalid blob path")
+        if not raw.startswith(prefix):
+            raise ValueError("blob path outside organization scope")
+
+
+def _fail_job(db: Session, job: SourceSyncJob, message: str) -> dict:
+    job.status = SyncJobStatus.FAILED.value
+    job.error_message = message[:500]
+    job.completed_at = datetime.now(UTC)
+    db.commit()
+    return {"error": message}
+
+
 def enqueue_source_sync(job_id: str, organization_id: str) -> None:
     run_source_sync.delay(job_id, organization_id)
 
@@ -25,22 +44,21 @@ def run_source_sync(job_id: str, organization_id: str) -> dict:
     control: Session = SessionLocal()
     db: Session | None = None
     try:
-        db = open_tenant_session(control, UUID(organization_id))
+        org_uuid = UUID(organization_id)
+        db = open_tenant_session(control, org_uuid)
         job = db.get(SourceSyncJob, UUID(job_id))
         if job is None:
             return {"error": "job_not_found"}
+        if job.organization_id != org_uuid:
+            return _fail_job(db, job, "organization_id does not match sync job")
         source = db.get(Source, job.source_id)
         if source is None:
-            job.status = SyncJobStatus.FAILED.value
-            job.error_message = "Source not found"
-            db.commit()
-            return {"error": "source_not_found"}
-
-        job.status = SyncJobStatus.RUNNING.value
-        job.started_at = datetime.now(UTC)
-        db.commit()
+            return _fail_job(db, job, "Source not found")
+        if source.organization_id != org_uuid:
+            return _fail_job(db, job, "source organization mismatch")
 
         files: list[FilePayload] = []
+        pending_blobs: list[str] = []
         if source.source_type == SourceType.GITHUB.value:
             cfg = db.query(GitHubRepoConfig).filter(GitHubRepoConfig.source_id == source.id).first()
             if cfg is None:
@@ -55,8 +73,19 @@ def run_source_sync(job_id: str, organization_id: str) -> dict:
             )
             cfg.last_indexed_commit = files[0].commit_hash if files else cfg.last_indexed_commit
         else:
+            pending_blobs = list(job.stats.get("uploaded_blobs") or [])
+            if pending_blobs:
+                _validate_blob_paths_for_org(pending_blobs, org_uuid)
+
+        job.status = SyncJobStatus.RUNNING.value
+        job.started_at = datetime.now(UTC)
+        db.commit()
+
+        if source.source_type == SourceType.GITHUB.value:
+            pass  # files populated above
+        else:
             storage = get_blob_storage()
-            blobs = job.stats.get("uploaded_blobs") or []
+            blobs = pending_blobs
             if not blobs and source.config.get("demo_path"):
                 settings = get_settings()
                 if settings.app_env != "development":
@@ -91,11 +120,13 @@ def run_source_sync(job_id: str, organization_id: str) -> dict:
             db.rollback()
             job = db.get(SourceSyncJob, UUID(job_id))
             if job:
+                safe_msg = str(exc).splitlines()[0][:500]
                 job.status = SyncJobStatus.FAILED.value
-                job.error_message = str(exc)[:2000]
+                job.error_message = safe_msg
                 job.completed_at = datetime.now(UTC)
                 db.commit()
-        return {"error": str(exc)}
+        safe_err = str(exc).splitlines()[0][:200]
+        return {"error": safe_err}
     finally:
         if db is not None:
             db.close()

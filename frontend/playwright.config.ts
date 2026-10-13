@@ -27,7 +27,7 @@ export default defineConfig({
     {
       name: "sidebar-layout",
       testMatch:
-        /sidebar-layout\.spec\.ts|chat-share\.spec\.ts|activity-page\.spec\.ts|chat-composer-layout\.spec\.ts|chat-composer-autogrow\.spec\.ts|new-questionnaire-dialog\.spec\.ts|logo-home\.spec\.ts|admin-console-nav\.spec\.ts/,
+        /sidebar-layout\.spec\.ts|chat-share\.spec\.ts|activity-page\.spec\.ts|chat-composer-layout\.spec\.ts|chat-composer-autogrow\.spec\.ts|new-questionnaire-dialog\.spec\.ts|logo-home\.spec\.ts|admin-console-nav\.spec\.ts|super-admin-route-guards/,
       use: {
         ...devices["Desktop Chrome"],
         storageState: "e2e/.auth/employee.json",
@@ -41,7 +41,8 @@ export default defineConfig({
     },
     {
       name: "public-dark",
-      testMatch: /public-a11y|dead-controls|login-brand|login-no-registration|dark-theme-contrast|one-port-login-surface|org-invitations/,
+      testMatch:
+        /public-a11y|dead-controls|login-brand|login-no-registration|dark-theme-contrast|one-port-login-surface|org-invitations|super-admin-route-guards|platform-admin-privacy/,
       use: { ...devices["Desktop Chrome"], colorScheme: "dark" },
     },
     { name: "public-light", testMatch: /public-a11y|dead-controls/, use: { ...devices["Desktop Chrome"], colorScheme: "light" } },
