@@ -1,3 +1,5 @@
+from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -36,3 +38,26 @@ class ChatAskResponse(BaseModel):
     project_name: str | None = None
     sources_searched: int = 0
     query_time_ms: int | None = None
+
+
+class ChatShareMessage(BaseModel):
+    role: Literal["user", "assistant", "system"]
+    content: str = Field(max_length=32000)
+    created_at: str | None = None
+
+
+class CreateChatShareRequest(BaseModel):
+    client_conversation_id: str = Field(min_length=1, max_length=64)
+    title: str = Field(default="Shared conversation", max_length=200)
+    messages: list[ChatShareMessage] = Field(default_factory=list, max_length=500)
+
+
+class CreateChatShareResponse(BaseModel):
+    share_token: str
+    share_path: str
+
+
+class ChatShareViewResponse(BaseModel):
+    title: str
+    messages: list[ChatShareMessage]
+    shared_at: datetime
