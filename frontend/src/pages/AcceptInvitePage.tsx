@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Logo } from "../components/ui/Logo";
+import { Logo } from "../components/brand/Logo";
 import { acceptInvitation, saveSession } from "../lib/api";
 
 export default function AcceptInvitePage() {
@@ -34,7 +34,9 @@ export default function AcceptInvitePage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface-canvas p-6 font-sans">
       <div className="w-full max-w-md aq-card shadow-panel aq-card-p">
-        <Logo />
+        <div className="flex flex-col items-center text-center">
+          <Logo variant="mark" size={48} />
+        </div>
         <h1 className="text-lg font-semibold mt-6 mb-2">Set your password</h1>
         <p className="text-sm text-fg-muted mb-4">Complete your AQREM account setup using your invitation.</p>
         <form className="space-y-3" onSubmit={onSubmit}>

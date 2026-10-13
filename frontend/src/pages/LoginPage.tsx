@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Logo } from "../components/ui/Logo";
+import { Logo } from "../components/brand/Logo";
 import { clearSession, loginUser, saveSession } from "../lib/api";
 
 export default function LoginPage() {
@@ -47,9 +47,10 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface-canvas p-6 font-sans">
       <div className="w-full max-w-md aq-card shadow-panel aq-card-p">
-        <div className="mb-6">
-          <Logo />
-          <p className="text-[var(--color-text-muted)] mt-3 text-sm">Evidence-backed questionnaire responses</p>
+        <div className="mb-6 flex flex-col items-center text-center">
+          <Logo variant="mark" size={48} />
+          <p className="text-[var(--color-text-muted)] mt-4 text-sm">Sign in to AQREM</p>
+          <p className="text-[var(--color-text-muted)] mt-1 text-xs">Evidence-backed questionnaire responses</p>
         </div>
         <h1 className="text-lg font-semibold mb-4">Sign in</h1>
         <form className="space-y-3" onSubmit={onSubmit}>

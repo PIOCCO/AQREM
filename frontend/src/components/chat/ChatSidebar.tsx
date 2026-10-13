@@ -19,7 +19,8 @@ import {
 } from "../icons/Icons";
 import { commandPaletteShortcutLabel } from "../../lib/keyboardHints";
 import { useTheme } from "../../lib/themeContext";
-import { Logo, LogoMark } from "../ui/Logo";
+import { LogoHomeLink } from "../brand/LogoHomeLink";
+import { dispatchFocusComposer } from "../../lib/chatHome";
 import { clearSession, fetchReviewQueue } from "../../lib/api";
 import { useToast } from "../ui/Toast";
 import { useAuth } from "../../lib/authContext";
@@ -249,7 +250,7 @@ export default function ChatSidebar({
   const navigate = useNavigate();
   const { user, session } = useAuth();
   const { projectId } = useProjectContext();
-  const { conversations, createNew, remove, rename } = useConversations();
+  const { conversations, remove, rename } = useConversations();
   const toast = useToast();
   const [search, setSearch] = useState("");
   const [reviewCount, setReviewCount] = useState<number | null>(null);
@@ -279,9 +280,9 @@ export default function ChatSidebar({
   }, [user?.fullName, user?.email]);
 
   function newChat() {
-    const conv = createNew(projectId);
     onCloseMobile();
-    navigate(`/c/${conv.id}`);
+    navigate("/");
+    dispatchFocusComposer();
   }
 
   const asideClass = ["chat-sidebar", collapsed ? "chat-sidebar-collapsed" : "", mobileOpen ? "chat-sidebar-mobile-open" : ""]
@@ -306,13 +307,9 @@ export default function ChatSidebar({
       ) : null}
       <aside ref={asideRef} className={asideClass} aria-label="Sidebar" data-testid="chat-sidebar">
         <div className="ref-sidebar-header">
-          {!collapsed ? (
-            <div className="min-w-0 flex-1">
-              <Logo />
-            </div>
-          ) : (
-            <LogoMark className="h-8 w-8 shrink-0" />
-          )}
+          <div className={`min-w-0 flex-1 ${collapsed ? "flex justify-center" : ""}`}>
+            <LogoHomeLink variant={collapsed ? "mark" : "full"} onNavigate={onCloseMobile} />
+          </div>
           <button
             type="button"
             className="ref-sidebar-collapse-btn hidden lg:inline-flex"

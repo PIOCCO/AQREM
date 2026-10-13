@@ -37,6 +37,7 @@
     --color-success-border: #a7f3d0;
     --color-focus-ring: #0f766e;
     --color-link: #0d9488;
+    --logo-fg: #0a0a0a;
 
     --chat-main: var(--color-background);
     --chat-sidebar: var(--color-surface-raised);
@@ -111,6 +112,7 @@
     --color-success-border: #047857;
     --color-focus-ring: #10a37f;
     --color-link: #5eead4;
+    --logo-fg: #ffffff;
 
     --chat-hover: rgba(255, 255, 255, 0.08);
     --chat-user-bubble: var(--color-surface-raised);
@@ -525,6 +527,45 @@
   .sr-only {
     @apply absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0;
     clip: rect(0, 0, 0, 0);
+  }
+
+  .aq-logo-wordmark {
+    color: var(--logo-fg);
+  }
+
+  .aq-logo-img {
+    @apply block max-w-none;
+  }
+
+  .aq-logo-img--dark {
+    display: none;
+  }
+
+  html.dark .aq-logo-img--light {
+    display: none;
+  }
+
+  html.dark .aq-logo-img--dark {
+    display: block;
+  }
+
+  @media (forced-colors: active) {
+    .aq-logo-wordmark {
+      color: CanvasText;
+    }
+  }
+
+  .aq-logo-home-link {
+    @apply inline-flex rounded-md transition-opacity duration-[120ms] focus-visible:outline-none focus-visible:ring-2;
+    --tw-ring-color: var(--color-focus-ring);
+  }
+
+  .aq-logo-home-link:hover {
+    opacity: 0.85;
+  }
+
+  .ref-sidebar-header .aq-logo-home-link {
+    @apply items-center;
   }
 
   .aq-code-block {

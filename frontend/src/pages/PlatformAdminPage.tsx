@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { LogoHomeLink } from "../components/brand/LogoHomeLink";
 import { ToastProvider, useToast } from "../components/ui/Toast";
 import { loadSession } from "../lib/api";
 import {
@@ -213,6 +214,7 @@ function PlatformAdminInner() {
     <div className="admin-shell font-sans text-chat-fg">
       <header className="border-b border-chat-border bg-chat-surface px-6 py-4 flex flex-wrap items-start justify-between gap-4">
         <div>
+          <LogoHomeLink variant="full" className="mb-2" />
           <h1 className="text-xl font-semibold tracking-tight">Platform administration</h1>
           <p className="text-sm text-chat-muted mt-1">
             Provision client organizations, licenses, and user invitations.

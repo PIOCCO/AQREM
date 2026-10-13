@@ -3,7 +3,7 @@ import { Outlet, useLocation, useParams } from "react-router-dom";
 import ChatSidebar from "../chat/ChatSidebar";
 import { ChatMobileMenuButton } from "../../pages/ChatPage";
 import CommandPalette from "../ui/CommandPalette";
-import { LogoMark } from "../ui/Logo";
+import { Logo } from "../brand/Logo";
 import RouteErrorBoundary from "../ui/RouteErrorBoundary";
 import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
 import { pageTitleForPath } from "../../lib/routeMeta";
@@ -60,7 +60,7 @@ export default function AppShell() {
         {!chatMode ? (
           <header className="chat-topbar flex h-14 shrink-0 items-center gap-3 px-4 lg:px-6 max-w-[var(--workspace-column-max)] w-full mx-auto">
             <ChatMobileMenuButton onClick={() => setMobileOpen(true)} />
-            <LogoMark className="h-8 w-8 lg:hidden" />
+            <Logo variant="mark" size={28} className="lg:hidden" />
             {pageTitleForPath(location.pathname) ? (
               <h1 className="truncate text-sm font-medium">{pageTitleForPath(location.pathname)}</h1>
             ) : null}

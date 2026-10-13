@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, Link } from "react-router-dom";
+import { LogoHomeLink } from "../brand/LogoHomeLink";
 import { useAuth } from "../../lib/authContext";
 import { roleDisplayLabel } from "../../lib/roleLabels";
 import { fetchOrgOverview } from "../../lib/orgAdminApi";
@@ -28,9 +29,9 @@ export default function ClientAdminShell() {
   return (
     <div className="min-h-screen flex bg-[var(--admin-canvas,#f5f5f4)] text-chat-fg">
       <aside className="w-64 shrink-0 border-r border-chat-border bg-chat-surface flex flex-col min-h-screen">
-        <div className="p-5 border-b border-chat-border">
-          <p className="font-semibold text-sm">Private assistant</p>
-          <p className="text-xs text-chat-muted mt-0.5">Client admin</p>
+        <div className="p-5 border-b border-chat-border space-y-2">
+          <LogoHomeLink variant="full" />
+          <p className="text-xs text-chat-muted">Client admin</p>
         </div>
         <nav className="flex-1 p-3 space-y-0.5" aria-label="Client administration">
           {NAV.map((item) => (

@@ -23,6 +23,7 @@ import {
 import { useConversations } from "../lib/conversationContext";
 import { useProjectContext } from "../lib/projectContext";
 import { newUuid } from "../lib/uuid";
+import { FOCUS_COMPOSER_EVENT } from "../lib/chatHome";
 
 const UPLOAD_SOURCE_TYPES = new Set(["folder_archive", "file_upload", "local_files"]);
 
@@ -105,8 +106,15 @@ export default function ChatPage() {
       const detail = (e as CustomEvent<string>).detail;
       if (typeof detail === "string") setInput(detail);
     }
+    function onFocusComposer() {
+      composerRef.current?.focus();
+    }
     window.addEventListener("aqrem-fill-composer", onFill);
-    return () => window.removeEventListener("aqrem-fill-composer", onFill);
+    window.addEventListener(FOCUS_COMPOSER_EVENT, onFocusComposer);
+    return () => {
+      window.removeEventListener("aqrem-fill-composer", onFill);
+      window.removeEventListener(FOCUS_COMPOSER_EVENT, onFocusComposer);
+    };
   }, []);
 
   useEffect(() => {
