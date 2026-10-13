@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createConversation,
+  dedupeEmptyConversations,
   deleteConversation,
+  findEmptyConversation,
   getConversation,
   listConversations,
   saveConversation,
@@ -60,6 +62,16 @@ describe("conversations storage", () => {
 
     saveConversation(conv);
     expect(listConversations()).toHaveLength(0);
+  });
+
+  it("findEmptyConversation and dedupe keep a single empty row", () => {
+    createConversation(null);
+    createConversation(null);
+    createConversation(null);
+    expect(listConversations().filter((c) => c.title === "New chat" && c.messages.length === 0).length).toBe(3);
+    dedupeEmptyConversations();
+    expect(listConversations().filter((c) => c.title === "New chat" && c.messages.length === 0).length).toBe(1);
+    expect(findEmptyConversation()).not.toBeNull();
   });
 
   it("delete leaves sibling conversations intact", () => {

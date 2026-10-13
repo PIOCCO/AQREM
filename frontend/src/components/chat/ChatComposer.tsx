@@ -106,7 +106,7 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
 
   return (
     <div
-      className={`w-full ${centered ? "max-w-[var(--chat-column-max)] mx-auto px-4" : "max-w-[var(--chat-column-max)] mx-auto px-4 pb-4 pt-2"}`}
+      className={`ref-content-column w-full ${centered ? "px-4" : "px-4 pb-2 pt-2"}`}
       onDragOver={(e) => {
         e.preventDefault();
         if (!uploadDisabledReason && !disabled) setDragOver(true);

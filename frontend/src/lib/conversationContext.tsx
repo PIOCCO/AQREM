@@ -8,7 +8,9 @@ import {
 } from "react";
 import {
   createConversation,
+  dedupeEmptyConversations,
   deleteConversation,
+  findEmptyConversation,
   getConversation,
   listConversations,
   renameConversation,
@@ -29,7 +31,10 @@ type ConversationContextValue = {
 const ConversationContext = createContext<ConversationContextValue | null>(null);
 
 export function ConversationProvider({ children }: { children: ReactNode }) {
-  const [conversations, setConversations] = useState<ChatConversation[]>(() => listConversations());
+  const [conversations, setConversations] = useState<ChatConversation[]>(() => {
+    dedupeEmptyConversations();
+    return listConversations();
+  });
 
   const refresh = useCallback(() => {
     setConversations(listConversations());
@@ -37,6 +42,15 @@ export function ConversationProvider({ children }: { children: ReactNode }) {
 
   const createNew = useCallback(
     (projectId: string | null = null) => {
+      const existing = findEmptyConversation();
+      if (existing) {
+        if (projectId != null && existing.projectId !== projectId) {
+          saveConversation({ ...existing, projectId });
+          refresh();
+          return getConversation(existing.id) ?? existing;
+        }
+        return existing;
+      }
       const conv = createConversation(projectId);
       refresh();
       return conv;

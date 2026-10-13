@@ -19,6 +19,9 @@
         }
         document.documentElement.classList.toggle("dark", resolved === "dark");
         document.documentElement.dataset.theme = resolved;
+        var sidebarKey = "aqrem_sidebar_collapsed";
+        var sidebarCollapsed = localStorage.getItem(sidebarKey) === "1";
+        document.documentElement.dataset.sidebarCollapsed = sidebarCollapsed ? "true" : "false";
       })();
     </script>
   </head>

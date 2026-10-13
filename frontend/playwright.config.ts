@@ -24,6 +24,15 @@ export default defineConfig({
       dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 720 } },
     },
+    {
+      name: "sidebar-layout",
+      testMatch: /sidebar-layout\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "e2e/.auth/employee.json",
+        viewport: { width: 1440, height: 900 },
+      },
+    },
     { name: "public-dark", testMatch: /public-a11y|dead-controls/, use: { ...devices["Desktop Chrome"], colorScheme: "dark" } },
     { name: "public-light", testMatch: /public-a11y|dead-controls/, use: { ...devices["Desktop Chrome"], colorScheme: "light" } },
   ],

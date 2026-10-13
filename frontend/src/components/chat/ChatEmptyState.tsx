@@ -12,7 +12,7 @@ export default function ChatEmptyState({
   onPickPrompt,
 }: Props) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-4 pb-6 w-full max-w-[var(--chat-column-max)] mx-auto">
+    <div className="ref-content-column flex flex-1 flex-col items-center justify-center px-4 pb-6 w-full min-h-0">
       <h1 className="mb-2 text-2xl font-semibold text-chat-fg text-center">How can I help, {name}?</h1>
       <p className="mb-6 text-sm text-chat-muted text-center max-w-md">
         Ask questions grounded in{" "}

@@ -3,6 +3,7 @@ import AppShell from "./components/layout/AppShell";
 import RequireAuth from "./components/RequireAuth";
 import { ToastProvider } from "./components/ui/Toast";
 import { ConversationProvider } from "./lib/conversationContext";
+import { SidebarProvider } from "./lib/sidebarContext";
 import { ProjectProvider } from "./lib/projectContext";
 import { ThemeProvider } from "./lib/themeContext";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
@@ -43,9 +44,10 @@ function AuthenticatedApp() {
     <ThemeProvider>
       <ToastProvider>
         <ProjectProvider>
-          <ConversationProvider>
-            <Routes>
-              <Route element={<AppShell />}>
+          <SidebarProvider>
+            <ConversationProvider>
+              <Routes>
+                <Route element={<AppShell />}>
                 <Route index element={<ChatPage />} />
                 <Route path="chat" element={<ChatPage />} />
                 <Route path="c/:conversationId" element={<ChatPage />} />
@@ -70,8 +72,9 @@ function AuthenticatedApp() {
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
-            </Routes>
-          </ConversationProvider>
+              </Routes>
+            </ConversationProvider>
+          </SidebarProvider>
         </ProjectProvider>
       </ToastProvider>
     </ThemeProvider>

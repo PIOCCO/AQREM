@@ -6,11 +6,11 @@ import { useToast } from "../ui/Toast";
 
 type Props = {
   conversationTitle: string;
+  /** Mobile drawer only — desktop toggle lives in the sidebar rail. */
   onOpenSidebar?: () => void;
-  onExpandSidebar?: () => void;
 };
 
-export default function ChatConversationHeader({ conversationTitle, onOpenSidebar, onExpandSidebar }: Props) {
+export default function ChatConversationHeader({ conversationTitle, onOpenSidebar }: Props) {
   const toast = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -23,11 +23,6 @@ export default function ChatConversationHeader({ conversationTitle, onOpenSideba
     <header className="ref-chat-header shrink-0">
       <div className="ref-chat-header-inner">
         <div className="flex min-w-0 items-center gap-2">
-          {onExpandSidebar ? (
-            <IconButton label="Expand sidebar" onClick={onExpandSidebar} className="hidden lg:inline-flex ref-header-icon-btn">
-              <IconSidebar className="h-5 w-5" />
-            </IconButton>
-          ) : null}
           {onOpenSidebar ? (
             <IconButton label="Open sidebar" onClick={onOpenSidebar} className="lg:hidden ref-header-icon-btn">
               <IconSidebar className="h-5 w-5" />

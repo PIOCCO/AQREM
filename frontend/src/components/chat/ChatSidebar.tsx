@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
   IconCheckCircle,
+  IconChevronDown,
   IconClipboard,
   IconDatabase,
   IconEdit,
@@ -14,9 +15,10 @@ import {
   IconActivity,
   IconSettings,
   IconSidebar,
-  IconSparkles,
   IconTrash,
 } from "../icons/Icons";
+import { commandPaletteShortcutLabel } from "../../lib/keyboardHints";
+import { useTheme } from "../../lib/themeContext";
 import { Logo, LogoMark } from "../ui/Logo";
 import { clearSession, fetchReviewQueue } from "../../lib/api";
 import { useToast } from "../ui/Toast";
@@ -54,33 +56,72 @@ function SidebarUserFooter({
   roleLabel,
   email,
   onLogout,
+  compact,
 }: {
   initials: string;
   name: string;
   roleLabel: string;
   email?: string;
   onLogout: () => void;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const { resolved, toggle } = useTheme();
+
+  if (compact) {
+    return (
+      <div className="border-t border-chat-border p-2 mt-auto relative shrink-0">
+        <Tooltip label={`${name} — account menu`}>
+          <button
+            type="button"
+            className="sidebar-rail-btn mx-auto"
+            aria-label="Account menu"
+            aria-expanded={open}
+            aria-haspopup="menu"
+            onClick={() => setOpen((v) => !v)}
+          >
+            <span className="ref-user-avatar">{initials}</span>
+          </button>
+        </Tooltip>
+        {open ? (
+          <>
+            <button type="button" className="fixed inset-0 z-40" aria-label="Close menu" onClick={() => setOpen(false)} />
+            <div className="absolute bottom-full left-1/2 z-50 mb-2 w-44 -translate-x-1/2 rounded-lg border border-chat-border bg-chat-surface py-1 text-sm shadow-composer">
+              {email ? <p className="px-3 py-2 text-xs text-chat-muted truncate border-b border-chat-border">{email}</p> : null}
+              <Link to="/settings" className="chat-menu-item" onClick={() => setOpen(false)}>
+                Settings
+              </Link>
+              <button type="button" className="chat-menu-item w-full text-left" onClick={() => { toggle(); setOpen(false); }}>
+                Theme: {resolved === "dark" ? "Dark" : "Light"}
+              </button>
+              <button type="button" className="chat-menu-item w-full text-left text-red-600" onClick={onLogout}>
+                Sign out
+              </button>
+            </div>
+          </>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
-    <div className="border-t border-chat-border p-3 mt-auto relative">
+    <div className="border-t border-chat-border p-3 mt-auto relative shrink-0">
       <div className="flex w-full items-center gap-2 rounded-lg p-1">
+        <span className="ref-user-avatar">{initials}</span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-chat-fg">{name}</p>
+          <p className="truncate text-xs text-chat-muted">{roleLabel}</p>
+        </div>
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-lg hover:bg-chat-hover p-1 text-left"
-          onClick={() => setOpen((v) => !v)}
+          className="ref-user-menu-btn"
+          aria-label="Account menu"
           aria-expanded={open}
           aria-haspopup="menu"
+          onClick={() => setOpen((v) => !v)}
         >
-          <span className="ref-user-avatar">{initials}</span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-chat-fg">{name}</p>
-            <p className="truncate text-xs text-chat-muted">{roleLabel}</p>
-          </div>
+          <IconChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
         </button>
-        <Link to="/settings" className="ref-sidebar-sparkle-btn shrink-0" aria-label="Settings">
-          <IconSparkles className="h-4 w-4" />
-        </Link>
       </div>
       {open ? (
         <>
@@ -90,6 +131,9 @@ function SidebarUserFooter({
             <Link to="/settings" className="chat-menu-item" onClick={() => setOpen(false)}>
               Settings
             </Link>
+            <button type="button" className="chat-menu-item w-full text-left" onClick={() => { toggle(); setOpen(false); }}>
+              Theme: {resolved === "dark" ? "Dark" : "Light"}
+            </button>
             <button type="button" className="chat-menu-item w-full text-left text-red-600" onClick={onLogout}>
               Sign out
             </button>
@@ -243,50 +287,110 @@ export default function ChatSidebar({
   const asideClass = ["chat-sidebar", collapsed ? "chat-sidebar-collapsed" : "", mobileOpen ? "chat-sidebar-mobile-open" : ""]
     .filter(Boolean)
     .join(" ");
+  const asideRef = useRef<HTMLElement>(null);
+  const cmdHint = commandPaletteShortcutLabel();
+  const toggleLabel = collapsed ? "Expand sidebar" : "Collapse sidebar";
+
+  useEffect(() => {
+    if (!mobileOpen || !asideRef.current) return;
+    const focusable = asideRef.current.querySelector<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    );
+    focusable?.focus();
+  }, [mobileOpen]);
 
   return (
     <>
       {mobileOpen ? (
         <button type="button" className="chat-sidebar-backdrop lg:hidden" aria-label="Close sidebar" onClick={onCloseMobile} />
       ) : null}
-      <aside className={asideClass} aria-label="Sidebar">
+      <aside ref={asideRef} className={asideClass} aria-label="Sidebar" data-testid="chat-sidebar">
         <div className="ref-sidebar-header">
-          {!collapsed ? <Logo /> : <LogoMark className="h-8 w-8 mx-auto" />}
-          <button type="button" className="ref-sidebar-collapse-btn hidden lg:inline-flex" onClick={onToggleCollapse} aria-label="Toggle sidebar">
+          {!collapsed ? (
+            <div className="min-w-0 flex-1">
+              <Logo />
+            </div>
+          ) : (
+            <LogoMark className="h-8 w-8 shrink-0" />
+          )}
+          <button
+            type="button"
+            className="ref-sidebar-collapse-btn hidden lg:inline-flex"
+            data-testid="sidebar-toggle"
+            onClick={onToggleCollapse}
+            aria-expanded={!collapsed}
+            aria-label={toggleLabel}
+          >
             <IconSidebar className="h-[18px] w-[18px]" />
           </button>
         </div>
 
-        {!collapsed ? (
-          <>
-            <div className="px-3 pb-2 space-y-2">
+        <div className="chat-sidebar-collapsed-only flex min-h-0 flex-1 flex-col w-full">
+          <nav className="sidebar-rail-nav" aria-label="Workspace (icons)">
+            <Tooltip label="New chat">
+              <button type="button" className="sidebar-rail-btn" onClick={newChat} aria-label="New chat">
+                <IconPlus className="h-5 w-5" />
+              </button>
+            </Tooltip>
+            <Tooltip label={`Search (${cmdHint})`}>
+              <button
+                type="button"
+                className="sidebar-rail-btn"
+                aria-label="Search conversations"
+                onClick={() => onOpenCommandPalette?.()}
+              >
+                <IconSearch className="h-5 w-5" />
+              </button>
+            </Tooltip>
+            {primaryNav.map(({ to, label, Icon, badge }) => (
+              <Tooltip key={label} label={label}>
+                <NavLink
+                  to={to}
+                  onClick={onCloseMobile}
+                  className={({ isActive }) => `sidebar-rail-btn ${isActive ? "sidebar-rail-btn-active" : ""}`}
+                  aria-label={label}
+                >
+                  <Icon className="h-5 w-5" />
+                  {badge && reviewCount != null && reviewCount > 0 ? (
+                    <span className="sr-only">{reviewCount} in review queue</span>
+                  ) : null}
+                </NavLink>
+              </Tooltip>
+            ))}
+          </nav>
+          <SidebarUserFooter
+            compact
+            initials={initials}
+            name={user?.fullName || user?.email || "User"}
+            roleLabel={roleDisplayLabel(user?.role)}
+            email={user?.email}
+            onLogout={() => {
+              clearSession();
+              navigate("/login", { replace: true });
+            }}
+          />
+        </div>
+
+        <div className="chat-sidebar-expanded-only flex min-h-0 flex-1 flex-col">
+            <div className="px-3 pb-2 space-y-2 shrink-0">
               <button type="button" className="ref-new-chat-btn" onClick={newChat}>
                 <IconPlus className="h-4 w-4" />
                 New chat
               </button>
               <div className="flex gap-2">
-                <div className="relative flex-1 min-w-0">
+                <div className="ref-sidebar-search-wrap">
                   <IconSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-chat-muted pointer-events-none" />
                   <input
-                    className="ref-sidebar-search pl-9"
+                    className="ref-sidebar-search pl-9 pr-14"
                     placeholder="Search conversations"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     aria-label="Search conversations"
                   />
+                  <span className="ref-sidebar-search-kbd" aria-hidden>
+                    {cmdHint}
+                  </span>
                 </div>
-                {onOpenCommandPalette ? (
-                  <Tooltip label="Command palette (Ctrl+K)">
-                    <button
-                      type="button"
-                      className="ref-sidebar-sparkle-btn shrink-0 aq-interactive text-[11px] font-medium px-2"
-                      onClick={onOpenCommandPalette}
-                      aria-label="Open command palette"
-                    >
-                      ⌘K
-                    </button>
-                  </Tooltip>
-                ) : null}
               </div>
             </div>
 
@@ -309,7 +413,7 @@ export default function ChatSidebar({
 
             <div className="mx-3 border-t border-chat-border" />
 
-            <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4 min-h-0" aria-label="Chat history">
+            <nav className="ref-conv-scroll flex-1 overflow-y-auto px-2 py-3 space-y-4 min-h-0" aria-label="Chat history">
               {groups.length === 0 ? (
                 <p className="px-2 text-xs text-chat-muted">No conversations yet</p>
               ) : (
@@ -362,30 +466,7 @@ export default function ChatSidebar({
                 navigate("/login", { replace: true });
               }}
             />
-          </>
-        ) : (
-          <div className="flex flex-col items-center gap-2 py-3">
-            <button
-              type="button"
-              className="ref-sidebar-collapse-btn"
-              onClick={onToggleCollapse}
-              aria-label="Expand sidebar"
-              title="Expand sidebar"
-            >
-              <IconSidebar className="h-[18px] w-[18px]" />
-            </button>
-            <Tooltip label="New chat">
-              <button type="button" className="chat-icon-btn" onClick={newChat} aria-label="New chat">
-                <IconPlus className="h-5 w-5" />
-              </button>
-            </Tooltip>
-            <Tooltip label="Settings">
-              <Link to="/settings" className="chat-icon-btn" aria-label="Settings">
-                <IconSettings className="h-5 w-5" />
-              </Link>
-            </Tooltip>
-          </div>
-        )}
+        </div>
       </aside>
     </>
   );

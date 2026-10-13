@@ -360,13 +360,11 @@ export default function ChatPage() {
 
   if (atHome) {
     return (
-      <div className="grid h-full min-h-0 grid-rows-[auto_1fr_auto] bg-chat-main">
-        <ChatConversationHeader
-          conversationTitle="New chat"
-          onOpenSidebar={outlet?.openMobileSidebar}
-          onExpandSidebar={outlet?.sidebarCollapsed ? outlet.expandSidebar : undefined}
-        />
-        <ChatEmptyState name={name} projectName={projectName} onPickPrompt={setInput} />
+      <div className="chat-view bg-chat-main">
+        <ChatConversationHeader conversationTitle="New chat" onOpenSidebar={outlet?.openMobileSidebar} />
+        <div className="min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
+          <ChatEmptyState name={name} projectName={projectName} onPickPrompt={setInput} />
+        </div>
         <div className="w-full shrink-0 ref-composer-dock">
           <ChatComposer
             ref={composerRef}
@@ -398,16 +396,17 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_1fr_auto] bg-chat-main">
+    <div className="chat-view bg-chat-main">
       <ChatConversationHeader
         conversationTitle={conversation!.title}
         onOpenSidebar={outlet?.openMobileSidebar}
-        onExpandSidebar={outlet?.sidebarCollapsed ? outlet.expandSidebar : undefined}
       />
 
       {empty ? (
         <>
-          <ChatEmptyState name={name} projectName={projectName} onPickPrompt={setInput} />
+          <div className="min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
+            <ChatEmptyState name={name} projectName={projectName} onPickPrompt={setInput} />
+          </div>
           <div className="w-full shrink-0 ref-composer-dock">
             <ChatComposer
               ref={composerRef}

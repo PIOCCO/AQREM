@@ -83,6 +83,23 @@ export function getConversation(id: string): ChatConversation | null {
   return readAll().find((c) => c.id === id) ?? null;
 }
 
+export function isEmptyConversation(c: ChatConversation): boolean {
+  return c.messages.length === 0 && c.title === "New chat";
+}
+
+export function findEmptyConversation(): ChatConversation | null {
+  return listConversations().find(isEmptyConversation) ?? null;
+}
+
+/** Keep one empty "New chat" row; remove duplicate empties from storage. */
+export function dedupeEmptyConversations(): void {
+  const all = readAll();
+  const empties = all.filter(isEmptyConversation);
+  if (empties.length <= 1) return;
+  const keepId = empties.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]!.id;
+  writeAll(all.filter((c) => !isEmptyConversation(c) || c.id === keepId));
+}
+
 export function createConversation(projectId: string | null = null): ChatConversation {
   const now = new Date().toISOString();
   const conv: ChatConversation = {

@@ -195,7 +195,7 @@ export default function MessageList({
   }, [streamingText]);
 
   return (
-    <div className="ref-conversation-scroll flex-1 overflow-y-auto relative">
+    <div className="ref-conversation-scroll min-h-0 overflow-y-auto relative">
       {showScrollDown ? (
         <Tooltip label="Scroll to latest">
           <button

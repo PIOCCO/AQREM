@@ -77,7 +77,7 @@ export default {
         link: "var(--color-link)",
       },
       width: {
-        sidebar: "280px",
+        sidebar: "var(--sidebar-w, 272px)",
       },
       boxShadow: {
         sm: "0 1px 2px 0 rgb(0 0 0 / 0.08)",
@@ -86,7 +86,8 @@ export default {
         composer: "0 0 0 1px rgb(0 0 0 / 0.05), 0 4px 16px rgb(0 0 0 / 0.08)",
       },
       height: {
-        header: "52px",
+        header: "56px",
+        topbar: "56px",
       },
       borderRadius: {
         card: "12px",
