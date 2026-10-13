@@ -24,6 +24,7 @@ import { useConversations } from "../lib/conversationContext";
 import { useProjectContext } from "../lib/projectContext";
 import { newUuid } from "../lib/uuid";
 import { FOCUS_COMPOSER_EVENT } from "../lib/chatHome";
+import { LoadingState } from "../components/ui/States";
 
 const UPLOAD_SOURCE_TYPES = new Set(["folder_archive", "file_upload", "local_files"]);
 
@@ -369,7 +370,7 @@ export default function ChatPage() {
   if (!session) return null;
 
   const name = greetingName(user?.fullName, user?.email);
-  const atHome = !conversationId || !conversation;
+  const atHome = !conversationId;
 
   const composer = (
     <ChatComposer
@@ -388,6 +389,14 @@ export default function ChatPage() {
       conversationKey={conversationId ?? "home"}
     />
   );
+
+  if (conversationId && !conversation) {
+    return (
+      <div className="chat-view bg-chat-main flex items-center justify-center min-h-[40vh]">
+        <LoadingState label="Loading conversation…" />
+      </div>
+    );
+  }
 
   if (atHome) {
     return (
