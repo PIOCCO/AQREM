@@ -15,6 +15,22 @@
     --aq-radius-md: 0.5rem;
     --aq-radius-lg: 0.75rem;
 
+    /* Semantic aliases (dark default applied via html.dark; light when .dark is absent) */
+    --bg: var(--color-background);
+    --surface: var(--color-surface);
+    --surface-raised: var(--color-surface-raised);
+    --surface-sunken: var(--color-surface-sunken);
+    --border: var(--color-border);
+    --border-strong: var(--color-border-strong);
+    --text-primary: var(--color-text-primary);
+    --text-secondary: var(--color-text-secondary);
+    --text-muted: var(--color-text-muted);
+    --accent: var(--color-accent);
+    --accent-hover: var(--color-accent);
+    --accent-contrast: var(--color-accent-fg);
+    --focus-ring: var(--color-focus-ring);
+    --overlay: var(--color-overlay);
+
     --color-background: #f5f5f4;
     --color-surface: #ffffff;
     --color-surface-raised: #f3f3f3;
@@ -37,6 +53,11 @@
     --color-success-border: #a7f3d0;
     --color-focus-ring: #0f766e;
     --color-link: #0d9488;
+    --color-info: #0d9488;
+    --color-info-bg: #ecfdf5;
+    --color-info-border: #99f6e4;
+    --color-surface-sunken: #ebebeb;
+    --color-overlay: rgb(0 0 0 / 0.55);
     --logo-fg: #0a0a0a;
 
     --chat-main: var(--color-background);
@@ -73,26 +94,27 @@
     --admin-sidebar-width: 340px;
     --admin-radius-card: 0.75rem;
     --admin-radius-input: 0.625rem;
-    --admin-canvas: #f5f5f4;
-    --admin-status-active-bg: #dcfce7;
-    --admin-status-active-text: #166534;
-    --admin-status-suspended-bg: #f3f4f6;
-    --admin-status-suspended-text: #4b5563;
-    --admin-status-test-bg: #ffedd5;
-    --admin-status-test-text: #9a3412;
-    --admin-seat-ok: #0d9488;
-    --admin-seat-full: #d97706;
-    --admin-seat-muted: #9ca3af;
-    --admin-alert-bg: #fffbeb;
-    --admin-alert-border: #fcd34d;
-    --admin-alert-text: #92400e;
+    --admin-canvas: var(--color-background);
+    --admin-status-active-bg: var(--color-success-bg);
+    --admin-status-active-text: var(--color-success);
+    --admin-status-suspended-bg: var(--color-surface-raised);
+    --admin-status-suspended-text: var(--color-text-secondary);
+    --admin-status-test-bg: var(--color-warning-bg);
+    --admin-status-test-text: var(--color-warning);
+    --admin-seat-ok: var(--color-accent);
+    --admin-seat-full: var(--color-warning);
+    --admin-seat-muted: var(--color-text-muted);
+    --admin-alert-bg: var(--color-warning-bg);
+    --admin-alert-border: var(--color-warning-border);
+    --admin-alert-text: var(--color-warning);
   }
 
   html.dark {
     color-scheme: dark;
     --color-background: #141414;
-    --color-surface: #1f1f1f;
-    --color-surface-raised: #2a2a2a;
+    --color-surface: #1c1c1c;
+    --color-surface-raised: #242424;
+    --color-surface-sunken: #181818;
     --color-border: #3f3f3f;
     --color-border-strong: #525252;
     --color-text-primary: #ececec;
@@ -112,6 +134,10 @@
     --color-success-border: #047857;
     --color-focus-ring: #10a37f;
     --color-link: #5eead4;
+    --color-info: #5eead4;
+    --color-info-bg: #0f2a26;
+    --color-info-border: #115e59;
+    --color-overlay: rgb(0 0 0 / 0.72);
     --logo-fg: #ffffff;
 
     --chat-hover: rgba(255, 255, 255, 0.08);
@@ -120,8 +146,22 @@
     --chat-send-ready-fg: var(--color-accent-fg);
   }
 
+  html:not(.dark) {
+    color-scheme: light;
+  }
+
   html {
     @apply scroll-smooth;
+    background: var(--color-background);
+    color: var(--color-text-primary);
+    min-height: 100%;
+  }
+
+  body,
+  #root {
+    min-height: 100dvh;
+    background: var(--color-background);
+    color: var(--color-text-primary);
   }
 
   body {
@@ -752,7 +792,8 @@
     @apply rounded-lg px-3 py-1.5 text-sm hover:bg-chat-hover;
   }
   .chat-primary-btn {
-    @apply rounded-lg bg-chat-accent px-3 py-1.5 text-sm text-white hover:opacity-90;
+    @apply rounded-lg bg-chat-accent px-3 py-1.5 text-sm hover:opacity-90;
+    color: var(--color-accent-fg);
   }
   .chat-topbar {
     @apply border-b border-chat-border backdrop-blur-sm;
@@ -1324,7 +1365,32 @@
 
   .admin-shell {
     background: var(--admin-canvas);
-    min-height: 100vh;
+    min-height: 100dvh;
+    color: var(--color-text-primary);
+  }
+
+  .admin-main-canvas {
+    background: var(--color-background);
+    flex: 1;
+    min-height: 0;
+  }
+
+  .admin-tab {
+    @apply pb-2 text-sm font-medium border-b-2 -mb-px transition-colors;
+    color: var(--color-text-secondary);
+    border-color: transparent;
+  }
+  .admin-tab:hover {
+    color: var(--color-text-primary);
+  }
+  .admin-tab-active {
+    color: var(--color-text-primary);
+    border-color: var(--color-accent);
+  }
+
+  .admin-org-title {
+    @apply text-lg font-semibold;
+    color: var(--color-text-primary);
   }
   .admin-card {
     border-radius: var(--admin-radius-card);
@@ -1347,9 +1413,15 @@
     color: var(--admin-status-test-text);
   }
   .admin-inline-alert {
+    @apply rounded-lg border px-4 py-3 text-sm;
     background: var(--admin-alert-bg);
     border-color: var(--admin-alert-border);
     color: var(--admin-alert-text);
+  }
+
+  .admin-skeleton-line {
+    @apply h-3 rounded animate-pulse;
+    background: var(--color-surface-raised);
   }
 
   .aq-interactive {

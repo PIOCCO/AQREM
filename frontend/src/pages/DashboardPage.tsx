@@ -54,7 +54,7 @@ function progressBarClass(status: string) {
   if (s === "completed") return "bg-success";
   if (s === "in_review") return "bg-info";
   if (s === "draft") return "bg-amber-400";
-  return "bg-slate-300";
+  return "bg-[var(--color-border-strong)]";
 }
 
 function activityIcon(action: string, resource: string) {

@@ -27,7 +27,7 @@ export default function RequirePlatformAdmin({ children }: { children: ReactNode
 
   if (!ready) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--color-background)] p-6">
         <LoadingState label="Checking administrator session…" />
       </div>
     );

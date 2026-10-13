@@ -29,7 +29,7 @@ export default function ClientAdminShell() {
   }, [session]);
 
   return (
-    <div className="min-h-screen flex bg-[var(--admin-canvas,#f5f5f4)] text-chat-fg">
+    <div className="min-h-[100dvh] flex bg-[var(--admin-canvas)] text-[var(--color-text-primary)]">
       <aside className="w-64 shrink-0 border-r border-chat-border bg-chat-surface flex flex-col min-h-screen">
         <div className="p-5 border-b border-chat-border space-y-2">
           <div className="flex items-center justify-between gap-2">

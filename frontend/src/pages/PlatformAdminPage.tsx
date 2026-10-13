@@ -58,9 +58,25 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
+function shortOrgId(id: string) {
+  return id.length >= 8 ? id.slice(0, 8) : id;
+}
+
+function MembersTableSkeleton() {
+  return (
+    <div className="p-4 space-y-3" aria-busy="true" aria-label="Loading members">
+      <div className="admin-skeleton-line w-1/3" />
+      <div className="admin-skeleton-line w-full" />
+      <div className="admin-skeleton-line w-full" />
+      <div className="admin-skeleton-line w-2/3" />
+    </div>
+  );
+}
+
 function PlatformAdminInner() {
   const toast = useToast();
   const session = loadSession();
+  const sessionToken = session?.token ?? null;
   const [context, setContext] = useState<import("../lib/platformAdminApi").AdminContext | null>(null);
   const [orgs, setOrgs] = useState<AdminOrganization[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -94,31 +110,38 @@ function PlatformAdminInner() {
   );
 
   const refreshOrgs = useCallback(async () => {
-    if (!session?.token) return;
-    const data = await fetchAdminOrganizations(session, { q: search || undefined, status: filter });
+    const s = loadSession();
+    if (!s?.token) return;
+    const data = await fetchAdminOrganizations(s, { q: search || undefined, status: filter });
     setOrgs(Array.isArray(data.items) ? data.items : []);
     setCounts(data.counts ?? { all: 0, active: 0, suspended: 0, test: 0 });
     if (!selectedId && data.items[0]) setSelectedId(data.items[0].id);
-  }, [session, search, filter, selectedId]);
+  }, [search, filter, selectedId]);
 
   const refreshDirectory = useCallback(async () => {
-    if (!session?.token || !selectedId) return;
+    const s = loadSession();
+    if (!s?.token || !selectedId) return;
     setDirLoading(true);
     try {
-      const data = await fetchOrganizationDirectory(auth, selectedId, dirPage, 5, selected ?? undefined);
+      const data = await fetchOrganizationDirectory(s, selectedId, dirPage, 5, selected ?? undefined);
       setDirectory(data.rows);
       setDirTotal(data.total);
       setDirSeats(data.seats);
+    } catch {
+      setDirectory([]);
+      toast.push("Failed to load members", "err");
     } finally {
       setDirLoading(false);
     }
-  }, [session, selectedId, dirPage]);
+  }, [selectedId, dirPage, selected]);
 
   useEffect(() => {
-    if (!session?.token) return;
+    if (!sessionToken) return;
     (async () => {
+      const s = loadSession();
+      if (!s?.token) return;
       try {
-        const ctx = await fetchAdminContext(session);
+        const ctx = await fetchAdminContext(s);
         setContext(ctx);
         await refreshOrgs();
       } catch {
@@ -127,23 +150,23 @@ function PlatformAdminInner() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [sessionToken]);
 
   useEffect(() => {
-    if (!session?.token || consoleSection !== "team") return;
+    if (!sessionToken || consoleSection !== "team") return;
     setTeamLoading(true);
-    fetchPlatformStaff(session)
+    fetchPlatformStaff(loadSession()!)
       .then(setPlatformStaff)
       .catch(() => toast.push("Failed to load platform team", "err"))
       .finally(() => setTeamLoading(false));
-  }, [consoleSection, session?.token]);
+  }, [consoleSection, sessionToken]);
 
   useEffect(() => {
-    if (!session?.token || consoleSection !== "roles") return;
-    fetchPermissionsMatrix(session)
+    if (!sessionToken || consoleSection !== "roles") return;
+    fetchPermissionsMatrix(loadSession()!)
       .then(setPermMatrix)
       .catch(() => toast.push("Failed to load roles matrix", "err"));
-  }, [consoleSection, session?.token]);
+  }, [consoleSection, sessionToken]);
 
   useEffect(() => {
     refreshOrgs().catch(() => undefined);
@@ -157,15 +180,15 @@ function PlatformAdminInner() {
 
   useEffect(() => {
     if (tab === "members" || tab === "overview") refreshDirectory().catch(() => undefined);
-    if (tab === "invitations" && session?.token && selectedId) {
-      fetchOrgInvitations(session, selectedId).then(setInvitations).catch(() => setInvitations([]));
+    if (tab === "invitations" && sessionToken && selectedId) {
+      fetchOrgInvitations(loadSession()!, selectedId).then(setInvitations).catch(() => setInvitations([]));
     }
-    if (tab === "audit" && session?.token && selectedId) {
-      fetchOrgAudit(session, selectedId)
+    if (tab === "audit" && sessionToken && selectedId) {
+      fetchOrgAudit(loadSession()!, selectedId)
         .then((d) => setAudit(d.items))
         .catch(() => setAudit([]));
     }
-  }, [tab, selectedId, dirPage, refreshDirectory, session]);
+  }, [tab, selectedId, dirPage, refreshDirectory, sessionToken]);
 
   if (!session?.token) {
     return (
@@ -277,8 +300,18 @@ function PlatformAdminInner() {
       </header>
 
       {context?.super_admin_warning ? (
-        <div className="mx-6 mt-4 admin-inline-alert border rounded-lg px-3 py-2 text-sm" role="alert">
-          Fewer than two active super admins. Add another super admin before production cutover.
+        <div className="mx-6 mt-4 admin-inline-alert flex flex-wrap items-center justify-between gap-3" role="alert">
+          <span>
+            <strong className="font-medium">Warning:</strong> Fewer than two active super admins. Add another super
+            admin before production cutover.
+          </span>
+          <button
+            type="button"
+            className="aq-btn-secondary text-xs py-1.5 h-auto"
+            onClick={() => setConsoleSection("team")}
+          >
+            Add super admin
+          </button>
         </div>
       ) : null}
 
@@ -346,9 +379,9 @@ function PlatformAdminInner() {
       ) : null}
 
       {consoleSection === "organizations" ? (
-      <div className="flex flex-col lg:flex-row min-h-[calc(100vh-5rem)]">
+      <div className="flex flex-col lg:flex-row min-h-[calc(100dvh-5rem)]">
         <aside
-          className="w-full lg:w-[var(--admin-sidebar-width)] shrink-0 border-b lg:border-b-0 lg:border-r border-chat-border bg-chat-surface p-4 space-y-4"
+          className="w-full lg:w-[var(--admin-sidebar-width)] shrink-0 border-b lg:border-b-0 lg:border-r border-chat-border bg-[var(--color-surface)] p-4 space-y-4"
           aria-label="Organizations"
         >
           <label className="block text-xs font-medium text-chat-muted" htmlFor="org-search">
@@ -367,7 +400,9 @@ function PlatformAdminInner() {
                 key={f.id}
                 type="button"
                 className={`rounded-full px-3 py-1 text-xs font-medium border ${
-                  filter === f.id ? "bg-chat-accent text-white border-chat-accent" : "border-chat-border text-chat-muted"
+                  filter === f.id
+                    ? "bg-chat-accent text-[var(--color-accent-fg)] border-chat-accent"
+                    : "border-chat-border text-[var(--color-text-secondary)]"
                 }`}
                 onClick={() => setFilter(f.id)}
               >
@@ -391,12 +426,17 @@ function PlatformAdminInner() {
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-sm truncate">{o.name}</span>
-                      <span className={`text-[10px] uppercase px-2 py-0.5 rounded-full ${statusBadgeClass(o.license_status)}`}>
+                      <span className="font-medium text-sm truncate text-[var(--color-text-primary)]">
+                        {o.name}
+                        <span className="text-[var(--color-text-muted)] font-normal"> · {shortOrgId(o.id)}</span>
+                      </span>
+                      <span className={`text-[10px] uppercase px-2 py-0.5 rounded-full shrink-0 ${statusBadgeClass(o.license_status)}`}>
                         {licenseStatusLabel(o.license_status)}
                       </span>
                     </div>
-                    <p className="text-xs text-chat-muted mt-1 capitalize">{o.environment}</p>
+                    <p className="text-xs text-chat-muted mt-1 capitalize">
+                      {o.environment} · {formatDate(o.created_at)}
+                    </p>
                     <p className="text-xs mt-2">
                       {o.seats.seats_used} / {o.seats.seats_limit} seats
                     </p>
@@ -412,7 +452,7 @@ function PlatformAdminInner() {
           )}
         </aside>
 
-        <main className="flex-1 p-4 lg:p-6 min-w-0">
+        <main className="admin-main-canvas flex-1 p-4 lg:p-6 min-w-0">
           {!selected ? (
             <p className="text-chat-muted text-sm">Select an organization to manage.</p>
           ) : (
@@ -420,7 +460,12 @@ function PlatformAdminInner() {
               <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-lg font-semibold">{selected.name}</h2>
+                    <h2 className="admin-org-title">
+                      {selected.name}
+                      <span className="text-sm font-normal text-[var(--color-text-muted)] ml-2">
+                        {shortOrgId(selected.id)}
+                      </span>
+                    </h2>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${statusBadgeClass(selected.license_status)}`}>
                       {licenseStatusLabel(selected.license_status)}
                     </span>
@@ -445,9 +490,7 @@ function PlatformAdminInner() {
                   <button
                     key={id}
                     type="button"
-                    className={`pb-2 text-sm font-medium border-b-2 -mb-px ${
-                      tab === id ? "border-chat-accent text-chat-fg" : "border-transparent text-chat-muted"
-                    }`}
+                    className={tab === id ? "admin-tab admin-tab-active" : "admin-tab"}
                     onClick={() => setTab(id)}
                   >
                     {label}
@@ -474,10 +517,20 @@ function PlatformAdminInner() {
                       </button>
                     </div>
                     <div className="admin-card p-4">
-                      <p className="text-xs text-chat-muted">License status</p>
-                      <p className="text-2xl font-semibold mt-1">{licenseStatusLabel(selected.license_status)}</p>
-                      <p className="text-xs text-chat-muted mt-2">
-                        {selected.license_renews_at ? `Renews ${formatDate(selected.license_renews_at)}` : "—"}
+                      <p className="text-xs text-chat-muted">License</p>
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${statusBadgeClass(selected.license_status)}`}>
+                          {licenseStatusLabel(selected.license_status)}
+                        </span>
+                        <span className="text-sm text-[var(--color-text-secondary)] capitalize">{selected.environment}</span>
+                      </div>
+                      <p className="text-sm text-[var(--color-text-primary)] mt-3">
+                        {selected.seats.seats_limit} licensed seats
+                      </p>
+                      <p className="text-xs text-chat-muted mt-1">
+                        {selected.license_renews_at
+                          ? `Renews ${formatDate(selected.license_renews_at)}`
+                          : "No renewal date on file"}
                       </p>
                     </div>
                   </div>
@@ -530,7 +583,7 @@ function PlatformAdminInner() {
 
                   <div className="admin-card overflow-hidden">
                     {dirLoading ? (
-                      <p className="p-4 text-sm text-chat-muted">Loading members…</p>
+                      <MembersTableSkeleton />
                     ) : directory.length === 0 ? (
                       <p className="p-4 text-sm text-chat-muted">No members or pending invitations yet.</p>
                     ) : (

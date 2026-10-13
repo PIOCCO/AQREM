@@ -149,11 +149,13 @@ export default function App() {
       <Route
         path="/master-admin"
         element={
-          <RequirePlatformAdmin>
-            <RouteErrorBoundary>
-              <PlatformAdminPage />
-            </RouteErrorBoundary>
-          </RequirePlatformAdmin>
+          <PublicTheme>
+            <RequirePlatformAdmin>
+              <RouteErrorBoundary>
+                <PlatformAdminPage />
+              </RouteErrorBoundary>
+            </RequirePlatformAdmin>
+          </PublicTheme>
         }
       />
       <Route

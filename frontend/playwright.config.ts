@@ -41,7 +41,7 @@ export default defineConfig({
     },
     {
       name: "public-dark",
-      testMatch: /public-a11y|dead-controls|login-brand|login-no-registration/,
+      testMatch: /public-a11y|dead-controls|login-brand|login-no-registration|dark-theme-contrast/,
       use: { ...devices["Desktop Chrome"], colorScheme: "dark" },
     },
     { name: "public-light", testMatch: /public-a11y|dead-controls/, use: { ...devices["Desktop Chrome"], colorScheme: "light" } },

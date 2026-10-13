@@ -17,7 +17,7 @@ export default class RootErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.error) {
       return (
-        <div className="min-h-screen bg-slate-100 p-8 flex items-start justify-center">
+        <div className="min-h-screen bg-[var(--color-background)] p-8 flex items-start justify-center">
           <div className="max-w-lg w-full rounded-lg border border-red-200 bg-surface p-6 shadow-sm text-fg">
             <h1 className="text-lg font-semibold text-red-800 mb-2">Something went wrong</h1>
             <p className="text-sm text-fg-secondary mb-4 font-mono break-all">{this.state.error.message}</p>
