@@ -17,7 +17,13 @@ import EvidenceDetailPage from "./pages/EvidenceDetailPage";
 import EvidencePage from "./pages/EvidencePage";
 import AcceptInvitePage from "./pages/AcceptInvitePage";
 import JoinOrgPage from "./pages/JoinOrgPage";
-import PlatformAdminPage from "./pages/PlatformAdminPage";
+import SuperAdminShell from "./pages/super-admin/SuperAdminShell";
+import SuperAdminOrganizationsPage from "./pages/super-admin/SuperAdminOrganizationsPage";
+import SuperAdminLicensesPage from "./pages/super-admin/SuperAdminLicensesPage";
+import SuperAdminDeploymentsPage from "./pages/super-admin/SuperAdminDeploymentsPage";
+import SuperAdminUsagePage from "./pages/super-admin/SuperAdminUsagePage";
+import SuperAdminAuditPage from "./pages/super-admin/SuperAdminAuditPage";
+import SuperAdminSettingsPage from "./pages/super-admin/SuperAdminSettingsPage";
 import RequireSuperAdmin from "./components/RequireSuperAdmin";
 import RequireOrgAdminOnly from "./components/RequireOrgAdminOnly";
 import RequireTenantWorkspace from "./components/RequireTenantWorkspace";
@@ -163,12 +169,20 @@ export default function App() {
           <PublicTheme>
             <RequireSuperAdmin>
               <RouteErrorBoundary>
-                <PlatformAdminPage />
+                <SuperAdminShell />
               </RouteErrorBoundary>
             </RequireSuperAdmin>
           </PublicTheme>
         }
-      />
+      >
+        <Route index element={<Navigate to="organizations" replace />} />
+        <Route path="organizations" element={<SuperAdminOrganizationsPage />} />
+        <Route path="licenses" element={<SuperAdminLicensesPage />} />
+        <Route path="deployments" element={<SuperAdminDeploymentsPage />} />
+        <Route path="usage" element={<SuperAdminUsagePage />} />
+        <Route path="audit" element={<SuperAdminAuditPage />} />
+        <Route path="settings" element={<SuperAdminSettingsPage />} />
+      </Route>
       <Route
         path="/admin"
         element={

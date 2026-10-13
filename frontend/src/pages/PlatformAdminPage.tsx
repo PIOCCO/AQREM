@@ -37,6 +37,13 @@ import {
 type ConsoleSection = "organizations" | "team" | "roles";
 type TabId = "overview" | "members" | "license" | "invitations" | "audit";
 
+type PlatformAdminPageProps = {
+  /** Render inside SuperAdminShell (no duplicate header / section tabs). */
+  embedded?: boolean;
+  surface?: "organizations" | "settings";
+  defaultOrgTab?: TabId;
+};
+
 function statusBadgeClass(status: string) {
   if (status === "active") return "admin-badge-active";
   if (status === "test") return "admin-badge-test";
@@ -78,7 +85,11 @@ function MembersTableSkeleton() {
   );
 }
 
-function PlatformAdminInner() {
+function PlatformAdminInner({
+  embedded = false,
+  surface = "organizations",
+  defaultOrgTab = "members",
+}: PlatformAdminPageProps) {
   const toast = useToast();
   const session = loadSession();
   const sessionToken = session?.token ?? null;
@@ -88,7 +99,7 @@ function PlatformAdminInner() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [selectedId, setSelectedId] = useState<string>("");
-  const [tab, setTab] = useState<TabId>("members");
+  const [tab, setTab] = useState<TabId>(defaultOrgTab);
   const [loading, setLoading] = useState(true);
   const [showNewOrg, setShowNewOrg] = useState(false);
   const [directory, setDirectory] = useState<DirectoryRow[]>([]);
@@ -104,7 +115,9 @@ function PlatformAdminInner() {
     { id: string; created_at: string; actor_email: string; action: string; target: string }[]
   >([]);
   const [lastInvite, setLastInvite] = useState<{ path: string; expires: string } | null>(null);
-  const [consoleSection, setConsoleSection] = useState<ConsoleSection>("organizations");
+  const [consoleSection, setConsoleSection] = useState<ConsoleSection>(
+    surface === "settings" ? "team" : "organizations",
+  );
   const [platformStaff, setPlatformStaff] = useState<PlatformStaffMember[]>([]);
   const [permMatrix, setPermMatrix] = useState<PermissionsMatrix | null>(null);
   const [teamLoading, setTeamLoading] = useState(false);
@@ -174,15 +187,24 @@ function PlatformAdminInner() {
   }, [consoleSection, sessionToken]);
 
   useEffect(() => {
-    if (!sessionToken || consoleSection !== "roles") return;
+    const wantMatrix = consoleSection === "roles" || (embedded && surface === "settings");
+    if (!sessionToken || !wantMatrix) return;
     fetchPermissionsMatrix(loadSession()!)
       .then(setPermMatrix)
       .catch(() => toast.push("Failed to load roles matrix", "err"));
-  }, [consoleSection, sessionToken]);
+  }, [consoleSection, sessionToken, embedded, surface]);
 
   useEffect(() => {
     refreshOrgs().catch(() => undefined);
   }, [search, filter]);
+
+  useEffect(() => {
+    setTab(defaultOrgTab);
+  }, [defaultOrgTab]);
+
+  useEffect(() => {
+    setConsoleSection(surface === "settings" ? "team" : "organizations");
+  }, [surface]);
 
   useEffect(() => {
     setDirPage(1);
@@ -270,48 +292,55 @@ function PlatformAdminInner() {
   const dirPages = Math.max(1, Math.ceil(dirTotal / 5));
 
   return (
-    <div className="admin-shell font-sans text-chat-fg">
-      <header className="border-b border-chat-border bg-chat-surface px-6 py-4 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <LogoHomeLink variant="full" className="mb-2" />
-          <h1 className="text-xl font-semibold tracking-tight">Super Admin</h1>
-          <p className="text-sm text-chat-muted mt-1">
-            Platform operations only — organizations, licenses, and invitations. No customer workspace data.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <nav className="flex gap-2 text-sm" aria-label="Platform console">
-            {(
-              [
-                ["organizations", "Organizations"],
-                ["team", "Team & roles"],
-                ["roles", "Roles"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                className={`rounded-lg px-3 py-1.5 border ${
-                  consoleSection === id ? "border-chat-accent bg-chat-surface-subtle" : "border-chat-border text-chat-muted"
-                }`}
-                onClick={() => setConsoleSection(id)}
-              >
-                {label}
+    <div className={embedded ? "font-sans text-chat-fg" : "admin-shell font-sans text-chat-fg"}>
+      {!embedded ? (
+        <header className="border-b border-chat-border bg-chat-surface px-6 py-4 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <LogoHomeLink variant="full" className="mb-2" />
+            <h1 className="text-xl font-semibold tracking-tight">Super Admin</h1>
+            <p className="text-sm text-chat-muted mt-1">
+              Platform operations only — organizations, licenses, and invitations. No customer workspace data.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <nav className="flex gap-2 text-sm" aria-label="Platform console">
+              {(
+                [
+                  ["organizations", "Organizations"],
+                  ["team", "Team & roles"],
+                  ["roles", "Roles"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={`rounded-lg px-3 py-1.5 border ${
+                    consoleSection === id ? "border-chat-accent bg-chat-surface-subtle" : "border-chat-border text-chat-muted"
+                  }`}
+                  onClick={() => setConsoleSection(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
+            {consoleSection === "organizations" ? (
+              <button type="button" className="aq-btn-primary text-sm" onClick={() => setShowNewOrg(true)}>
+                + New organization
               </button>
-            ))}
-          </nav>
-          <Link to="/" className="text-sm text-chat-muted hover:text-chat-fg">
-            Back to app
-          </Link>
-          {consoleSection === "organizations" ? (
-            <button type="button" className="aq-btn-primary text-sm" onClick={() => setShowNewOrg(true)}>
-              + New organization
-            </button>
-          ) : null}
-        </div>
-      </header>
+            ) : null}
+          </div>
+        </header>
+      ) : null}
 
-      {context?.super_admin_warning ? (
+      {embedded && surface === "organizations" ? (
+        <div className="px-4 pt-4 flex justify-end">
+          <button type="button" className="aq-btn-primary text-sm" onClick={() => setShowNewOrg(true)}>
+            + New organization
+          </button>
+        </div>
+      ) : null}
+
+      {context?.super_admin_warning && (embedded || consoleSection === "organizations") ? (
         <div className="mx-6 mt-4 admin-inline-alert flex flex-wrap items-center justify-between gap-3" role="alert">
           <span>
             <strong className="font-medium">Warning:</strong> Fewer than two active super admins. Add another super
@@ -331,7 +360,7 @@ function PlatformAdminInner() {
         </div>
       ) : null}
 
-      {consoleSection === "team" ? (
+      {(consoleSection === "team" || (embedded && surface === "settings")) ? (
         <main className="admin-main-canvas p-6 max-w-5xl">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h2 className="text-lg font-semibold">Platform team</h2>
@@ -375,7 +404,7 @@ function PlatformAdminInner() {
         </main>
       ) : null}
 
-      {consoleSection === "roles" && permMatrix ? (
+      {(consoleSection === "roles" || (embedded && surface === "settings")) && permMatrix ? (
         <main className="p-6 overflow-x-auto">
           <h2 className="text-lg font-semibold mb-2">Permission matrix</h2>
           <p className="text-sm text-chat-muted mb-4">
@@ -409,7 +438,7 @@ function PlatformAdminInner() {
         </main>
       ) : null}
 
-      {consoleSection === "organizations" ? (
+      {(consoleSection === "organizations" || (embedded && surface === "organizations")) ? (
       <div className="flex flex-col lg:flex-row min-h-[calc(100dvh-5rem)]">
         <aside
           className="w-full lg:w-[var(--admin-sidebar-width)] shrink-0 border-b lg:border-b-0 lg:border-r border-chat-border bg-[var(--color-surface)] p-4 space-y-4"
@@ -984,10 +1013,10 @@ function LicenseTab({
   );
 }
 
-export default function PlatformAdminPage() {
+export default function PlatformAdminPage(props: PlatformAdminPageProps = {}) {
   return (
     <ToastProvider>
-      <PlatformAdminInner />
+      <PlatformAdminInner {...props} />
     </ToastProvider>
   );
 }
