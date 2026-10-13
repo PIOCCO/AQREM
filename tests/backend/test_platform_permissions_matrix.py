@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.core.permissions_catalog import platform_endpoint_permissions, platform_permissions_for_role
 from app.core.platform_roles import PlatformRole
+from app.core.jwt_audiences import AUD_EMPLOYEE, AUD_ORG_ADMIN, AUD_PLATFORM
 from app.core.security import create_access_token, hash_password
 from app.models.organization import User
 

@@ -30,6 +30,23 @@ class TokenResponse(BaseModel):
     is_platform_admin: bool = False
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        email = value.strip().lower()
+        if "@" not in email:
+            raise ValueError("Enter a valid email address")
+        return email
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=512)
+    new_password: str = Field(min_length=8, max_length=256)
+
+
 class UserResponse(BaseModel):
     id: UUID
     email: EmailStr

@@ -5,6 +5,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.roles import Role, role_at_least
+from app.core.jwt_audiences import AUD_ORG_ADMIN, AUD_PLATFORM, TENANT_AUDIENCES, ALL_AUDIENCES
 from app.core.security import decode_access_token
 from app.core.tenant import TenantContext
 from app.db.session import get_db
@@ -22,7 +23,7 @@ def get_authenticated_user(
     if credentials is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:
-        payload = decode_access_token(credentials.credentials)
+        payload = decode_access_token(credentials.credentials, audiences=ALL_AUDIENCES)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
 
@@ -37,7 +38,7 @@ def _token_payload(credentials: HTTPAuthorizationCredentials | None) -> dict:
     if credentials is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:
-        return decode_access_token(credentials.credentials)
+        return decode_access_token(credentials.credentials, audiences=ALL_AUDIENCES)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
 
@@ -55,7 +56,7 @@ def get_tenant_context(
     if credentials is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:
-        payload = decode_access_token(credentials.credentials)
+        payload = decode_access_token(credentials.credentials, audiences=TENANT_AUDIENCES)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
 
@@ -63,6 +64,13 @@ def get_tenant_context(
     user = db.get(User, user_id)
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+
+    token_aud = payload.get("aud")
+    if token_aud == AUD_PLATFORM:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Platform tokens cannot access tenant data plane endpoints",
+        )
 
     if user.must_change_password:
         raise HTTPException(
@@ -85,13 +93,6 @@ def get_tenant_context(
     allowed, reason = org_allows_sign_in(org)
     if not allowed:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
-
-    aud = payload.get("aud")
-    if aud == "aqrem-master" or payload.get("role") == "PLATFORM_ADMIN":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Platform tokens cannot access tenant data plane endpoints",
-        )
 
     membership = (
         db.query(OrganizationMembership)

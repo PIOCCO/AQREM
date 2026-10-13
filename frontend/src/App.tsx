@@ -40,6 +40,8 @@ import QuestionnairesPage from "./pages/QuestionnairesPage";
 import SourcesPage from "./pages/SourcesPage";
 import LoginEntryRedirect from "./components/LoginEntryRedirect";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import RouteErrorBoundary from "./components/ui/RouteErrorBoundary";
 
 function PublicTheme({ children }: { children: ReactNode }) {
@@ -97,6 +99,30 @@ export default function App() {
         element={
           <PublicTheme>
             <LoginEntryRedirect />
+          </PublicTheme>
+        }
+      />
+      <Route
+        path="/share/:shareToken"
+        element={
+          <PublicTheme>
+            <ShareConversationPage />
+          </PublicTheme>
+        }
+      />
+      <Route
+        path="/forgot-password"
+        element={
+          <PublicTheme>
+            <ForgotPasswordPage />
+          </PublicTheme>
+        }
+      />
+      <Route
+        path="/reset-password"
+        element={
+          <PublicTheme>
+            <ResetPasswordPage />
           </PublicTheme>
         }
       />

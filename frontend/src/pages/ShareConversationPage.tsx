@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import MarkdownContent from "../components/chat/MarkdownContent";
-import { fetchChatShare, type ChatShareView } from "../lib/chatShareApi";
+import { fetchChatShare, fetchPublicChatShare, type ChatShareView } from "../lib/chatShareApi";
 import { useAuth } from "../lib/authContext";
 
 export default function ShareConversationPage() {
@@ -12,29 +12,33 @@ export default function ShareConversationPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!session || !shareToken) {
+    if (!shareToken) {
       setLoading(false);
       return;
     }
     setLoading(true);
-    fetchChatShare(session, shareToken)
+    const loader = session
+      ? fetchChatShare(session, shareToken)
+      : fetchPublicChatShare(shareToken);
+    loader
       .then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : "Unable to load share"))
       .finally(() => setLoading(false));
   }, [session, shareToken]);
 
-  if (!session) return null;
-
   return (
-    <div className="chat-view bg-chat-main">
+    <div className="chat-view bg-chat-main min-h-screen flex flex-col">
+      <div className="bg-[var(--admin-status-active-bg)] text-[var(--admin-status-active-text)] text-sm text-center py-2 px-4" role="status">
+        Shared read-only view — sign in to continue the conversation in your organization.
+      </div>
       <header className="ref-chat-header shrink-0">
         <div className="ref-chat-header-inner">
           <div className="min-w-0">
             <p className="text-xs text-chat-muted uppercase tracking-wide">Shared conversation</p>
             <h1 className="truncate text-[15px] font-medium text-chat-fg">{data?.title ?? "Share link"}</h1>
           </div>
-          <Link to="/" className="ref-header-action-btn shrink-0">
-            Back to chat
+          <Link to={session ? "/" : "/login"} className="ref-header-action-btn shrink-0">
+            {session ? "Back to chat" : "Sign in"}
           </Link>
         </div>
       </header>

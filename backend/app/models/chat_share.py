@@ -22,6 +22,7 @@ class ChatConversationShare(TenantBase):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     messages: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

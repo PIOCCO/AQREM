@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.audit.service import record_audit
 from app.core.dependencies import get_tenant_context
 from app.core.rate_limit import RETRIEVAL_PREVIEW_LIMIT, limiter
 from app.core.roles import Role
@@ -41,17 +42,31 @@ async def ask_chat(
 async def create_chat_share(
     payload: CreateChatShareRequest,
     tenant: TenantContext = Depends(get_tenant_context),
+    control_db: Session = Depends(get_db),
     db: Session = Depends(get_tenant_db),
 ) -> CreateChatShareResponse:
     messages = [m.model_dump() for m in payload.messages]
-    share = ChatShareService(db).create_or_update_share(
+    share = ChatShareService(db, control_db=control_db).create_or_update_share(
         organization_id=tenant.organization_id,
         user_id=tenant.user_id,
         client_conversation_id=payload.client_conversation_id,
         title=payload.title,
         messages=messages,
     )
+    record_audit(
+        db,
+        organization_id=tenant.organization_id,
+        user_id=tenant.user_id,
+        action="chat_share_created",
+        resource_type="chat_share",
+        resource_id=share.share_token[:16],
+        metadata={"client_conversation_id": payload.client_conversation_id},
+    )
+    db.flush()
+    control_db.flush()
     db.commit()
+    if control_db is not db:
+        control_db.commit()
     return CreateChatShareResponse(share_token=share.share_token, share_path=f"/share/{share.share_token}")
 
 
@@ -59,9 +74,22 @@ async def create_chat_share(
 async def get_chat_share(
     token: str,
     tenant: TenantContext = Depends(get_tenant_context),
+    control_db: Session = Depends(get_db),
     db: Session = Depends(get_tenant_db),
 ) -> ChatShareViewResponse:
-    share = ChatShareService(db).get_share_for_tenant(token=token, organization_id=tenant.organization_id)
+    share = ChatShareService(db, control_db=control_db).get_share_for_tenant(
+        token=token, organization_id=tenant.organization_id
+    )
+    record_audit(
+        db,
+        organization_id=tenant.organization_id,
+        user_id=tenant.user_id,
+        action="chat_share_viewed",
+        resource_type="chat_share",
+        resource_id=token[:16],
+        metadata={"authenticated": True},
+    )
+    db.commit()
     return ChatShareViewResponse(
         title=share.title,
         messages=share.messages,
@@ -73,13 +101,25 @@ async def get_chat_share(
 async def revoke_chat_share(
     token: str,
     tenant: TenantContext = Depends(get_tenant_context),
+    control_db: Session = Depends(get_db),
     db: Session = Depends(get_tenant_db),
 ) -> None:
     is_admin = tenant.role == Role.ORG_ADMIN
-    ChatShareService(db).revoke_share(
+    ChatShareService(db, control_db=control_db).revoke_share(
         token=token,
         organization_id=tenant.organization_id,
         user_id=tenant.user_id,
         is_org_admin=is_admin,
     )
+    record_audit(
+        db,
+        organization_id=tenant.organization_id,
+        user_id=tenant.user_id,
+        action="chat_share_revoked",
+        resource_type="chat_share",
+        resource_id=token[:16],
+        metadata={},
+    )
     db.commit()
+    if control_db is not db:
+        control_db.commit()

@@ -22,6 +22,8 @@ class Organization(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     owner_display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    chat_shares_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    chat_share_ttl_days: Mapped[int] = mapped_column(Integer, nullable=False, default=7)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

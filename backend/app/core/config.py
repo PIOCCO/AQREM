@@ -25,6 +25,17 @@ class Settings(BaseSettings):
 
     app_env: str = "development"
     secret_key: str = "dev-secret-change-me"
+    jwt_issuer: str = Field(default="aqrem", validation_alias=AliasChoices("jwt_issuer", "JWT_ISSUER"))
+    password_reset_expire_minutes: int = Field(default=60, validation_alias=AliasChoices("password_reset_expire_minutes", "PASSWORD_RESET_EXPIRE_MINUTES"))
+    app_public_base_url: str = Field(
+        default="http://127.0.0.1:5173",
+        validation_alias=AliasChoices("app_public_base_url", "APP_PUBLIC_BASE_URL"),
+    )
+    email_delivery_mode: str = Field(
+        default="log",
+        validation_alias=AliasChoices("email_delivery_mode", "EMAIL_DELIVERY_MODE"),
+        description="log (dev only) or disabled until SMTP is configured",
+    )
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     serve_frontend: bool = False

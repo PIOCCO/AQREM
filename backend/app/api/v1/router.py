@@ -4,6 +4,7 @@ from app.api.v1 import (
     admin,
     master,
     org_admin,
+    public_chat,
     answer_library,
     audit,
     auth,
@@ -30,6 +31,7 @@ api_router.include_router(sources.router, prefix="/sources", tags=["sources"])
 api_router.include_router(evidence.router, prefix="/evidence", tags=["evidence"])
 api_router.include_router(retrieval.router, prefix="/retrieval", tags=["retrieval"])
 api_router.include_router(chat.router, prefix="/chat", tags=["chat"])
+api_router.include_router(public_chat.router, prefix="/public/chat", tags=["public-chat"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(questionnaires.router, prefix="/questionnaires", tags=["questionnaires"])
 api_router.include_router(answer_library.router, prefix="/answer-library", tags=["answer-library"])

@@ -10,12 +10,18 @@ from app.core.platform_access import resolve_platform_role
 from app.core.platform_roles import PlatformRole
 from app.core.rate_limit import AUTH_LOGIN_LIMIT, limiter
 from app.core.roles import Role
+from app.core.jwt_audiences import AUD_EMPLOYEE, AUD_ORG_ADMIN, AUD_PLATFORM
 from app.core.security import create_access_token, hash_password, verify_password
+from app.services.auth.password_reset import (
+    PASSWORD_RESET_GENERIC_MESSAGE,
+    request_password_reset,
+    reset_password_with_token,
+)
 from app.core.tenant import TenantContext
 from app.db.session import get_db
 from app.models.organization import Organization, OrganizationMembership, User
 from app.schemas.admin import AcceptInvitationRequest, ChangePasswordRequest
-from app.schemas.auth import LoginRequest, TokenResponse, UserResponse
+from app.schemas.auth import ForgotPasswordRequest, LoginRequest, ResetPasswordRequest, TokenResponse, UserResponse
 from app.services.licensing import org_allows_sign_in
 from app.services.platform_provisioning import accept_invitation
 
@@ -38,9 +44,9 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
             str(user.id),
             {
                 "platform_role": platform_role.value,
-                "aud": "aqrem-master",
                 "platform_auth_version": int(getattr(user, "platform_auth_version", 1) or 1),
             },
+            audience=AUD_PLATFORM,
         )
         return TokenResponse(
             access_token=token,
@@ -71,15 +77,15 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
 
     member_role = Role(membership.role)
-    audience = "aqrem-org-admin" if member_role == Role.ORG_ADMIN else "aqrem-employee"
+    audience = AUD_ORG_ADMIN if member_role == Role.ORG_ADMIN else AUD_EMPLOYEE
     token = create_access_token(
         str(user.id),
         {
             "organization_id": str(membership.organization_id),
             "role": membership.role,
-            "aud": audience,
             "auth_version": membership.auth_version,
         },
+        audience=audience,
     )
     return TokenResponse(
         access_token=token,
@@ -116,15 +122,15 @@ def accept_invite(
         raise HTTPException(status_code=403, detail=reason)
 
     member_role = Role(membership.role)
-    audience = "aqrem-org-admin" if member_role == Role.ORG_ADMIN else "aqrem-employee"
+    audience = AUD_ORG_ADMIN if member_role == Role.ORG_ADMIN else AUD_EMPLOYEE
     token = create_access_token(
         str(user.id),
         {
             "organization_id": str(membership.organization_id),
             "role": membership.role,
-            "aud": audience,
             "auth_version": membership.auth_version,
         },
+        audience=audience,
     )
     return TokenResponse(
         access_token=token,
@@ -133,6 +139,35 @@ def accept_invite(
         must_change_password=False,
         is_platform_admin=user.is_platform_admin,
     )
+
+
+@router.post("/forgot-password", status_code=200)
+@limiter.limit("10/minute")
+def forgot_password(
+    request: Request,
+    payload: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    request_password_reset(db, email=payload.email)
+    db.commit()
+    return {"message": PASSWORD_RESET_GENERIC_MESSAGE}
+
+
+@router.post("/reset-password", status_code=204)
+@limiter.limit("10/minute")
+def reset_password(
+    request: Request,
+    payload: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+) -> None:
+    try:
+        reset_password_with_token(db, token=payload.token, new_password=payload.new_password)
+    except ValueError as exc:
+        code = str(exc)
+        if code == "WEAK_PASSWORD":
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters") from exc
+        raise HTTPException(status_code=400, detail="This reset link is invalid or expired") from exc
+    db.commit()
 
 
 @router.post("/change-password", status_code=204)

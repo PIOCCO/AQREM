@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.permissions_catalog import has_platform_permission
 from app.core.platform_roles import PlatformRole
+from app.core.jwt_audiences import AUD_PLATFORM
 from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models.organization import User
@@ -38,7 +39,7 @@ def get_platform_user(
     if credentials is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:
-        payload = decode_access_token(credentials.credentials)
+        payload = decode_access_token(credentials.credentials, audiences=AUD_PLATFORM)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
 
@@ -46,12 +47,6 @@ def get_platform_user(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Tenant session cannot access the platform console",
-        )
-    aud = payload.get("aud")
-    if aud is not None and aud != "aqrem-master":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Platform console requires a master audience token",
         )
 
     from uuid import UUID

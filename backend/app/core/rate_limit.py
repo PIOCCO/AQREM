@@ -9,3 +9,4 @@ limiter = Limiter(key_func=get_remote_address, default_limits=[])
 LLM_GENERATE_LIMIT = "30/minute"
 RETRIEVAL_PREVIEW_LIMIT = "60/minute"
 AUTH_LOGIN_LIMIT = "20/minute"
+PUBLIC_SHARE_LIMIT = "30/minute"

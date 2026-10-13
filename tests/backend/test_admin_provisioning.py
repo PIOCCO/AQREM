@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.core.roles import Role
+from app.core.jwt_audiences import AUD_EMPLOYEE, AUD_ORG_ADMIN, AUD_PLATFORM
 from app.core.security import create_access_token, hash_password
 from app.models.enums import LicenseStatus
 from app.models.organization import Organization, OrganizationMembership, User
@@ -143,7 +144,7 @@ def test_admin_provisions_org_and_client_user(client: TestClient, db_session):
         headers={"Authorization": f"Bearer {editor_token}"},
         json={"email": "x@y.example", "full_name": "X", "role": "VIEWER"},
     )
-    assert forbidden.status_code == 403
+    assert forbidden.status_code in (401, 403)
 
 
 @pytest.mark.skipif(not _postgres_available(), reason="PostgreSQL not available")

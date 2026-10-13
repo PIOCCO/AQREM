@@ -137,6 +137,25 @@ export async function loginUser(payload: { email: string; password: string }) {
   return res.json();
 }
 
+export async function requestPasswordReset(email: string): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE}/api/v1/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email.trim() }),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Could not request password reset"));
+  return res.json();
+}
+
+export async function resetPasswordWithToken(token: string, newPassword: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/v1/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "This reset link is invalid or expired"));
+}
+
 export async function acceptInvitation(payload: {
   token: string;
   password: string;

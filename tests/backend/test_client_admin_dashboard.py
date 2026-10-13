@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.roles import Role
+from app.core.jwt_audiences import AUD_EMPLOYEE, AUD_ORG_ADMIN, AUD_PLATFORM
 from app.core.security import create_access_token, hash_password
 from app.models.client_admin import ClientCredentialMetadata
 from app.models.organization import Organization, OrganizationMembership, User
@@ -92,9 +93,9 @@ def test_master_token_rejected_on_org_admin(client: TestClient, db_session):
     )
     db_session.add(master)
     db_session.commit()
-    master_token = create_access_token(str(master.id), {"role": "PLATFORM_ADMIN", "aud": "aqrem-master"})
+    master_token = create_access_token(str(master.id), {"platform_role": "SUPER_ADMIN", "platform_auth_version": 1}, audience=AUD_PLATFORM)
     res = client.get("/api/v1/org-admin/overview", headers=_org_admin_headers(master_token, str(org.id)))
-    assert res.status_code == 403
+    assert res.status_code in (401, 403)
 
 
 def test_upload_rejects_eicar(client: TestClient, db_session, monkeypatch, tmp_path):

@@ -1,5 +1,7 @@
 from app.models.answer_library import AnswerLibraryEntry, AnswerLibraryEvidenceLink
 from app.models.chat_share import ChatConversationShare
+from app.models.chat_share_index import ChatShareTokenIndex
+from app.models.password_reset import PasswordResetToken
 from app.models.audit import AuditEvent
 from app.models.client_admin import ClientCredentialMetadata, ClientDocument
 from app.models.evidence import EvidenceItem, EvidenceItemVersion

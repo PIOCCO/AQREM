@@ -93,9 +93,12 @@ export default function LoginPage() {
               <label htmlFor={passwordId} className="text-sm font-medium text-[var(--color-text-primary)]">
                 Password
               </label>
-              <span className="text-xs text-[var(--color-text-muted)]" title="Password reset is managed by your administrator">
-                Forgot password? Contact your admin
-              </span>
+              <a
+                href="/forgot-password"
+                className="text-xs text-[var(--color-link)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus-ring)]"
+              >
+                Forgot password?
+              </a>
             </div>
             <div className="relative">
               <input
@@ -136,14 +139,6 @@ export default function LoginPage() {
         </form>
         <p className="text-xs text-[var(--color-text-muted)] mt-4">
           Need access? Ask your organization admin for an invitation.
-        </p>
-        <p className="text-xs text-[var(--color-text-muted)] mt-2">
-          Platform operators: use <code className="text-[11px]">PLATFORM_ADMIN_EMAIL</code> from{" "}
-          <code className="text-[11px]">backend/.env</code>, then open{" "}
-          <a href="/master-admin" className="text-[var(--color-link)] hover:underline">
-            Admin console
-          </a>
-          .
         </p>
       </div>
     </div>

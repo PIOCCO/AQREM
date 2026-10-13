@@ -151,6 +151,25 @@ export async function fetchOrgAudit(session: AuthSession, limit = 50) {
   return res.json();
 }
 
+export async function fetchChatSharing(session: AuthSession): Promise<{ enabled: boolean; default_ttl_days: number }> {
+  const res = await fetch(`${API_BASE}/api/v1/org-admin/chat-sharing`, { headers: headers(session) });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to load chat sharing settings"));
+  return res.json();
+}
+
+export async function updateChatSharing(
+  session: AuthSession,
+  payload: { enabled: boolean; default_ttl_days?: number },
+): Promise<{ enabled: boolean; default_ttl_days: number }> {
+  const res = await fetch(`${API_BASE}/api/v1/org-admin/chat-sharing`, {
+    method: "PUT",
+    headers: headers(session),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to update chat sharing"));
+  return res.json();
+}
+
 export async function fetchTelemetrySchema(session: AuthSession) {
   const res = await fetch(`${API_BASE}/api/v1/org-admin/telemetry-schema`, { headers: headers(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load telemetry schema"));

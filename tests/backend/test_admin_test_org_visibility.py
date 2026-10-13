@@ -1,5 +1,6 @@
 """Test organizations must be hidden from platform admin when test mode is off."""
 
+from app.core.jwt_audiences import AUD_EMPLOYEE, AUD_ORG_ADMIN, AUD_PLATFORM
 from app.core.security import create_access_token, hash_password
 from app.models.enums import LicenseStatus
 from app.models.organization import Organization, User
@@ -27,7 +28,7 @@ def test_hidden_test_org_directory_returns_404(client, db_session, monkeypatch):
     db_session.add_all([admin, test_org])
     db_session.commit()
 
-    token = create_access_token(str(admin.id), {"role": "PLATFORM_ADMIN"})
+    token = create_access_token(str(admin.id), {"platform_role": "SUPER_ADMIN", "platform_auth_version": 1}, audience=AUD_PLATFORM)
     headers = {"Authorization": f"Bearer {token}"}
 
     res = client.get(f"/api/v1/admin/organizations/{test_org.id}/directory", headers=headers)

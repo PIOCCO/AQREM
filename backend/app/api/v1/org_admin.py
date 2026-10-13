@@ -15,6 +15,7 @@ from app.core.dependencies import require_org_admin
 from app.core.org_admin_errors import org_admin_error
 from app.core.rate_limit import limiter
 from app.core.roles import Role
+from app.core.jwt_audiences import AUD_ORG_ADMIN
 from app.core.security import decode_access_token
 from app.core.tenant import TenantContext
 from app.db.session import get_db
@@ -61,21 +62,14 @@ def _require_org_admin_surface(request: Request, tenant: TenantContext = Depends
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         raise org_admin_error(code="UNAUTHORIZED", message="Not authenticated", status_code=401)
-    payload = decode_access_token(auth[7:])
-    aud = payload.get("aud")
-    if aud in {"aqrem-master", "aqrem-employee"}:
-        raise org_admin_error(
-            code="WRONG_AUDIENCE",
-            message="This console requires an organization administrator session.",
-            status_code=403,
-        )
-    settings = get_settings()
-    if settings.app_env == "production" and aud != "aqrem-org-admin":
+    try:
+        decode_access_token(auth[7:], audiences=AUD_ORG_ADMIN)
+    except ValueError as exc:
         raise org_admin_error(
             code="WRONG_AUDIENCE",
             message="Organization administrator token required.",
             status_code=403,
-        )
+        ) from exc
     return tenant
 
 
@@ -671,6 +665,75 @@ def telemetry_schema(
         "description": "Only these content-free fields may be sent to the master console.",
         "fields": TELEMETRY_FIELD_CATALOG,
     }
+
+
+@router.get("/chat-sharing")
+def get_chat_sharing(
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    control_db: Session = Depends(get_db),
+) -> dict:
+    org = control_db.get(Organization, tenant.organization_id)
+    if org is None:
+        raise org_admin_error(code="NOT_FOUND", message="Organization not found", status_code=404)
+    return {"enabled": bool(org.chat_shares_enabled), "default_ttl_days": int(org.chat_share_ttl_days or 7)}
+
+
+@router.put("/chat-sharing")
+def update_chat_sharing(
+    payload: dict,
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    control_db: Session = Depends(get_db),
+    tenant_db: Session = Depends(get_tenant_db),
+) -> dict:
+    org = control_db.get(Organization, tenant.organization_id)
+    if org is None:
+        raise org_admin_error(code="NOT_FOUND", message="Organization not found", status_code=404)
+    before = bool(org.chat_shares_enabled)
+    if "enabled" in payload:
+        org.chat_shares_enabled = bool(payload["enabled"])
+    if "default_ttl_days" in payload:
+        org.chat_share_ttl_days = max(1, min(int(payload["default_ttl_days"]), 90))
+    record_audit(
+        tenant_db,
+        organization_id=tenant.organization_id,
+        user_id=tenant.user_id,
+        action="chat_sharing_updated",
+        resource_type="organization",
+        resource_id=str(org.id),
+        metadata={"before_enabled": before, "after_enabled": org.chat_shares_enabled, "ttl_days": org.chat_share_ttl_days},
+    )
+    control_db.commit()
+    tenant_db.commit()
+    return {"enabled": org.chat_shares_enabled, "default_ttl_days": org.chat_share_ttl_days}
+
+
+@router.post("/members/{membership_id}/password-reset", status_code=204)
+def admin_trigger_password_reset(
+    membership_id: UUID,
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    control_db: Session = Depends(get_db),
+    tenant_db: Session = Depends(get_tenant_db),
+) -> None:
+    from app.services.auth.password_reset import request_password_reset
+
+    membership = control_db.get(OrganizationMembership, membership_id)
+    if membership is None or membership.organization_id != tenant.organization_id:
+        raise org_admin_error(code="NOT_FOUND", message="Member not found", status_code=404)
+    user = control_db.get(User, membership.user_id)
+    if user is None:
+        raise org_admin_error(code="NOT_FOUND", message="Member not found", status_code=404)
+    request_password_reset(control_db, email=user.email)
+    record_audit(
+        tenant_db,
+        organization_id=tenant.organization_id,
+        user_id=tenant.user_id,
+        action="member_password_reset_requested",
+        resource_type="user",
+        resource_id=str(user.id),
+        metadata={},
+    )
+    control_db.commit()
+    tenant_db.commit()
 
 
 @router.get("/data-storage", response_model=TenantStorageResponse)

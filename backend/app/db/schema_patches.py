@@ -17,6 +17,9 @@ _ORG_PATCHES = (
     "ALTER TABLE organization_memberships ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true",
     "ALTER TABLE organization_memberships ADD COLUMN IF NOT EXISTS auth_version INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS owner_display_name VARCHAR(255)",
+    "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS chat_shares_enabled BOOLEAN NOT NULL DEFAULT false",
+    "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS chat_share_ttl_days INTEGER NOT NULL DEFAULT 7",
+    "ALTER TABLE chat_conversation_shares ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ",
     "ALTER TABLE user_invitations ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ",
     """
     UPDATE organizations o SET license_limit = GREATEST(

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../lib/authContext";
-import { fetchTelemetrySchema } from "../lib/orgAdminApi";
+import { fetchChatSharing, fetchTelemetrySchema, updateChatSharing } from "../lib/orgAdminApi";
 
 export default function ClientAdminPrivacyPage() {
   const { session } = useAuth();

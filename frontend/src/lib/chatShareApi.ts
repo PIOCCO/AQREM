@@ -58,3 +58,9 @@ export async function fetchChatShare(session: AuthSession, token: string): Promi
   if (!res.ok) throw new Error(await readApiError(res, "Share link not found or access denied"));
   return res.json() as Promise<ChatShareView>;
 }
+
+export async function fetchPublicChatShare(token: string): Promise<ChatShareView> {
+  const res = await fetch(`${API_BASE}/api/v1/public/chat/shares/${encodeURIComponent(token)}`);
+  if (!res.ok) throw new Error(await readApiError(res, "Share link not found or expired"));
+  return res.json() as Promise<ChatShareView>;
+}

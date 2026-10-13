@@ -24,6 +24,7 @@ def engine():
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         ControlBase.metadata.drop_all(bind=conn)
         TenantBase.metadata.drop_all(bind=conn)
+        conn.execute(text("DROP TYPE IF EXISTS public_chat_share_index CASCADE"))
         ControlBase.metadata.create_all(bind=conn)
         TenantBase.metadata.create_all(bind=conn)
     yield eng

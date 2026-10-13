@@ -1,6 +1,7 @@
 """API: secrets in SourceCreate must not persist."""
 
 from app.core.roles import Role
+from app.core.jwt_audiences import AUD_EMPLOYEE, AUD_ORG_ADMIN, AUD_PLATFORM
 from app.core.security import create_access_token, hash_password
 from app.models.enums import EvidenceScope, SourceType
 from app.models.organization import Organization, OrganizationMembership, User

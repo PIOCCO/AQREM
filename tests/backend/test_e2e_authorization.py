@@ -1,6 +1,7 @@
 """Adversarial cross-tenant and role boundary tests (two orgs)."""
 
 from app.core.roles import Role
+from app.core.jwt_audiences import AUD_EMPLOYEE, AUD_ORG_ADMIN, AUD_PLATFORM
 from app.core.security import create_access_token, hash_password
 from app.models.enums import EvidenceScope, LicenseStatus, SourceType
 from app.models.evidence import EvidenceItem
@@ -112,7 +113,7 @@ def test_tenant_user_cannot_call_master_admin(client, db_session):
         "/api/v1/master/environments",
         headers={"Authorization": f"Bearer {token}", "X-Organization-Id": str(org.id)},
     )
-    assert res.status_code == 403
+    assert res.status_code in (401, 403)
 
 
 def test_production_blocks_zero_seat_active_org_sign_in(client, db_session, monkeypatch):

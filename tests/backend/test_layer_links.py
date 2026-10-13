@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.roles import Role
+from app.core.jwt_audiences import AUD_EMPLOYEE, AUD_ORG_ADMIN, AUD_PLATFORM
 from app.core.security import create_access_token, hash_password
 from app.models.enums import LicenseStatus
 from app.models.environment import ControlPlaneEvent
@@ -26,7 +27,7 @@ def _tenant_headers(token: str, org_id: str) -> dict[str, str]:
 
 
 def _master_token(user_id: str) -> str:
-    return create_access_token(user_id, {"role": "PLATFORM_ADMIN", "aud": "aqrem-master"})
+    return create_access_token(user_id, {"platform_role": "SUPER_ADMIN", "platform_auth_version": 1}, audience=AUD_PLATFORM)
 
 
 def _org_admin_token(user_id: str, org_id: str, auth_version: int = 1) -> str:
@@ -35,9 +36,9 @@ def _org_admin_token(user_id: str, org_id: str, auth_version: int = 1) -> str:
         {
             "organization_id": org_id,
             "role": Role.ORG_ADMIN.value,
-            "aud": "aqrem-org-admin",
             "auth_version": auth_version,
         },
+        audience=AUD_ORG_ADMIN,
     )
 
 
@@ -47,9 +48,9 @@ def _employee_token(user_id: str, org_id: str, auth_version: int = 1) -> str:
         {
             "organization_id": org_id,
             "role": Role.EDITOR.value,
-            "aud": "aqrem-employee",
             "auth_version": auth_version,
         },
+        audience=AUD_EMPLOYEE,
     )
 
 
@@ -87,11 +88,12 @@ def test_s8_token_confusion_matrix(client: TestClient, db_session):
     db_session.commit()
     emp_tok = _employee_token(str(employee.id), str(org.id))
     assert client.get("/api/v1/org-admin/setup", headers=_tenant_headers(emp_tok, str(org.id))).status_code == 403
-    assert client.get("/api/v1/master/environments", headers={"Authorization": f"Bearer {emp_tok}"}).status_code == 403
+    assert client.get("/api/v1/master/environments", headers={"Authorization": f"Bearer {emp_tok}"}).status_code in (401, 403)
 
     admin, master_tok = _seed_platform_admin(db_session)
-    assert (
-        client.get("/api/v1/projects", headers=_tenant_headers(master_tok, str(org.id))).status_code == 403
+    assert client.get("/api/v1/projects", headers=_tenant_headers(master_tok, str(org.id))).status_code in (
+        401,
+        403,
     )
     org_admin = User(email="oa@link.test", full_name="OA", hashed_password=hash_password("password"))
     db_session.add(org_admin)
@@ -101,7 +103,7 @@ def test_s8_token_confusion_matrix(client: TestClient, db_session):
     )
     db_session.commit()
     oa_tok = _org_admin_token(str(org_admin.id), str(org.id))
-    assert client.get("/api/v1/master/environments", headers={"Authorization": f"Bearer {oa_tok}"}).status_code == 403
+    assert client.get("/api/v1/master/environments", headers={"Authorization": f"Bearer {oa_tok}"}).status_code in (401, 403)
 
 
 def test_s1_provision_and_telemetry_pipeline(client: TestClient, db_session, monkeypatch):
