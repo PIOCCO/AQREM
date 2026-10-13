@@ -11,6 +11,7 @@ import {
 } from "../icons/Icons";
 import MarkdownContent from "./MarkdownContent";
 import MessageMetaPanel from "./SourceCitations";
+import ChatMainColumn from "./ChatMainColumn";
 
 type Props = {
   messages: ChatMessage[];
@@ -168,7 +169,7 @@ export default function MessageList({
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const liveRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showScrollDown, setShowScrollDown] = useState(false);
 
   useEffect(() => {
@@ -176,16 +177,17 @@ export default function MessageList({
   }, [messages, streamingText, retrievalStatus]);
 
   useEffect(() => {
-    const parent = scrollRef.current?.parentElement;
-    if (!(parent instanceof HTMLElement)) return;
-    const el = parent;
+    const scrollEl = scrollContainerRef.current;
+    if (!scrollEl) return;
     function onScroll() {
-      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const node = scrollContainerRef.current;
+      if (!node) return;
+      const dist = node.scrollHeight - node.scrollTop - node.clientHeight;
       setShowScrollDown(dist > 120);
     }
-    el.addEventListener("scroll", onScroll);
+    scrollEl.addEventListener("scroll", onScroll);
     onScroll();
-    return () => el.removeEventListener("scroll", onScroll);
+    return () => scrollEl.removeEventListener("scroll", onScroll);
   }, [messages.length]);
 
   useEffect(() => {
@@ -195,7 +197,7 @@ export default function MessageList({
   }, [streamingText]);
 
   return (
-    <div className="ref-conversation-scroll min-h-0 overflow-y-auto relative">
+    <div ref={scrollContainerRef} className="ref-conversation-scroll min-h-0 min-w-0 overflow-y-auto relative">
       {showScrollDown ? (
         <Tooltip label="Scroll to latest">
           <button
@@ -208,7 +210,8 @@ export default function MessageList({
           </button>
         </Tooltip>
       ) : null}
-      <div className="ref-conversation-column" ref={scrollRef}>
+      <ChatMainColumn className="ref-conversation-column" data-testid="chat-messages-column">
+        <div>
         {messages.map((m, idx) => {
           const prevUser =
             m.role === "assistant"
@@ -242,7 +245,8 @@ export default function MessageList({
           </div>
         ) : null}
         <div ref={bottomRef} className="h-6" aria-hidden />
-      </div>
+        </div>
+      </ChatMainColumn>
     </div>
   );
 }

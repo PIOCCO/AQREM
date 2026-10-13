@@ -8,7 +8,6 @@ import {
   type ChangeEvent,
   type DragEvent,
   type KeyboardEvent,
-  type ReactNode,
 } from "react";
 import { IconArrowUp, IconPlus, IconStop } from "../icons/Icons";
 import { Tooltip } from "../ui/Tooltip";
@@ -32,14 +31,11 @@ type Props = {
   onPickFiles: (files: FileList | null) => void;
   onRemoveAttachment: (id: string) => void;
   uploadDisabledReason?: string | null;
-  centered?: boolean;
-  scopeSlot?: ReactNode;
-  /** Scope chip rendered above the input row (inside the column). */
-  scopePicker?: ReactNode;
 };
 
 const MAX_LINES = 8;
 const LINE_HEIGHT_PX = 24;
+const MIN_TEXT_HEIGHT_PX = LINE_HEIGHT_PX;
 
 const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatComposer(
   {
@@ -54,9 +50,6 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
     onPickFiles,
     onRemoveAttachment,
     uploadDisabledReason,
-    centered,
-    scopeSlot,
-    scopePicker,
   },
   forwardedRef,
 ) {
@@ -71,17 +64,26 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
     if (!el) return;
     el.style.height = "auto";
     const maxHeight = LINE_HEIGHT_PX * MAX_LINES;
-    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
+    const next = Math.max(MIN_TEXT_HEIGHT_PX, Math.min(el.scrollHeight, maxHeight));
+    el.style.height = `${next}px`;
   }, []);
 
   useEffect(() => {
     resize();
-  }, [value, resize]);
+  }, [value, attachments.length, resize]);
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      textareaRef.current?.blur();
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (!disabled && !loading && (value.trim() || attachments.some((a) => a.status === "pending"))) onSend();
+      if (!disabled && !loading && (value.trim() || attachments.some((a) => a.status === "pending"))) {
+        onSend();
+        requestAnimationFrame(() => textareaRef.current?.focus());
+      }
     }
   }
 
@@ -106,7 +108,7 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
 
   return (
     <div
-      className={`ref-content-column w-full ${centered ? "px-4" : "px-4 pb-2 pt-2"}`}
+      className="chat-composer-block"
       onDragOver={(e) => {
         e.preventDefault();
         if (!uploadDisabledReason && !disabled) setDragOver(true);
@@ -114,88 +116,93 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
       onDragLeave={() => setDragOver(false)}
       onDrop={onDrop}
     >
-      {scopePicker ? <div className="mb-1">{scopePicker}</div> : null}
-      {scopeSlot ? <div className="mb-3">{scopeSlot}</div> : null}
-      {attachments.length > 0 ? (
-        <ul className="mb-2 flex flex-wrap gap-2">
-          {attachments.map((a) => (
-            <li
-              key={a.id}
-              className="flex items-center gap-2 rounded-full border border-chat-border bg-chat-surface-subtle px-3 py-1 text-xs text-chat-fg"
+      <div
+        className={`chat-composer shadow-composer ${dragOver ? "ring-2 ring-[var(--color-accent)]" : ""}`}
+        data-testid="chat-composer-shell"
+      >
+        {attachments.length > 0 ? (
+          <ul className="chat-composer-attachments" aria-label="Attached files">
+            {attachments.map((a) => (
+              <li key={a.id} className="chat-composer-attachment-chip">
+                <span className="max-w-[12rem] truncate">{a.file.name}</span>
+                <span className="text-chat-muted shrink-0">
+                  {a.file.size ? `${Math.max(1, Math.round(a.file.size / 1024))} KB` : ""}
+                </span>
+                {a.status === "uploading" ? <span className="chat-spinner" aria-label="Uploading" /> : null}
+                {a.status === "error" ? <span className="text-[var(--color-danger)]">Failed</span> : null}
+                <button
+                  type="button"
+                  className="text-chat-muted hover:text-chat-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-focus-ring)] rounded"
+                  onClick={() => onRemoveAttachment(a.id)}
+                  aria-label={`Remove ${a.file.name}`}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        <div className="chat-composer-row">
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            className="sr-only"
+            aria-label="Attach documents"
+            onChange={onFileChange}
+            disabled={Boolean(uploadDisabledReason) || disabled}
+          />
+          <Tooltip label={attachTitle}>
+            <button
+              type="button"
+              className="chat-composer-attach-btn shrink-0"
+              onClick={() => fileRef.current?.click()}
+              disabled={Boolean(uploadDisabledReason) || disabled}
+              aria-label="Attach documents"
             >
-              <span className="max-w-[12rem] truncate">{a.file.name}</span>
-              {a.status === "uploading" ? <span className="chat-spinner" aria-hidden /> : null}
-              {a.status === "error" ? <span className="text-[var(--color-danger)]">Failed</span> : null}
+              <IconPlus className="h-5 w-5" />
+            </button>
+          </Tooltip>
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder="Ask AQREM anything about your documents…"
+            disabled={disabled}
+            className="chat-composer-input"
+            aria-label="Message"
+            data-testid="chat-composer-input"
+          />
+          {streaming ? (
+            <Tooltip label="Stop generating">
               <button
                 type="button"
-                className="text-chat-muted hover:text-chat-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-focus-ring)] rounded"
-                onClick={() => onRemoveAttachment(a.id)}
-                aria-label={`Remove ${a.file.name}`}
+                className="chat-composer-send chat-composer-send-stop aq-interactive"
+                onClick={onStop}
+                aria-label="Stop generating"
+                data-testid="chat-composer-stop"
               >
-                ×
+                <IconStop className="h-4 w-4" />
               </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      <div className={`chat-composer shadow-composer ${dragOver ? "ring-2 ring-[var(--color-accent)]" : ""}`}>
-        <input
-          ref={fileRef}
-          type="file"
-          multiple
-          className="sr-only"
-          aria-label="Attach documents"
-          onChange={onFileChange}
-          disabled={Boolean(uploadDisabledReason) || disabled}
-        />
-        <Tooltip label={attachTitle}>
-          <button
-            type="button"
-            className="chat-composer-attach-btn shrink-0"
-            onClick={() => fileRef.current?.click()}
-            disabled={Boolean(uploadDisabledReason) || disabled}
-            aria-label="Attach documents"
-            title={attachTitle}
-          >
-            <IconPlus className="h-5 w-5" />
-          </button>
-        </Tooltip>
-        <textarea
-          ref={textareaRef}
-          rows={1}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder="Ask AQREM anything about your documents…"
-          disabled={disabled}
-          className="chat-composer-input"
-          aria-label="Message"
-        />
-        {streaming ? (
-          <Tooltip label="Stop generating">
-            <button
-              type="button"
-              className="chat-composer-send chat-composer-send-stop aq-interactive"
-              onClick={onStop}
-              aria-label="Stop generating"
-            >
-              <IconStop className="h-4 w-4" />
-            </button>
-          </Tooltip>
-        ) : (
-          <Tooltip label={canSend ? "Send message" : "Enter a message to send"}>
-            <button
-              type="button"
-              className={`chat-composer-send aq-interactive ${canSend ? "chat-composer-send-ready" : ""}`}
-              disabled={!canSend}
-              onClick={onSend}
-              aria-label="Send message"
-            >
-              {loading ? <span className="chat-spinner" aria-hidden /> : <IconArrowUp className="h-4 w-4" />}
-            </button>
-          </Tooltip>
-        )}
+            </Tooltip>
+          ) : (
+            <Tooltip label={canSend ? "Send message" : "Enter a message to send"}>
+              <button
+                type="button"
+                className={`chat-composer-send aq-interactive ${canSend ? "chat-composer-send-ready" : ""}`}
+                disabled={!canSend}
+                onClick={onSend}
+                aria-label="Send message"
+                data-testid="chat-composer-send"
+              >
+                {loading ? <span className="chat-spinner" aria-hidden /> : <IconArrowUp className="h-4 w-4" />}
+              </button>
+            </Tooltip>
+          )}
+        </div>
       </div>
       <p className="ref-composer-disclaimer">
         AQREM can make mistakes. Verify important answers against the source evidence.

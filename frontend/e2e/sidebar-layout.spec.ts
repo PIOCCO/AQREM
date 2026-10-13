@@ -44,7 +44,7 @@ async function assertComposerVisible(page: Page) {
 
 async function assertContentColumnAligned(page: Page) {
   const header = await page.locator(".ref-chat-header-inner").boundingBox();
-  const composerColumn = await page.locator(".ref-composer-dock .ref-content-column").boundingBox();
+  const composerColumn = await page.locator(".ref-composer-dock .chat-main-column").boundingBox();
   expect(header).not.toBeNull();
   expect(composerColumn).not.toBeNull();
   if (header && composerColumn) {

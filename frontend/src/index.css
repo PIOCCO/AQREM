@@ -664,9 +664,41 @@
     }
   }
 
+  .chat-main-column {
+    box-sizing: border-box;
+    width: min(var(--chat-column-max), calc(100% - 32px));
+    max-width: var(--chat-column-max);
+    margin-inline: auto;
+    min-width: 0;
+    transition: margin-inline 200ms ease;
+  }
+  @media (max-width: 767px) {
+    .chat-main-column {
+      width: calc(100% - 16px);
+    }
+  }
+  .chat-composer-block {
+    @apply w-full min-w-0;
+  }
+  .chat-composer-column {
+    @apply w-full min-w-0;
+  }
+  .chat-scope-row {
+    @apply w-full min-w-0;
+  }
   .chat-composer {
-    @apply flex items-end gap-2 rounded-[28px] border border-chat-border bg-chat-surface px-3 py-3;
-    min-height: 52px;
+    @apply flex w-full min-w-0 flex-col gap-2 rounded-[28px] border border-chat-border bg-chat-surface;
+    min-height: 56px;
+    padding: 10px 12px;
+  }
+  .chat-composer-row {
+    @apply flex w-full min-w-0 items-end gap-2;
+  }
+  .chat-composer-attachments {
+    @apply flex w-full min-w-0 flex-wrap gap-2;
+  }
+  .chat-composer-attachment-chip {
+    @apply flex max-w-full items-center gap-2 rounded-full border border-chat-border bg-chat-surface-subtle px-3 py-1 text-xs text-chat-fg;
   }
   .shadow-composer {
     box-shadow: 0 0 0 1px rgb(0 0 0 / 0.04), 0 4px 20px rgb(0 0 0 / 0.06);
@@ -675,8 +707,8 @@
     box-shadow: 0 0 0 1px rgb(255 255 255 / 0.06), 0 4px 20px rgb(0 0 0 / 0.35);
   }
   .chat-composer-input {
-    @apply min-h-[24px] flex-1 resize-none border-0 bg-transparent py-2 text-[15px] text-chat-fg placeholder:text-chat-muted outline-none;
-    max-height: calc(24px * 8);
+    @apply min-h-[24px] flex-1 resize-none border-0 bg-transparent py-0 text-base leading-6 text-chat-fg placeholder:text-chat-muted outline-none;
+    max-height: 200px;
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: var(--chat-border) transparent;
@@ -697,12 +729,14 @@
     @apply mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-chat-muted hover:bg-chat-hover hover:text-chat-fg disabled:opacity-40;
   }
   .chat-composer-attach-btn {
-    @apply mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-chat-muted hover:bg-chat-hover hover:text-chat-fg disabled:opacity-40 focus-visible:ref-focus-ring;
-    min-width: 36px;
-    min-height: 36px;
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-chat-muted hover:bg-chat-hover hover:text-chat-fg disabled:opacity-40 focus-visible:ref-focus-ring;
+    width: 36px;
+    height: 36px;
   }
   .chat-composer-send {
-    @apply mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-chat-border bg-chat-surface-subtle text-chat-muted disabled:opacity-40 disabled:pointer-events-none focus-visible:ref-focus-ring;
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-chat-border bg-chat-surface-subtle text-chat-muted disabled:opacity-40 disabled:pointer-events-none focus-visible:ref-focus-ring;
+    width: 36px;
+    height: 36px;
   }
   .chat-composer-send-ready {
     background: var(--chat-send-ready-bg);
@@ -852,15 +886,14 @@
     --chat-topbar-h: 56px;
   }
   .ref-content-column {
-    width: min(var(--chat-column-max), calc(100% - 48px));
-    margin-inline: auto;
+    @apply chat-main-column;
   }
   .ref-chat-header {
     @apply border-b border-chat-border bg-chat-main shrink-0;
     height: var(--chat-topbar-h);
   }
   .ref-chat-header-inner {
-    @apply ref-content-column flex h-full w-full max-w-full items-center justify-between gap-4 px-4;
+    @apply chat-main-column flex h-full max-w-full items-center justify-between gap-4 min-w-0;
   }
   .ref-header-assistant-btn {
     @apply inline-flex items-center gap-1 rounded-md px-1 py-0.5 hover:bg-chat-hover;
@@ -876,7 +909,7 @@
     @apply bg-chat-main min-h-0 overflow-y-auto overflow-x-hidden;
   }
   .ref-conversation-column {
-    @apply ref-content-column px-4 py-8 lg:px-6;
+    @apply py-8;
   }
   .ref-msg-user-wrap {
     @apply mb-8 flex flex-col items-end gap-2;
@@ -911,7 +944,8 @@
   .ref-composer-dock {
     background: color-mix(in srgb, var(--chat-main) 92%, transparent);
     border-top: 1px solid color-mix(in srgb, var(--chat-border) 25%, transparent);
-    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    padding-top: 16px;
+    padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
   }
   .scope-picker-trigger {
     @apply inline-flex max-w-full items-center gap-1.5 rounded-full border border-chat-border bg-chat-surface-subtle px-3 py-1.5 text-left transition-colors duration-150 hover:bg-chat-hover focus-visible:outline-none focus-visible:ring-2;
@@ -1042,7 +1076,7 @@
     @apply rounded px-0.5;
   }
   .ref-composer-disclaimer {
-    @apply mt-2 text-center text-[11px] text-chat-muted px-2;
+    @apply mt-2 text-center text-xs text-chat-muted;
   }
 
   .admin-shell {

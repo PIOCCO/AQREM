@@ -3,3 +3,4 @@ test-results/
 e2e/.qa-credentials.json
 e2e/.auth/
 e2e/screenshots/
+artifacts/

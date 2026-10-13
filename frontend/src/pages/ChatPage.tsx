@@ -3,6 +3,8 @@ import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useToast } from "../components/ui/Toast";
 import ChatComposer, { type PendingAttachment } from "../components/chat/ChatComposer";
+import ChatComposerDock from "../components/chat/ChatComposerDock";
+import ChatMainColumn from "../components/chat/ChatMainColumn";
 import ChatConversationHeader from "../components/chat/ChatConversationHeader";
 import ChatEmptyState from "../components/chat/ChatEmptyState";
 import ScopePicker from "../components/chat/ScopePicker";
@@ -314,6 +316,9 @@ export default function ChatPage() {
     conv = persist(conv);
     setInput("");
     setAttachments([]);
+    const focusComposer = () => composerRef.current?.focus();
+    requestAnimationFrame(focusComposer);
+    window.setTimeout(focusComposer, 0);
 
     if (text) await streamReply(text, conv);
     else if (uploadNote) {
@@ -358,31 +363,33 @@ export default function ChatPage() {
   const name = greetingName(user?.fullName, user?.email);
   const atHome = !conversationId || !conversation;
 
+  const composer = (
+    <ChatComposer
+      ref={composerRef}
+      value={input}
+      onChange={setInput}
+      onSend={onSend}
+      onStop={onStop}
+      streaming={loading && streamingText != null}
+      loading={loading}
+      disabled={false}
+      attachments={attachments}
+      onPickFiles={onPickFiles}
+      onRemoveAttachment={onRemoveAttachment}
+      uploadDisabledReason={uploadDisabledReason}
+    />
+  );
+
   if (atHome) {
     return (
       <div className="chat-view bg-chat-main">
         <ChatConversationHeader conversationTitle="New chat" onOpenSidebar={outlet?.openMobileSidebar} />
-        <div className="min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
-          <ChatEmptyState name={name} projectName={projectName} onPickPrompt={setInput} />
+        <div className="min-h-0 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col">
+          <ChatMainColumn className="flex flex-1 flex-col min-h-0" data-testid="chat-scroll-column">
+            <ChatEmptyState name={name} projectName={projectName} onPickPrompt={setInput} />
+          </ChatMainColumn>
         </div>
-        <div className="w-full shrink-0 ref-composer-dock">
-          <ChatComposer
-            ref={composerRef}
-            value={input}
-            onChange={setInput}
-            onSend={onSend}
-            onStop={onStop}
-            streaming={loading && streamingText != null}
-            loading={loading}
-            disabled={loading}
-            attachments={attachments}
-            onPickFiles={onPickFiles}
-            onRemoveAttachment={onRemoveAttachment}
-            uploadDisabledReason={uploadDisabledReason}
-            scopePicker={scopePicker}
-            centered
-          />
-        </div>
+        <ChatComposerDock scopePicker={scopePicker}>{composer}</ChatComposerDock>
       </div>
     );
   }
@@ -401,27 +408,12 @@ export default function ChatPage() {
 
       {empty ? (
         <>
-          <div className="min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
-            <ChatEmptyState name={name} projectName={projectName} onPickPrompt={setInput} />
+          <div className="min-h-0 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col">
+            <ChatMainColumn className="flex flex-1 flex-col min-h-0" data-testid="chat-scroll-column">
+              <ChatEmptyState name={name} projectName={projectName} onPickPrompt={setInput} />
+            </ChatMainColumn>
           </div>
-          <div className="w-full shrink-0 ref-composer-dock">
-            <ChatComposer
-              ref={composerRef}
-              value={input}
-              onChange={setInput}
-              onSend={onSend}
-              onStop={onStop}
-              streaming={loading && streamingText != null}
-              loading={loading}
-              disabled={loading}
-              attachments={attachments}
-              onPickFiles={onPickFiles}
-              onRemoveAttachment={onRemoveAttachment}
-              uploadDisabledReason={uploadDisabledReason}
-              scopePicker={scopePicker}
-              centered
-            />
-          </div>
+          <ChatComposerDock scopePicker={scopePicker}>{composer}</ChatComposerDock>
         </>
       ) : (
         <>
@@ -433,23 +425,7 @@ export default function ChatPage() {
             onRetry={onRetry}
             onFeedback={onFeedback}
           />
-          <div className="shrink-0 ref-composer-dock">
-            <ChatComposer
-              ref={composerRef}
-              value={input}
-              onChange={setInput}
-              onSend={onSend}
-              onStop={onStop}
-              streaming={loading && streamingText != null}
-              loading={loading}
-              disabled={loading}
-              attachments={attachments}
-              onPickFiles={onPickFiles}
-              onRemoveAttachment={onRemoveAttachment}
-              uploadDisabledReason={uploadDisabledReason}
-              scopePicker={scopePicker}
-            />
-          </div>
+          <ChatComposerDock scopePicker={scopePicker}>{composer}</ChatComposerDock>
         </>
       )}
     </div>

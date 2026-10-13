@@ -11,3 +11,4 @@ frontend/dist/
 upload_data/
 *.egg-info/
 .DS_Store
+/artifacts/
