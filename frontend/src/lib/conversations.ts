@@ -38,6 +38,7 @@ export type ChatMessageMeta = {
   queryTimeMs?: number;
   userQuery?: string;
   feedback?: "good" | "bad";
+  starterPrompts?: string[];
 };
 
 export type ChatMessage = {

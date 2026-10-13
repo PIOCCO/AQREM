@@ -20,16 +20,17 @@ function walk(dir: string, out: string[] = []): string[] {
 /** Rough static check: native buttons must have onClick, type=submit, or be disabled. */
 function findSuspiciousButtons(source: string, file: string): string[] {
   const issues: string[] = [];
-  const buttonRe = /<button\b[^>]*>/g;
+  const buttonRe = /<button\b[\s\S]*?<\/button>/g;
   let m: RegExpExecArray | null;
   while ((m = buttonRe.exec(source))) {
-    const tag = m[0];
+    const block = m[0];
+    const open = block.slice(0, block.indexOf(">") + 1);
     const line = source.slice(0, m.index).split("\n").length;
-    if (/type=["']submit["']/.test(tag)) continue;
-    if (/\bdisabled\b/.test(tag)) continue;
-    if (/\bonClick=/.test(tag)) continue;
-    if (/\bform=/.test(tag)) continue;
-    issues.push(`${file}:${line} button missing onClick/disabled/submit: ${tag.slice(0, 80)}…`);
+    if (/type=["']submit["']/.test(open)) continue;
+    if (/\bdisabled\b/.test(open)) continue;
+    if (/\bonClick=/.test(block)) continue;
+    if (/\bform=/.test(open)) continue;
+    issues.push(`${file}:${line} button missing onClick/disabled/submit`);
   }
   return issues;
 }

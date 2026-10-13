@@ -425,8 +425,13 @@
   }
 
   .chat-sidebar {
-    @apply fixed inset-y-0 left-0 z-50 flex w-sidebar max-w-[85vw] flex-col border-r border-chat-border bg-chat-sidebar transition-transform lg:static lg:max-w-none lg:translate-x-0;
+    @apply fixed inset-y-0 left-0 z-50 flex w-sidebar max-w-[85vw] flex-col border-r border-chat-border bg-chat-sidebar transition-[transform,width] duration-150 ease-out lg:static lg:max-w-none;
     transform: translateX(-100%);
+  }
+  @media (min-width: 1024px) {
+    .chat-sidebar {
+      transform: translateX(0);
+    }
   }
   .chat-sidebar-mobile-open {
     transform: translateX(0);
@@ -676,8 +681,60 @@
   }
   .ref-composer-dock {
     background: color-mix(in srgb, var(--chat-main) 92%, transparent);
-    border-top: 1px solid color-mix(in srgb, var(--chat-border) 55%, transparent);
+    border-top: 1px solid color-mix(in srgb, var(--chat-border) 25%, transparent);
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
   }
+  .scope-picker-trigger {
+    @apply inline-flex max-w-full items-center gap-1.5 rounded-full border border-chat-border bg-chat-surface-subtle px-3 py-1.5 text-left transition-colors duration-150 hover:bg-chat-hover focus-visible:outline-none focus-visible:ring-2;
+    ring-color: var(--color-focus-ring);
+    ring-offset-color: var(--chat-main);
+    margin-bottom: 8px;
+  }
+  .scope-picker-popover {
+    @apply rounded-xl border border-chat-border bg-chat-surface shadow-composer overflow-hidden;
+    max-height: min(360px, 50vh);
+    animation: scope-popover-in 140ms ease-out;
+  }
+  .scope-picker-popover-above {
+    transform-origin: bottom center;
+  }
+  .scope-picker-popover-below {
+    transform-origin: top center;
+  }
+  @keyframes scope-popover-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .scope-picker-popover {
+      animation: none;
+    }
+  }
+  .scope-picker-search {
+    @apply w-full border-0 border-b border-chat-border bg-transparent px-3 py-2 text-sm text-chat-fg outline-none focus:ring-0;
+  }
+  .scope-picker-list {
+    @apply overflow-y-auto py-1 max-h-52;
+  }
+  .scope-picker-option {
+    @apply flex w-full items-center gap-2 px-3 py-2 text-sm text-chat-fg hover:bg-chat-hover transition-colors;
+  }
+  .scope-picker-option-active {
+    @apply bg-chat-hover;
+  }
+  .scope-picker-footer {
+    @apply flex items-center justify-between gap-2 border-t border-chat-border px-3 py-2;
+  }
+  .scope-picker-empty {
+    @apply px-4 py-4;
+  }
+
   .ref-scope-bar {
     @apply flex flex-wrap items-center gap-2 rounded-xl border border-chat-border bg-chat-surface-subtle px-3 py-2;
   }

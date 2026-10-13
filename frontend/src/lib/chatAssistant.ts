@@ -55,8 +55,23 @@ export async function generateAssistantReply(
 
   const intent = classifyChatIntent(trimmed);
   if (intent) {
+    const hasProjects = Boolean(projectId);
     return {
-      content: buildConversationalReply(intent),
+      content: buildConversationalReply(intent, { hasProjects }),
+      meta: {
+        conversational: true,
+        isDraft: false,
+        intent,
+        starterPrompts: ["Complete a questionnaire", "Find evidence for a control", "Check an answer against sources"],
+      },
+      skippedRetrieval: true,
+    };
+  }
+
+  if (!projectId) {
+    return {
+      content:
+        "You don't have a project selected yet. Create a project to connect sources, then ask questions about your documents.",
       meta: { conversational: true, isDraft: false },
       skippedRetrieval: true,
     };
@@ -77,7 +92,7 @@ export async function generateAssistantReply(
     const fromLibrary = Boolean(data.from_library);
 
     let content = formatLibraryAnswer(data.answer ?? "", fromLibrary);
-    if (!fromLibrary && insufficient && !content.trim()) {
+    if (!fromLibrary && insufficient) {
       content = formatNoEvidenceMessage(
         (data.project_name as string | undefined) ?? scope?.projectName,
         typeof data.sources_searched === "number" ? data.sources_searched : (scope?.sourcesCount ?? 0),

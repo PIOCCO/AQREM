@@ -20,7 +20,7 @@ export default defineConfig({
     { name: "setup", testMatch: /auth\.setup\.ts/ },
     {
       name: "audit",
-      testMatch: /authenticated-audit\.spec\.ts|contrast-regression\.spec\.ts/,
+      testMatch: /authenticated-audit\.spec\.ts|contrast-regression\.spec\.ts|chat-sidebar\.spec\.ts/,
       dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 720 } },
     },

@@ -34,6 +34,8 @@ type Props = {
   uploadDisabledReason?: string | null;
   centered?: boolean;
   scopeSlot?: ReactNode;
+  /** Scope chip rendered above the input row (inside the column). */
+  scopePicker?: ReactNode;
 };
 
 const MAX_LINES = 8;
@@ -54,6 +56,7 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
     uploadDisabledReason,
     centered,
     scopeSlot,
+    scopePicker,
   },
   forwardedRef,
 ) {
@@ -111,6 +114,7 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
       onDragLeave={() => setDragOver(false)}
       onDrop={onDrop}
     >
+      {scopePicker ? <div className="mb-1">{scopePicker}</div> : null}
       {scopeSlot ? <div className="mb-3">{scopeSlot}</div> : null}
       {attachments.length > 0 ? (
         <ul className="mb-2 flex flex-wrap gap-2">

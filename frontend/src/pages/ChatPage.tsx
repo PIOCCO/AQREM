@@ -5,7 +5,7 @@ import { useToast } from "../components/ui/Toast";
 import ChatComposer, { type PendingAttachment } from "../components/chat/ChatComposer";
 import ChatConversationHeader from "../components/chat/ChatConversationHeader";
 import ChatEmptyState from "../components/chat/ChatEmptyState";
-import ChatScopeBar from "../components/chat/ChatScopeBar";
+import ScopePicker from "../components/chat/ScopePicker";
 import MessageList from "../components/chat/MessageList";
 import { IconSidebar } from "../components/icons/Icons";
 import { fetchSources, uploadSourceFiles } from "../lib/api";
@@ -89,11 +89,20 @@ export default function ChatPage() {
       navigate(`/c/${conv.id}`, { replace: true });
       return;
     }
-    if (conv.projectId !== projectId) {
-      conv = saveConversation({ ...conv, projectId });
-    }
     setConversation(conv);
-  }, [conversationId, projectId, navigate]);
+    if (conv.projectId && conv.projectId !== projectId) {
+      setProjectId(conv.projectId);
+    }
+  }, [conversationId, navigate, setProjectId]);
+
+  useEffect(() => {
+    function onFill(e: Event) {
+      const detail = (e as CustomEvent<string>).detail;
+      if (typeof detail === "string") setInput(detail);
+    }
+    window.addEventListener("aqrem-fill-composer", onFill);
+    return () => window.removeEventListener("aqrem-fill-composer", onFill);
+  }, []);
 
   useEffect(() => {
     if (!session || !projectId) {
@@ -126,17 +135,6 @@ export default function ChatPage() {
     return null;
   }, [projectId, uploadSourceId, uploadSourceLoading]);
 
-  const scopeBar = (
-    <ChatScopeBar
-      projectName={projectName}
-      projectId={projectId}
-      sourcesCount={sourcesCount}
-      projects={projects}
-      onSelectProject={setProjectId}
-      compact={false}
-    />
-  );
-
   const persist = useCallback(
     (next: ChatConversation) => {
       const saved = upsert(next);
@@ -144,6 +142,31 @@ export default function ChatPage() {
       return saved;
     },
     [upsert],
+  );
+
+  const onSelectScope = useCallback(
+    (id: string | null) => {
+      setProjectId(id);
+      const label = id ? projects.find((p) => p.id === id)?.name ?? "Project" : "All projects";
+      toast(`Scope: ${label}`);
+      if (conversation) {
+        persist({ ...conversation, projectId: id });
+      }
+    },
+    [conversation, persist, projects, setProjectId, toast],
+  );
+
+  const scopePicker = (
+    <ScopePicker
+      projects={projects.map((p) => ({
+        id: p.id,
+        name: p.name,
+        sourcesCount: p.id === projectId ? (sourcesCount ?? undefined) : undefined,
+      }))}
+      projectId={projectId}
+      onSelectProject={onSelectScope}
+      sourcesCount={sourcesCount}
+    />
   );
 
   const onPickFiles = useCallback((files: FileList | null) => {
@@ -332,7 +355,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-chat-main">
+    <div className="grid h-full min-h-0 grid-rows-[auto_1fr_auto] bg-chat-main">
       <ChatConversationHeader
         conversationTitle={conversation.title}
         onOpenSidebar={outlet?.openMobileSidebar}
@@ -364,6 +387,7 @@ export default function ChatPage() {
               onPickFiles={onPickFiles}
               onRemoveAttachment={onRemoveAttachment}
               uploadDisabledReason={uploadDisabledReason}
+              scopePicker={scopePicker}
               centered
             />
           </div>
@@ -392,7 +416,7 @@ export default function ChatPage() {
               onPickFiles={onPickFiles}
               onRemoveAttachment={onRemoveAttachment}
               uploadDisabledReason={uploadDisabledReason}
-              scopeSlot={scopeBar}
+              scopePicker={scopePicker}
             />
           </div>
         </>

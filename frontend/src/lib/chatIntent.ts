@@ -29,24 +29,16 @@ export function classifyChatIntent(query: string): ChatIntent | null {
   return null;
 }
 
-export function buildConversationalReply(intent: ChatIntent): string {
-  const starters = STARTER_PROMPTS.slice(0, 3)
-    .map((s) => `- ${s}`)
-    .join("\n");
+export function buildConversationalReply(intent: ChatIntent, opts?: { hasProjects?: boolean }): string {
+  const noProject =
+    opts?.hasProjects === false
+      ? " Create a project first (Projects in the sidebar) to connect your documents."
+      : "";
   if (intent === "greeting") {
-    return (
-      "Hello! I'm here to help you find answers in your project sources and work through questionnaires.\n\n" +
-      `**Try one of these:**\n${starters}`
-    );
+    return `Hello! I can help you find answers in your project sources and work through questionnaires.${noProject}`;
   }
   if (intent === "thanks") {
-    return (
-      "You're welcome. If you have another question about your policies or evidence, ask anytime.\n\n" +
-      `**Try one of these:**\n${starters}`
-    );
+    return `You're welcome. Ask anytime if you need another answer from your sources.${noProject}`;
   }
-  return (
-    "I search your active project sources, cite evidence, and help with questionnaires and review workflows.\n\n" +
-    `**Try one of these:**\n${starters}`
-  );
+  return `I search your active project sources, cite evidence, and help with questionnaires and review.${noProject}`;
 }

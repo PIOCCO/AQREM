@@ -28,7 +28,7 @@ export default function AppShell() {
   ]);
 
   return (
-    <div className="h-screen flex overflow-hidden bg-chat-main text-chat-fg font-sans">
+    <div className="flex h-[100dvh] min-h-0 overflow-hidden bg-chat-main text-chat-fg font-sans">
       <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} />
       <ChatSidebar
         activeConversationId={activeConversationId}

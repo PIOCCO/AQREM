@@ -72,7 +72,9 @@ function AssistantMessage({
     !message.meta.error;
 
   const showReviewQueue =
-    message.meta?.insufficientEvidence || message.meta?.needsReview || message.meta?.isDraft;
+    !message.meta?.insufficientEvidence &&
+    !message.meta?.conversational &&
+    Boolean(message.meta?.needsReview || message.meta?.isDraft);
 
   return (
     <div className="ref-msg-assistant">
@@ -84,6 +86,22 @@ function AssistantMessage({
         </div>
       ) : null}
       <MarkdownContent content={message.content} />
+      {message.meta?.conversational && message.meta.starterPrompts?.length ? (
+        <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Suggested prompts">
+          {message.meta.starterPrompts.map((prompt) => (
+            <button
+              key={prompt}
+              type="button"
+              className="ref-starter-prompt inline-block max-w-full"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("aqrem-fill-composer", { detail: prompt }));
+              }}
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <MessageMetaPanel meta={message.meta} variant="reference" />
       {message.meta?.error && onRetry ? (
         <button type="button" className="ref-evidence-action-btn mt-3" onClick={onRetry}>
