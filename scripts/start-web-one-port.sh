@@ -211,6 +211,9 @@ if [[ ! -x "$UV" ]]; then
 fi
 [[ -x "$UV" ]] || UV=uvicorn
 
+echo "Syncing backend dependencies (pip install -e .[dev])…"
+.venv/bin/pip install -q -e ".[dev]"
+
 ensure_lab_dependencies
 
 HOST="${AQREM_WEB_HOST:-${API_HOST:-0.0.0.0}}"
