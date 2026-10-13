@@ -131,6 +131,7 @@ export default function EvidencePage() {
         <input
           className="aq-input flex-1"
           placeholder="Search evidence…"
+          aria-label="Search evidence"
           value={search}
           onChange={(e) => {
             const next = new URLSearchParams(searchParams);
@@ -141,6 +142,7 @@ export default function EvidencePage() {
         />
         <select
           className="aq-select sm:max-w-xs"
+          aria-label="Filter by source"
           value={sourceId}
           onChange={(e) => {
             const next = new URLSearchParams(searchParams);
@@ -176,19 +178,19 @@ export default function EvidencePage() {
           return (
             <article key={item.id} className="aq-card aq-card-p">
               <div className="flex flex-wrap items-center gap-2 mb-2">
-                <h2 className="font-medium text-slate-900 font-mono text-sm break-all">{path}</h2>
+                <h2 className="font-medium text-fg font-mono text-sm break-all">{path}</h2>
                 <EvidenceStrengthBadge strength={item.evidence_strength} />
               </div>
-              <p className="text-xs text-slate-500 mb-2 font-mono">
+              <p className="text-xs text-fg-muted mb-2 font-mono">
                 {item.repository ? `${item.repository} · ` : null}
                 {hash ? `commit ${hash.slice(0, 8)} · ` : null}
                 {item.line_start != null
                   ? `lines ${item.line_start}${item.line_end != null ? `–${item.line_end}` : ""}`
                   : null}
               </p>
-              <p className="text-sm text-slate-700 line-clamp-4 whitespace-pre-wrap break-all font-mono">{preview}</p>
+              <p className="text-sm text-fg-secondary line-clamp-4 whitespace-pre-wrap break-all font-mono">{preview}</p>
               {item.content_truncated && (
-                <p className="text-xs text-slate-500 mt-1">Preview truncated — open detail for full text.</p>
+                <p className="text-xs text-fg-muted mt-1">Preview truncated — open detail for full text.</p>
               )}
               <Link to={`/evidence/${item.id}`} className="aq-link inline-block mt-3 text-sm">
                 View evidence

@@ -89,7 +89,7 @@ export default function ClientAdminSetupPage() {
     <div className="max-w-6xl mx-auto p-6 lg:p-10 min-w-0">
       <header className="flex flex-wrap items-start justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Set up your private assistant</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-fg">Set up your private assistant</h1>
           <p className="text-chat-muted mt-2 max-w-xl">
             Finish these steps so employees can ask questions about your documents in <strong>{orgName}</strong>.
           </p>

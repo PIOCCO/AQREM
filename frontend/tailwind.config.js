@@ -69,6 +69,12 @@ export default {
         chat: {
           accent: "var(--color-accent)",
         },
+        fg: {
+          DEFAULT: "var(--color-text-primary)",
+          muted: "var(--color-text-muted)",
+          secondary: "var(--color-text-secondary)",
+        },
+        link: "var(--color-link)",
       },
       width: {
         sidebar: "280px",

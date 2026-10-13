@@ -64,16 +64,24 @@ function SidebarUserFooter({
   const [open, setOpen] = useState(false);
   return (
     <div className="border-t border-chat-border p-3 mt-auto relative">
-      <button type="button" className="flex w-full items-center gap-2 rounded-lg hover:bg-chat-hover p-1" onClick={() => setOpen((v) => !v)}>
-        <span className="ref-user-avatar">{initials}</span>
-        <div className="min-w-0 flex-1 text-left">
-          <p className="truncate text-sm font-medium text-chat-fg">{name}</p>
-          <p className="truncate text-xs text-chat-muted">{roleLabel}</p>
-        </div>
-        <Link to="/settings" className="ref-sidebar-sparkle-btn" aria-label="Settings" onClick={(e) => e.stopPropagation()}>
+      <div className="flex w-full items-center gap-2 rounded-lg p-1">
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-lg hover:bg-chat-hover p-1 text-left"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-haspopup="menu"
+        >
+          <span className="ref-user-avatar">{initials}</span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-chat-fg">{name}</p>
+            <p className="truncate text-xs text-chat-muted">{roleLabel}</p>
+          </div>
+        </button>
+        <Link to="/settings" className="ref-sidebar-sparkle-btn shrink-0" aria-label="Settings">
           <IconSparkles className="h-4 w-4" />
         </Link>
-      </button>
+      </div>
       {open ? (
         <>
           <button type="button" className="fixed inset-0 z-40" aria-label="Close menu" onClick={() => setOpen(false)} />

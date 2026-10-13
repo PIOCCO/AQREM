@@ -78,7 +78,7 @@ export default function LoginPage() {
           Access is provisioned by your administrator. If you received an invitation link, use that URL to set your
           password.
         </p>
-        <p className="text-xs text-slate-500 mt-2">
+        <p className="text-xs text-fg-muted mt-2">
           Platform administrators: sign in with your admin account (from{" "}
           <code className="text-[11px]">PLATFORM_ADMIN_EMAIL</code>), then open{" "}
           <a href="/platform-admin" className="text-chat-accent hover:underline">

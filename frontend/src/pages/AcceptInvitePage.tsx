@@ -36,7 +36,7 @@ export default function AcceptInvitePage() {
       <div className="w-full max-w-md aq-card shadow-panel aq-card-p">
         <Logo />
         <h1 className="text-lg font-semibold mt-6 mb-2">Set your password</h1>
-        <p className="text-sm text-slate-600 mb-4">Complete your AQREM account setup using your invitation.</p>
+        <p className="text-sm text-fg-muted mb-4">Complete your AQREM account setup using your invitation.</p>
         <form className="space-y-3" onSubmit={onSubmit}>
           <input name="full_name" placeholder="Full name (optional)" className="aq-input" />
           <input

@@ -232,8 +232,8 @@ export default function QuestionnaireDetailPage() {
         {questions.map((q) => (
           <div key={q.id} className="aq-card aq-card-p">
             <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="text-xs font-mono text-slate-500">{q.external_id}</span>
-              {q.section && <span className="text-xs text-slate-500">{q.section}</span>}
+              <span className="text-xs font-mono text-fg-muted">{q.external_id}</span>
+              {q.section && <span className="text-xs text-fg-muted">{q.section}</span>}
               {q.answer?.status && <StatusBadge status={q.answer.status} />}
               <ConfidenceBadge confidence={q.answer?.confidence} />
               <EvidenceStrengthBadge strength={q.answer?.evidence_strength} />
@@ -249,7 +249,7 @@ export default function QuestionnaireDetailPage() {
           </div>
         ))}
       </div>
-      <p className="text-xs text-slate-500 mt-4">{insufficient} questions flagged with insufficient evidence.</p>
+      <p className="text-xs text-fg-muted mt-4">{insufficient} questions flagged with insufficient evidence.</p>
     </div>
   );
 }

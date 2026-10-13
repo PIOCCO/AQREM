@@ -2,7 +2,7 @@ const statusConfig: Record<string, { className: string; symbol: string }> = {
   approved: { className: "bg-success-bg text-success-text border-success-border", symbol: "✓" },
   needs_review: { className: "bg-warning-bg text-warning-text border-warning-border", symbol: "⚠" },
   potentially_stale: { className: "bg-warning-bg text-warning-text border-warning-border", symbol: "⚠" },
-  draft: { className: "bg-surface-subtle text-slate-700 border-border", symbol: "○" },
+  draft: { className: "bg-surface-subtle text-fg-secondary border-border", symbol: "○" },
   rejected: { className: "bg-error-bg text-error-text border-error-border", symbol: "✕" },
   failed: { className: "bg-error-bg text-error-text border-error-border", symbol: "✕" },
   indexing: { className: "bg-info-bg text-info-text border-info-border", symbol: "…" },
@@ -45,7 +45,7 @@ export function ConfidenceBadge({ confidence }: { confidence?: string | null }) 
       ? "bg-success-bg text-success-text border-success-border"
       : confidence === "medium"
         ? "bg-warning-bg text-warning-text border-warning-border"
-        : "bg-surface-subtle text-slate-700 border-border";
+        : "bg-surface-subtle text-fg-secondary border-border";
   return (
     <BadgeShell className={tone}>
       <span className="normal-case text-[11px]">Confidence:</span> {confidence}

@@ -51,7 +51,7 @@ export default function EvidenceDetailPage() {
         }
       />
       <div className="aq-card aq-card-p space-y-4">
-        <div className="flex flex-wrap gap-2 text-sm text-slate-600 items-center">
+        <div className="flex flex-wrap gap-2 text-sm text-fg-muted items-center">
           {lineStart != null && (
             <span className="font-mono text-xs">
               Lines {String(item.line_start)}
@@ -75,7 +75,7 @@ export default function EvidenceDetailPage() {
                 const lineNo = lineStart != null ? lineStart + i : i + 1;
                 return (
                   <tr key={lineNo} className="align-top">
-                    <td className="select-none text-slate-400 text-right pr-3 py-0.5 w-12 border-r border-border bg-surface-subtle/80">
+                    <td className="select-none text-fg-muted text-right pr-3 py-0.5 w-12 border-r border-border bg-surface-subtle/80">
                       {lineNo}
                     </td>
                     <td className="py-0.5 pl-3 whitespace-pre-wrap break-all">{line || " "}</td>

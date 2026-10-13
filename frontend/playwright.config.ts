@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: true,
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: "list",
@@ -17,7 +17,14 @@ export default defineConfig({
     timeout: 120_000,
   },
   projects: [
-    { name: "dark", use: { ...devices["Desktop Chrome"], colorScheme: "dark" } },
-    { name: "light", use: { ...devices["Desktop Chrome"], colorScheme: "light" } },
+    { name: "setup", testMatch: /auth\.setup\.ts/ },
+    {
+      name: "audit",
+      testMatch: /authenticated-audit\.spec\.ts|contrast-regression\.spec\.ts/,
+      dependencies: ["setup"],
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 720 } },
+    },
+    { name: "public-dark", testMatch: /public-a11y|dead-controls/, use: { ...devices["Desktop Chrome"], colorScheme: "dark" } },
+    { name: "public-light", testMatch: /public-a11y|dead-controls/, use: { ...devices["Desktop Chrome"], colorScheme: "light" } },
   ],
 });

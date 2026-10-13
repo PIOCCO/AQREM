@@ -97,15 +97,15 @@ export default function ReviewQueuePage() {
         {items.map((item) => (
           <article key={item.answer_id} className="aq-card aq-card-p aq-card-hover">
             <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="text-xs font-mono text-slate-500">{item.question_external_id}</span>
+              <span className="text-xs font-mono text-fg-muted">{item.question_external_id}</span>
               <StatusBadge status={item.status} />
               <ConfidenceBadge confidence={item.confidence} />
-              <span className="text-xs rounded-md border border-border bg-surface-subtle px-2 py-0.5 text-slate-700">
+              <span className="text-xs rounded-md border border-border bg-surface-subtle px-2 py-0.5 text-fg-secondary">
                 {item.reason}
               </span>
             </div>
-            <p className="font-medium text-slate-900 mb-1 line-clamp-2">{item.question_text}</p>
-            {item.questionnaire_name && <p className="text-xs text-slate-500 mb-3">{item.questionnaire_name}</p>}
+            <p className="font-medium text-fg mb-1 line-clamp-2">{item.question_text}</p>
+            {item.questionnaire_name && <p className="text-xs text-fg-muted mb-3">{item.questionnaire_name}</p>}
             {item.potentially_stale ? (
               <Link to={`/stale-answers/${item.answer_id}`} className="aq-link text-sm text-warning-text">
                 Review evidence change

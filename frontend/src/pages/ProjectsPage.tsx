@@ -118,10 +118,10 @@ export default function ProjectsPage() {
               {rows.map((p) => (
                 <tr key={p.id}>
                   <td>
-                    <Link to={`/projects/${p.id}`} className="font-medium text-slate-900 hover:text-info-text">
+                    <Link to={`/projects/${p.id}`} className="font-medium text-fg hover:text-info-text">
                       {p.name}
                     </Link>
-                    {p.description && <div className="text-xs text-slate-500">{p.description}</div>}
+                    {p.description && <div className="text-xs text-fg-muted">{p.description}</div>}
                   </td>
                   <td className="tabular-nums">{p.source_count}</td>
                   <td className="tabular-nums">{p.questionnaire_count}</td>
@@ -139,11 +139,11 @@ export default function ProjectsPage() {
         <Modal title="Create project" onClose={() => setShowCreate(false)} wide>
           <form onSubmit={onCreate} className="space-y-4">
             <div className="space-y-3">
-              <label className="block text-sm font-medium text-slate-800">
+              <label className="block text-sm font-medium text-fg">
                 Project name
                 <input name="name" required placeholder="Project name" className="aq-input mt-1" />
               </label>
-              <label className="block text-sm font-medium text-slate-800">
+              <label className="block text-sm font-medium text-fg">
                 Description
                 <textarea
                   name="description"
@@ -165,7 +165,7 @@ export default function ProjectsPage() {
         </Modal>
       )}
 
-      <p className="text-xs text-slate-500 mt-4">
+      <p className="text-xs text-fg-muted mt-4">
         Tip: use the project selector in the sidebar to filter dashboard and list views.{" "}
         <Link to="/questionnaires" className="aq-link text-xs">
           Open questionnaires

@@ -5,8 +5,8 @@ type Props = {
 export function SourceCreateFields({ defaultSourceName = "" }: Props) {
   return (
     <fieldset className="space-y-3 border border-border rounded-control p-4">
-      <legend className="text-sm font-medium text-slate-900 px-1">Source code</legend>
-      <p className="text-xs text-slate-500 -mt-1">
+      <legend className="text-sm font-medium text-fg px-1">Source code</legend>
+      <p className="text-xs text-fg-muted -mt-1">
         Connect a repository, folder path, or document upload source for this project. Leave the source name empty to
         skip and add later.
       </p>

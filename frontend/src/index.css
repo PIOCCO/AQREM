@@ -3,6 +3,13 @@
 @tailwind utilities;
 
 @layer base {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  textarea,
+  select {
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
+  }
+
   :root {
     --aq-radius-sm: 0.375rem;
     --aq-radius-md: 0.5rem;
@@ -29,6 +36,7 @@
     --color-success-bg: #ecfdf5;
     --color-success-border: #a7f3d0;
     --color-focus-ring: #0f766e;
+    --color-link: #0d9488;
 
     --chat-main: var(--color-background);
     --chat-sidebar: var(--color-surface-raised);
@@ -73,6 +81,7 @@
   }
 
   html.dark {
+    color-scheme: dark;
     --color-background: #141414;
     --color-surface: #1f1f1f;
     --color-surface-raised: #2a2a2a;
@@ -94,6 +103,7 @@
     --color-success-bg: #052e21;
     --color-success-border: #047857;
     --color-focus-ring: #10a37f;
+    --color-link: #5eead4;
 
     --chat-hover: rgba(255, 255, 255, 0.08);
     --chat-user-bubble: var(--color-surface-raised);
@@ -142,7 +152,8 @@
   }
 
   .aq-card {
-    @apply rounded-card border border-border bg-surface shadow-card;
+    @apply rounded-card border border-border shadow-card;
+    background-color: var(--color-surface);
   }
 
   .aq-card-p {
@@ -169,7 +180,8 @@
   }
 
   .aq-btn-secondary {
-    @apply aq-btn border border-border-strong bg-surface hover:bg-surface-subtle;
+    @apply aq-btn border border-border-strong hover:bg-surface-subtle;
+    background-color: var(--color-surface);
     color: var(--color-text-primary);
   }
 
@@ -272,7 +284,8 @@
   }
 
   .ref-metric-card {
-    @apply rounded-card border border-border bg-surface px-5 py-4 shadow-card min-w-0;
+    @apply rounded-card border border-border px-5 py-4 shadow-card min-w-0;
+    background-color: var(--color-surface);
   }
 
   .ref-metric-value {
@@ -675,7 +688,8 @@
     @apply w-full appearance-none rounded-lg border border-chat-border bg-chat-surface py-1.5 pl-2 pr-8 text-sm text-chat-fg focus-visible:ref-focus-ring;
   }
   .ref-scope-link {
-    @apply text-chat-accent hover:underline focus-visible:ref-focus-ring rounded;
+    color: var(--color-link);
+    @apply hover:underline focus-visible:ref-focus-ring rounded;
   }
   .ref-starter-prompt {
     @apply rounded-xl border border-chat-border bg-chat-surface px-4 py-3 text-left text-sm text-chat-fg hover:bg-chat-hover focus-visible:ref-focus-ring transition-colors;

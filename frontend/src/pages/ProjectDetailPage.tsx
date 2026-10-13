@@ -89,9 +89,9 @@ export default function ProjectDetailPage() {
       <ProjectSourcesSection session={session} projectId={projectId} editable={editable} />
 
       <nav className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-10">
-        <p className="sm:col-span-2 lg:col-span-3 text-sm font-medium text-slate-700">Workspace</p>
+        <p className="sm:col-span-2 lg:col-span-3 text-sm font-medium text-fg-secondary">Workspace</p>
         {workspaceLinks(projectId).map((item) => (
-          <Link key={item.to} to={item.to} className="aq-card aq-card-p aq-card-hover text-sm font-medium text-slate-800">
+          <Link key={item.to} to={item.to} className="aq-card aq-card-p aq-card-hover text-sm font-medium text-fg">
             {item.label}
           </Link>
         ))}

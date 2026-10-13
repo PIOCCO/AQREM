@@ -100,7 +100,7 @@ export default function QuestionReviewPage() {
   return (
     <div className="max-w-6xl">
       {genPhase && (
-        <p className="mb-4 text-sm text-slate-600 flex items-center gap-2" role="status">
+        <p className="mb-4 text-sm text-fg-muted flex items-center gap-2" role="status">
           <span className="aq-spinner" aria-hidden />
           {genPhase}
         </p>
@@ -119,13 +119,13 @@ export default function QuestionReviewPage() {
       <section className="aq-workspace-section mb-6">
         <p className="aq-panel-label">Question</p>
         <div className="flex flex-wrap items-center gap-2 mb-3">
-          <span className="text-sm font-mono text-slate-500">{detail?.question.external_id}</span>
+          <span className="text-sm font-mono text-fg-muted">{detail?.question.external_id}</span>
           {detail?.question.section && (
-            <span className="text-xs text-slate-500">{detail.question.section}</span>
+            <span className="text-xs text-fg-muted">{detail.question.section}</span>
           )}
           {answer && <StatusBadge status={answer.status} />}
         </div>
-        <h1 className="text-page-title text-slate-900 leading-snug">{detail?.question.text}</h1>
+        <h1 className="text-page-title text-fg leading-snug">{detail?.question.text}</h1>
         {!answer && canEdit && (
           <button type="button" disabled={busy} onClick={onGenerate} className="aq-btn-primary mt-4">
             Generate answer
@@ -155,17 +155,17 @@ export default function QuestionReviewPage() {
               <h2 className="aq-section-title">AI answer</h2>
               {answer && <ConfidenceBadge confidence={answer.confidence} />}
             </div>
-            <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">
+            <p className="text-fg leading-relaxed whitespace-pre-wrap">
               {answer?.draft_text ?? "No draft yet."}
             </p>
             {answer?.approved_text && answer.approved_text !== answer.draft_text && (
               <div className="mt-4 pt-4 border-t border-border">
                 <h3 className="aq-panel-label mb-1">Last approved</h3>
-                <p className="text-sm whitespace-pre-wrap text-slate-700">{answer.approved_text}</p>
+                <p className="text-sm whitespace-pre-wrap text-fg-secondary">{answer.approved_text}</p>
               </div>
             )}
             {answer?.generation_source && (
-              <p className="text-xs text-slate-500 mt-3 capitalize">
+              <p className="text-xs text-fg-muted mt-3 capitalize">
                 Generation: {answer.generation_source.replaceAll("_", " ")}
                 {answer.library_entry_id && (
                   <>
@@ -179,7 +179,7 @@ export default function QuestionReviewPage() {
               </p>
             )}
             {answer?.reasoning_summary && (
-              <p className="text-sm text-slate-600 mt-2 border-l-2 border-border pl-3">{answer.reasoning_summary}</p>
+              <p className="text-sm text-fg-muted mt-2 border-l-2 border-border pl-3">{answer.reasoning_summary}</p>
             )}
           </section>
 
@@ -236,7 +236,7 @@ export default function QuestionReviewPage() {
               </div>
             )}
             {!canReview && !canEdit && (
-              <p className="text-sm text-slate-500">You have read-only access to this workspace.</p>
+              <p className="text-sm text-fg-muted">You have read-only access to this workspace.</p>
             )}
           </div>
         </div>
@@ -249,14 +249,14 @@ export default function QuestionReviewPage() {
                 <div key={item.id} className="aq-evidence-citation">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <span className="text-xs font-medium text-slate-500 mr-2">[{idx + 1}]</span>
+                      <span className="text-xs font-medium text-fg-muted mr-2">[{idx + 1}]</span>
                       <Link to={`/evidence/${item.id}`} className="aq-link font-medium break-all font-mono text-xs">
                         {item.file_path}
                       </Link>
                     </div>
                     <button
                       type="button"
-                      className="shrink-0 p-1.5 rounded-control text-slate-500 hover:bg-surface hover:text-slate-800"
+                      className="shrink-0 p-1.5 rounded-control text-fg-muted hover:bg-surface hover:text-fg"
                       aria-label="Copy file path"
                       onClick={() => navigator.clipboard.writeText(item.file_path)}
                     >
@@ -265,15 +265,15 @@ export default function QuestionReviewPage() {
                   </div>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {item.line_start != null && (
-                      <span className="text-xs text-slate-500 font-mono">
+                      <span className="text-xs text-fg-muted font-mono">
                         lines {item.line_start}
                         {item.line_end ? `–${item.line_end}` : ""}
                       </span>
                     )}
-                    {item.repository && <span className="text-xs text-slate-500">{item.repository}</span>}
+                    {item.repository && <span className="text-xs text-fg-muted">{item.repository}</span>}
                     <EvidenceStrengthBadge strength={item.evidence_strength} />
                   </div>
-                  <pre className="mt-2 text-slate-700 line-clamp-4 whitespace-pre-wrap font-mono text-xs leading-relaxed">
+                  <pre className="mt-2 text-fg-secondary line-clamp-4 whitespace-pre-wrap font-mono text-xs leading-relaxed">
                     {item.content_preview}
                   </pre>
                   <Link to={`/evidence/${item.id}`} className="aq-btn-ghost mt-2 px-0 text-xs">
@@ -282,7 +282,7 @@ export default function QuestionReviewPage() {
                 </div>
               ))}
               {!answer?.evidence?.length && (
-                <p className="text-sm text-slate-500">No supporting evidence linked.</p>
+                <p className="text-sm text-fg-muted">No supporting evidence linked.</p>
               )}
             </div>
           </section>

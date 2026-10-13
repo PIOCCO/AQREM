@@ -146,7 +146,7 @@ export default function QuestionnairesPage() {
             </select>
             <input name="recipient" placeholder="Recipient (optional)" className="aq-input" />
             <textarea name="description" placeholder="Description (optional)" className="aq-textarea min-h-16" />
-            <label className="block text-sm text-slate-600">
+            <label className="block text-sm text-fg-muted">
               Upload questions (CSV/XLSX)
               <input
                 name="file"
@@ -164,7 +164,7 @@ export default function QuestionnairesPage() {
                 }}
               />
             </label>
-            {filePreview && <p className="text-xs text-slate-600 aq-alert-info">{filePreview}</p>}
+            {filePreview && <p className="text-xs text-fg-muted aq-alert-info">{filePreview}</p>}
             <div className="flex gap-2 justify-end pt-2">
               <button type="button" className="aq-btn-ghost" onClick={() => setShowCreate(false)}>
                 Cancel

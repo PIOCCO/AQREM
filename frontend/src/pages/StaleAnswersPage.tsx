@@ -51,7 +51,7 @@ export default function StaleAnswersPage() {
     };
   }, [session?.organizationId, session?.token, debouncedSearch, projectId]);
 
-  if (!session) return <p className="text-sm text-slate-600">Please sign in.</p>;
+  if (!session) return <p className="text-sm text-fg-muted">Please sign in.</p>;
 
   return (
     <div>
@@ -75,8 +75,8 @@ export default function StaleAnswersPage() {
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <StatusBadge status={item.status || "potentially_stale"} />
             </div>
-            <p className="font-medium text-slate-900 line-clamp-2">{item.question_text}</p>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="font-medium text-fg line-clamp-2">{item.question_text}</p>
+            <p className="text-sm text-fg-muted mt-1">
               Project: {item.project_name ?? "—"} · Evidence changes: {item.changed_evidence_count}
             </p>
             <Link to={`/stale-answers/${item.answer_id}`} className="aq-link inline-block mt-3 text-sm">

@@ -126,7 +126,7 @@ export default function ProjectSourcesSection({
   return (
     <section className="mt-8">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <h2 className="text-section-title text-slate-900">{title}</h2>
+        <h2 className="text-section-title text-fg">{title}</h2>
         {editable && (
           <button type="button" onClick={() => setShowCreate(true)} className="aq-btn-secondary text-sm">
             Add source
@@ -134,7 +134,7 @@ export default function ProjectSourcesSection({
         )}
       </div>
       {syncingId && jobStatus && (
-        <p className="mb-4 text-sm text-slate-600">Indexing status: {jobStatus.replaceAll("_", " ")}…</p>
+        <p className="mb-4 text-sm text-fg-muted">Indexing status: {jobStatus.replaceAll("_", " ")}…</p>
       )}
       {loading && <LoadingState label="Loading sources…" />}
       {error && <ErrorState message={error} onRetry={load} />}
@@ -155,8 +155,8 @@ export default function ProjectSourcesSection({
         {sources.map((source) => (
           <article key={source.id} className="aq-card aq-card-p">
             <div className="flex items-start justify-between gap-2 mb-2">
-              <h3 className="font-semibold text-slate-900">{source.name}</h3>
-              <span className="text-xs uppercase tracking-wide text-slate-500">
+              <h3 className="font-semibold text-fg">{source.name}</h3>
+              <span className="text-xs uppercase tracking-wide text-fg-muted">
                 {source.source_type.replaceAll("_", " ")}
               </span>
             </div>
@@ -164,10 +164,10 @@ export default function ProjectSourcesSection({
               <StatusBadge status={source.status} />
             </div>
             {typeof source.config?.demo_path === "string" && (
-              <p className="text-xs font-mono text-slate-600 mb-2">Path: {source.config.demo_path}</p>
+              <p className="text-xs font-mono text-fg-muted mb-2">Path: {source.config.demo_path}</p>
             )}
             {source.source_type === "github" && typeof source.config?.repository_full_name === "string" && (
-              <p className="text-xs font-mono text-slate-600 mb-2">{source.config.repository_full_name}</p>
+              <p className="text-xs font-mono text-fg-muted mb-2">{source.config.repository_full_name}</p>
             )}
             <div className="flex flex-wrap gap-2 mt-3">
               {editable && (

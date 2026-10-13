@@ -32,7 +32,7 @@ export default function StaleAnswerDetailPage() {
     reload().catch(() => setError("Unable to load stale answer."));
   }, [answerId, session?.organizationId, session?.token]);
 
-  if (!session) return <p className="text-sm text-slate-600">Please sign in.</p>;
+  if (!session) return <p className="text-sm text-fg-muted">Please sign in.</p>;
   if (error && !detail) return <ErrorState message={error} onRetry={reload} />;
   if (!detail) return <LoadingState label="Loading staleness review…" />;
 
@@ -50,19 +50,19 @@ export default function StaleAnswerDetailPage() {
 
       <section className="aq-workspace-section">
         <p className="aq-panel-label">Question</p>
-        <h2 className="text-page-title text-slate-900 leading-snug mb-2">{detail.question_text}</h2>
-        <p className="text-sm text-slate-500">
+        <h2 className="text-page-title text-fg leading-snug mb-2">{detail.question_text}</h2>
+        <p className="text-sm text-fg-muted">
           Project: {detail.project_name ?? "—"} · Questionnaire: {detail.questionnaire_name}
         </p>
         {detail.approved_text && (
           <div className="mt-4 pt-4 border-t border-border">
             <h3 className="aq-panel-label">Last approved answer</h3>
-            <p className="text-sm whitespace-pre-wrap text-slate-800">{detail.approved_text}</p>
+            <p className="text-sm whitespace-pre-wrap text-fg">{detail.approved_text}</p>
           </div>
         )}
         <div className="mt-4 pt-4 border-t border-border">
           <h3 className="aq-panel-label">Current draft</h3>
-          <p className="text-sm whitespace-pre-wrap text-slate-800">{detail.draft_text}</p>
+          <p className="text-sm whitespace-pre-wrap text-fg">{detail.draft_text}</p>
         </div>
       </section>
 
@@ -71,22 +71,22 @@ export default function StaleAnswerDetailPage() {
         {detail.changed_evidence.map((ev: any) => (
           <div key={ev.event_id} className="aq-evidence-citation">
             <div className="font-medium font-mono text-sm break-all">{ev.file_path}</div>
-            <div className="text-xs text-slate-500 mt-1 font-mono">
+            <div className="text-xs text-fg-muted mt-1 font-mono">
               Previous commit: {ev.previous_commit_hash ?? "—"} · Current commit: {ev.current_commit_hash ?? "—"}
             </div>
-            <div className="text-xs text-slate-500 mt-1 font-mono">
+            <div className="text-xs text-fg-muted mt-1 font-mono">
               Previous hash: {ev.snapshot_content_hash.slice(0, 12)}… · Current hash:{" "}
               {ev.current_content_hash.slice(0, 12)}…
             </div>
             {ev.previous_content_excerpt && (
               <div className="mt-3">
-                <div className="text-label uppercase tracking-wide text-slate-500 mb-1">Previous excerpt</div>
+                <div className="text-label uppercase tracking-wide text-fg-muted mb-1">Previous excerpt</div>
                 <pre className="aq-code-block text-xs mt-1">{ev.previous_content_excerpt}</pre>
               </div>
             )}
             {ev.current_content_excerpt && (
               <div className="mt-3">
-                <div className="text-label uppercase tracking-wide text-slate-500 mb-1">Current excerpt</div>
+                <div className="text-label uppercase tracking-wide text-fg-muted mb-1">Current excerpt</div>
                 <pre className="aq-code-block text-xs mt-1">{ev.current_content_excerpt}</pre>
               </div>
             )}
@@ -182,7 +182,7 @@ export default function StaleAnswerDetailPage() {
           </>
         )}
         {!canReview && !canEdit && (
-          <p className="text-sm text-slate-500">You have read-only access to staleness review actions.</p>
+          <p className="text-sm text-fg-muted">You have read-only access to staleness review actions.</p>
         )}
       </div>
     </div>

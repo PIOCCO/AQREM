@@ -59,7 +59,7 @@ function progressBarClass(status: string) {
 
 function activityIcon(action: string, resource: string) {
   const a = `${action} ${resource}`.toLowerCase();
-  if (a.includes("github") || a.includes("sync") || a.includes("source")) return <IconGithub className="h-5 w-5 text-slate-800" />;
+  if (a.includes("github") || a.includes("sync") || a.includes("source")) return <IconGithub className="h-5 w-5 text-fg" />;
   if (a.includes("export") || a.includes("document")) return <IconShield className="h-5 w-5 text-emerald-600" />;
   return <IconShield className="h-5 w-5 text-brand-violet" />;
 }
@@ -137,19 +137,20 @@ export default function DashboardPage() {
     <div className="max-w-[1400px] mx-auto space-y-8">
       <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
         <div>
-          <h1 className="text-page-title text-slate-900">
+          <h1 className="text-page-title text-fg">
             {timeGreeting()}, {greetingName(user?.fullName, user?.email)}
           </h1>
-          <p className="mt-1 text-sm text-slate-600 max-w-xl">
+          <p className="mt-1 text-sm text-fg-muted max-w-xl">
             Manage company evidence and turn it into verified responses.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <div className="relative w-44">
-            <IconSearch className="absolute left-3 top-1/2 -h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <IconSearch className="absolute left-3 top-1/2 -h-4 w-4 -translate-y-1/2 text-fg-muted" />
             <input
               className="ref-header-search"
               placeholder="Search"
+              aria-label="Search questionnaires"
               value={tableSearch}
               onChange={(e) => setTableSearch(e.target.value)}
             />
@@ -209,14 +210,14 @@ export default function DashboardPage() {
       <div className="grid xl:grid-cols-3 gap-6">
         <section className="xl:col-span-2 aq-card shadow-card overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-            <h2 className="text-section-title text-slate-900">Active Questionnaires</h2>
-            <Link to="/questionnaires" className="text-sm text-brand-blue font-medium hover:underline">
+            <h2 className="text-section-title text-fg">Active Questionnaires</h2>
+            <Link to="/questionnaires" className="text-sm text-link font-medium hover:underline">
               View all
             </Link>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-sm">
-              <thead className="bg-surface-muted text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+              <thead className="bg-surface-muted text-left text-xs font-medium uppercase tracking-wide text-fg-muted">
                 <tr>
                   <th className="px-5 py-3">Questionnaire Name</th>
                   <th className="px-5 py-3">Project</th>
@@ -228,9 +229,9 @@ export default function DashboardPage() {
               <tbody>
                 {filteredQuestionnaires.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
+                    <td colSpan={5} className="px-5 py-8 text-center text-fg-muted">
                       No questionnaires yet.{" "}
-                      <Link to="/questionnaires" className="text-brand-blue font-medium hover:underline">
+                      <Link to="/questionnaires" className="text-link font-medium hover:underline">
                         Create one
                       </Link>
                     </td>
@@ -238,15 +239,15 @@ export default function DashboardPage() {
                 ) : (
                   filteredQuestionnaires.map((qn) => (
                     <tr key={qn.id} className="border-t border-border hover:bg-surface-muted/60">
-                      <td className="px-5 py-4 font-medium text-slate-900">
-                        <Link to={`/questionnaires/${qn.id}`} className="hover:text-brand-blue">
+                      <td className="px-5 py-4 font-medium text-fg">
+                        <Link to={`/questionnaires/${qn.id}`} className="hover:text-link">
                           {qn.name}
                         </Link>
                       </td>
-                      <td className="px-5 py-4 text-slate-600">{qn.project_name ?? "—"}</td>
+                      <td className="px-5 py-4 text-fg-muted">{qn.project_name ?? "—"}</td>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2">
-                          <span className="text-slate-700 tabular-nums w-10">{qn.progress_percent}%</span>
+                          <span className="text-fg-secondary tabular-nums w-10">{qn.progress_percent}%</span>
                           <div className="flex-1 max-w-[120px] h-2 rounded-full bg-surface-subtle overflow-hidden">
                             <div
                               className={`h-full rounded-full ${progressBarClass(qn.status)}`}
@@ -276,18 +277,18 @@ export default function DashboardPage() {
 
         <section className="aq-card shadow-card">
           <div className="px-5 py-4 border-b border-border">
-            <h2 className="text-section-title text-slate-900">Evidence Activity</h2>
+            <h2 className="text-section-title text-fg">Evidence Activity</h2>
           </div>
           <ul className="divide-y divide-border">
             {activity.length === 0 ? (
-              <li className="px-5 py-6 text-sm text-slate-500">No recent activity.</li>
+              <li className="px-5 py-6 text-sm text-fg-muted">No recent activity.</li>
             ) : (
               activity.map((item, idx) => (
                 <li key={idx} className="px-5 py-4 flex gap-3">
                   <span className="mt-0.5">{activityIcon(item.action, item.resource_type)}</span>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-900">{formatActivityTitle(item.action)}</p>
-                    <p className="text-xs text-slate-500 mt-0.5 capitalize">
+                    <p className="text-sm font-medium text-fg">{formatActivityTitle(item.action)}</p>
+                    <p className="text-xs text-fg-muted mt-0.5 capitalize">
                       {item.resource_type.replaceAll("_", " ")} · {new Date(item.created_at).toLocaleString()}
                     </p>
                   </div>
@@ -296,7 +297,7 @@ export default function DashboardPage() {
             )}
           </ul>
           <div className="px-5 py-3 border-t border-border">
-            <Link to="/audit" className="text-sm font-medium text-brand-blue hover:underline">
+            <Link to="/audit" className="text-sm font-medium text-link hover:underline">
               View activity log
             </Link>
           </div>
@@ -305,12 +306,12 @@ export default function DashboardPage() {
 
       <div className="grid xl:grid-cols-2 gap-6">
         <section className="aq-card shadow-panel p-6">
-          <h2 className="text-section-title text-slate-900 mb-4">Question Review workspace</h2>
+          <h2 className="text-section-title text-fg mb-4">Question Review workspace</h2>
           {reviewItem ? (
             <>
-              <p className="text-label uppercase tracking-wide text-slate-500 mb-1">Question</p>
-              <p className="text-sm font-medium text-slate-900 mb-4">{reviewItem.question_text}</p>
-              <p className="text-label uppercase tracking-wide text-slate-500 mb-1">Confidence</p>
+              <p className="text-label uppercase tracking-wide text-fg-muted mb-1">Question</p>
+              <p className="text-sm font-medium text-fg mb-4">{reviewItem.question_text}</p>
+              <p className="text-label uppercase tracking-wide text-fg-muted mb-1">Confidence</p>
               <p className="text-sm font-medium text-success-text capitalize mb-4">{reviewItem.confidence || "—"}</p>
               <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
                 {reviewItem.confidence && reviewItem.confidence !== "low" && (
@@ -324,9 +325,9 @@ export default function DashboardPage() {
               </div>
             </>
           ) : (
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-fg-muted">
               No answers waiting for review.{" "}
-              <Link to="/review-queue" className="text-brand-blue font-medium hover:underline">
+              <Link to="/review-queue" className="text-link font-medium hover:underline">
                 Open review queue
               </Link>
             </p>
@@ -335,14 +336,14 @@ export default function DashboardPage() {
 
         <section>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-section-title text-slate-900">Answer Library preview</h2>
-            <Link to="/answer-library" className="text-sm text-brand-blue font-medium hover:underline">
+            <h2 className="text-section-title text-fg">Answer Library preview</h2>
+            <Link to="/answer-library" className="text-sm text-link font-medium hover:underline">
               View library
             </Link>
           </div>
           <div className="grid sm:grid-cols-2 gap-4">
             {libraryPreview.length === 0 ? (
-              <p className="text-sm text-slate-500 sm:col-span-2 aq-card p-5">No library entries yet.</p>
+              <p className="text-sm text-fg-muted sm:col-span-2 aq-card p-5">No library entries yet.</p>
             ) : (
               libraryPreview.map((entry) => (
                 <Link
@@ -355,8 +356,8 @@ export default function DashboardPage() {
                       <IconShield className="h-5 w-5" />
                     </span>
                     <div className="min-w-0">
-                      <p className="font-medium text-slate-900 truncate">{entry.question_text.slice(0, 40)}</p>
-                      <p className="text-xs text-slate-500 mt-1 capitalize">
+                      <p className="font-medium text-fg truncate">{entry.question_text.slice(0, 40)}</p>
+                      <p className="text-xs text-fg-muted mt-1 capitalize">
                         {entry.status.replaceAll("_", " ")}
                         {Array.isArray(entry.evidence) ? ` · ${entry.evidence.length} sources` : ""}
                       </p>

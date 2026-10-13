@@ -47,7 +47,7 @@ export default function AnswerLibraryPage() {
     };
   }, [session?.organizationId, session?.token, debouncedQuery, projectId]);
 
-  if (!session) return <p className="text-sm text-slate-600">Please sign in.</p>;
+  if (!session) return <p className="text-sm text-fg-muted">Please sign in.</p>;
 
   return (
     <div>
@@ -70,12 +70,12 @@ export default function AnswerLibraryPage() {
           <article key={entry.id} className="aq-card aq-card-p aq-card-hover">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="font-medium text-slate-900 line-clamp-2">{entry.question_text}</p>
-                <p className="text-sm text-slate-600 mt-2 line-clamp-2">{entry.answer_text}</p>
+                <p className="font-medium text-fg line-clamp-2">{entry.question_text}</p>
+                <p className="text-sm text-fg-muted mt-2 line-clamp-2">{entry.answer_text}</p>
               </div>
               <div className="text-right shrink-0 space-y-1">
                 <StatusBadge status={entry.status} />
-                <div className="text-xs text-slate-500">Reused {entry.reuse_count}×</div>
+                <div className="text-xs text-fg-muted">Reused {entry.reuse_count}×</div>
               </div>
             </div>
             <Link to={`/answer-library/${entry.id}`} className="aq-link text-sm mt-3 inline-block">

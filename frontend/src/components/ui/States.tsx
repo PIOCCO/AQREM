@@ -104,7 +104,7 @@ export function Modal({
           <h2 id="aq-modal-title" className="aq-modal-title mb-0">
             {title}
           </h2>
-          <button type="button" onClick={onClose} className="aq-btn-ghost px-2 py-1 text-slate-500" aria-label="Close">
+          <button type="button" onClick={onClose} className="aq-btn-ghost px-2 py-1 text-fg-muted" aria-label="Close">
             ✕
           </button>
         </div>

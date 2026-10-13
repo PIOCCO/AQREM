@@ -38,7 +38,7 @@ export default function ChangePasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-surface-canvas p-6 font-sans">
       <div className="w-full max-w-md aq-card shadow-panel aq-card-p">
         <h1 className="text-lg font-semibold mb-2">Set a new password</h1>
-        <p className="text-sm text-slate-600 mb-4">Your administrator requires a password change before you continue.</p>
+        <p className="text-sm text-fg-muted mb-4">Your administrator requires a password change before you continue.</p>
         <form className="space-y-3" onSubmit={onSubmit}>
           <input
             name="current_password"

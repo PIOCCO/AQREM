@@ -141,6 +141,7 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
           type="file"
           multiple
           className="sr-only"
+          aria-label="Attach documents"
           onChange={onFileChange}
           disabled={Boolean(uploadDisabledReason) || disabled}
         />
