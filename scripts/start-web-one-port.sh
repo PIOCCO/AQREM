@@ -173,7 +173,20 @@ build_frontend() {
   (cd "$FRONTEND" && npm install && npm run build)
 }
 
-if [[ ! -f "$FRONTEND/dist/index.html" ]]; then
+frontend_build_stale() {
+  local dist_index="$FRONTEND/dist/index.html"
+  [[ -f "$dist_index" ]] || return 0
+  if find "$FRONTEND/src" "$FRONTEND/index.html" "$FRONTEND/package.json" "$FRONTEND/tailwind.config.js" \
+    -type f -newer "$dist_index" 2>/dev/null | grep -q .; then
+    return 0
+  fi
+  return 1
+}
+
+if [[ "${AQREM_FORCE_FRONTEND_BUILD:-0}" == "1" ]] || [[ ! -f "$FRONTEND/dist/index.html" ]] || frontend_build_stale; then
+  if [[ -f "$FRONTEND/dist/index.html" ]] && frontend_build_stale; then
+    echo "Frontend sources changed since last build — rebuilding dist for one-port serve…"
+  fi
   build_frontend
 fi
 

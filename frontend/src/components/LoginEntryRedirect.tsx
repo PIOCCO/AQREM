@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { fetchAuthMe, loadSession } from "../lib/api";
+import { fetchAuthMe, loadSession, saveSession } from "../lib/api";
 import { LoadingState } from "./ui/States";
 import LoginPage from "../pages/LoginPage";
 
@@ -13,8 +13,11 @@ export default function LoginEntryRedirect() {
     if (!session?.token) return;
     fetchAuthMe(session)
       .then((me) => {
-        if (me.is_platform_admin && !session.organizationId) {
-          setTarget("/platform-admin");
+        if (me.is_platform_admin && !me.organization_id) {
+          if (session.organizationId) {
+            saveSession(session.token, null);
+          }
+          setTarget("/master-admin");
         } else if (me.organization_id || session.organizationId) {
           setTarget("/");
         } else {

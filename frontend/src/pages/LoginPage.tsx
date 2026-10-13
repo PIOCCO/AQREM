@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Logo } from "../components/brand/Logo";
+import { AuthPageShell } from "../components/auth/AuthPageShell";
 import { clearSession, loginUser, saveSession } from "../lib/api";
 
 const LOGIN_ERROR_GENERIC = "Incorrect email or password.";
@@ -65,82 +65,79 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--color-background)] p-6 font-sans">
-      <div className="w-full max-w-[440px] aq-card shadow-panel aq-card-p">
-        <div className="mb-6 flex flex-col items-center text-center">
-          <Logo variant="mark" size={48} />
-          <p className="text-[var(--color-text-muted)] mt-4 text-sm">Evidence-backed questionnaire responses</p>
-        </div>
-        <h1 className="text-lg font-semibold mb-4 text-[var(--color-text-primary)]">Sign in to AQREM</h1>
-        <form className="space-y-4" onSubmit={onSubmit} noValidate>
-          <div>
-            <label htmlFor={emailId} className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">
-              Email
-            </label>
-            <input
-              ref={emailRef}
-              id={emailId}
-              name="email"
-              type="email"
-              className="aq-input w-full"
-              required
-              autoComplete="username"
-              disabled={loading}
-            />
-          </div>
-          <div>
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <label htmlFor={passwordId} className="text-sm font-medium text-[var(--color-text-primary)]">
-                Password
-              </label>
-              <a
-                href="/forgot-password"
-                className="text-xs text-[var(--color-link)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus-ring)]"
-              >
-                Forgot password?
-              </a>
-            </div>
-            <div className="relative">
-              <input
-                id={passwordId}
-                name="password"
-                type={showPassword ? "text" : "password"}
-                className="aq-input w-full pr-20"
-                required
-                autoComplete="current-password"
-                disabled={loading}
-              />
-              <button
-                type="button"
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--color-link)] hover:underline px-2 py-1 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus-ring)]"
-                onClick={() => setShowPassword((v) => !v)}
-                aria-pressed={showPassword}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? "Hide" : "Show"}
-              </button>
-            </div>
-          </div>
-          {error ? (
-            <div className="aq-alert-error" role="alert">
-              {error}
-            </div>
-          ) : null}
-          <button type="submit" disabled={loading} className="aq-btn-primary w-full">
-            {loading ? (
-              <>
-                <span className="aq-spinner border-t-primary-foreground border-slate-600/30" aria-hidden />
-                Signing in…
-              </>
-            ) : (
-              "Sign in"
-            )}
-          </button>
-        </form>
-        <p className="text-xs text-[var(--color-text-muted)] mt-4">
+    <AuthPageShell
+      title="Sign in to AQREM"
+      footer={
+        <p className="text-xs text-[var(--color-text-muted)]">
           Need access? Ask your organization admin for an invitation.
         </p>
-      </div>
-    </div>
+      }
+    >
+      <form className="space-y-4" onSubmit={onSubmit} noValidate>
+        <div>
+          <label htmlFor={emailId} className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">
+            Email
+          </label>
+          <input
+            ref={emailRef}
+            id={emailId}
+            name="email"
+            type="email"
+            className="aq-input w-full"
+            required
+            autoComplete="username"
+            disabled={loading}
+          />
+        </div>
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <label htmlFor={passwordId} className="text-sm font-medium text-[var(--color-text-primary)]">
+              Password
+            </label>
+            <a
+              href="/forgot-password"
+              className="text-xs text-[var(--color-link)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus-ring)]"
+            >
+              Forgot password?
+            </a>
+          </div>
+          <div className="relative">
+            <input
+              id={passwordId}
+              name="password"
+              type={showPassword ? "text" : "password"}
+              className="aq-input w-full pr-20"
+              required
+              autoComplete="current-password"
+              disabled={loading}
+            />
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--color-link)] hover:underline px-2 py-1 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus-ring)]"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-pressed={showPassword}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
+        </div>
+        {error ? (
+          <div className="aq-alert-error" role="alert">
+            {error}
+          </div>
+        ) : null}
+        <button type="submit" disabled={loading} className="aq-btn-primary w-full">
+          {loading ? (
+            <>
+              <span className="aq-spinner border-t-[var(--color-accent-fg)] border-[var(--color-border)]" aria-hidden />
+              Signing in…
+            </>
+          ) : (
+            "Sign in"
+          )}
+        </button>
+      </form>
+    </AuthPageShell>
   );
 }

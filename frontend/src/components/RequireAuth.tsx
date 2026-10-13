@@ -7,6 +7,7 @@ import { clearSession, fetchAuthMe, loadSession, saveSession } from "../lib/api"
 export default function RequireAuth({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [valid, setValid] = useState(false);
+  const [redirectTo, setRedirectTo] = useState<string | null>(null);
 
   useEffect(() => {
     const session = loadSession();
@@ -17,7 +18,11 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
     }
     fetchAuthMe(session)
       .then((me) => {
-        if (me.is_platform_admin && !session.organizationId) {
+        if (me.is_platform_admin && !me.organization_id) {
+          if (session.organizationId) {
+            saveSession(session.token, null);
+          }
+          setRedirectTo("/master-admin");
           setValid(false);
           setReady(true);
           return;
@@ -51,6 +56,7 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
       </div>
     );
   }
+  if (redirectTo) return <Navigate to={redirectTo} replace />;
   if (!valid) return <Navigate to="/login" replace />;
   return <AuthProvider>{children}</AuthProvider>;
 }

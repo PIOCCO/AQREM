@@ -182,9 +182,18 @@ def _mount_frontend_app(app: FastAPI, settings) -> None:
     if assets_dir.is_dir():
         app.mount("/assets", StaticFiles(directory=assets_dir), name="frontend-assets")
 
+    def _spa_index_response() -> FileResponse:
+        return FileResponse(
+            index_html,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+            },
+        )
+
     @app.get("/")
     def frontend_index() -> FileResponse:
-        return FileResponse(index_html)
+        return _spa_index_response()
 
     @app.get("/{full_path:path}")
     def frontend_spa(full_path: str) -> FileResponse:
@@ -192,8 +201,11 @@ def _mount_frontend_app(app: FastAPI, settings) -> None:
             raise HTTPException(status_code=404, detail="Not found")
         candidate = dist / full_path
         if candidate.is_file():
-            return FileResponse(candidate)
-        return FileResponse(index_html)
+            headers = None
+            if full_path == "index.html" or not full_path.startswith("assets/"):
+                headers = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"}
+            return FileResponse(candidate, headers=headers)
+        return _spa_index_response()
 
 
 app = create_app()

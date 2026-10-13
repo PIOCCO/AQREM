@@ -209,15 +209,17 @@ def me(
         elif membership and not membership.is_active:
             organization_id = None
     else:
-        membership = (
-            db.query(OrganizationMembership)
-            .filter(OrganizationMembership.user_id == user.id, OrganizationMembership.is_active.is_(True))
-            .order_by(OrganizationMembership.id.asc())
-            .first()
-        )
-        if membership:
-            organization_id = membership.organization_id
-            role = Role(membership.role)
+        platform_role_preview = resolve_platform_role(user)
+        if platform_role_preview is None:
+            membership = (
+                db.query(OrganizationMembership)
+                .filter(OrganizationMembership.user_id == user.id, OrganizationMembership.is_active.is_(True))
+                .order_by(OrganizationMembership.id.asc())
+                .first()
+            )
+            if membership:
+                organization_id = membership.organization_id
+                role = Role(membership.role)
 
     platform_role = resolve_platform_role(user)
     if platform_role is not None and parsed_org_header is None and organization_id is None:
