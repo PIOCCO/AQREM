@@ -10,6 +10,7 @@ from app.core.tenant import TenantContext
 from app.db.session import get_db
 from app.models.organization import Organization, OrganizationMembership, User
 from app.services.licensing import org_allows_sign_in
+from app.core.platform_access import get_platform_user
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -41,24 +42,8 @@ def _token_payload(credentials: HTTPAuthorizationCredentials | None) -> dict:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
 
 
-def require_platform_admin(
-    user: User = Depends(get_authenticated_user),
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-) -> User:
-    if not user.is_platform_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Platform administrator required")
-    payload = _token_payload(credentials)
-    if payload.get("organization_id"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tenant session cannot access the platform console",
-        )
-    aud = payload.get("aud")
-    if aud is not None and aud != "aqrem-master":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Platform console requires a master audience token",
-        )
+def require_platform_admin(user: User = Depends(get_platform_user)) -> User:
+    """Valid platform console session (any platform role). Prefer require_platform_permission per route."""
     return user
 
 

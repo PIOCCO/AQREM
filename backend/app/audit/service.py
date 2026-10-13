@@ -8,7 +8,7 @@ from app.models.audit import AuditEvent
 def record_audit(
     db: Session,
     *,
-    organization_id: UUID,
+    organization_id: UUID | None,
     user_id: UUID | None,
     action: str,
     resource_type: str,

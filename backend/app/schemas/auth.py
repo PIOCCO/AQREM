@@ -26,6 +26,7 @@ class UserResponse(BaseModel):
     full_name: str
     organization_id: UUID | None = None
     role: Role | None = None
+    platform_role: str | None = None
     is_platform_admin: bool = False
     must_change_password: bool = False
     permissions: list[str] = []

@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -5,7 +6,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.admin_errors import admin_error
-from app.core.dependencies import require_platform_admin
+from app.core.platform_access import require_platform_permission, resolve_platform_role
+from app.core.platform_roles import PlatformRole
+from app.core.permissions_catalog import platform_permission_matrix, platform_endpoint_permissions
+from app.services.platform_staff import (
+    PlatformStaffError,
+    count_active_super_admins,
+    invite_platform_staff,
+    set_platform_role,
+)
+from app.services.roles_audit import run_roles_audit
 from app.core.roles import Role
 from app.db.session import get_db
 from app.models.audit import AuditEvent
@@ -27,6 +37,12 @@ from app.schemas.admin import (
     AdminOrganizationUpdate,
     AdminProvisionUserRequest,
     AdminProvisionUserResponse,
+    PermissionsMatrixResponse,
+    PlatformStaffInviteRequest,
+    PlatformStaffRoleUpdate,
+    PlatformStaffRow,
+    ReplaceOrgAdminRequest,
+    RolesAuditReport,
 )
 from app.services.admin_org import (
     filter_orgs_for_admin,
@@ -35,6 +51,7 @@ from app.services.admin_org import (
     org_to_admin_response,
     seat_usage_response,
 )
+from app.audit.service import record_audit
 from app.services.licensing import LicenseDenied, assert_can_add_seat, licensing_test_mode_effective
 from app.services.platform_provisioning import (
     create_organization_admin,
@@ -59,9 +76,18 @@ def _require_admin_visible_org(db: Session, organization_id: UUID) -> Organizati
 
 
 @router.get("/context", response_model=AdminContextResponse)
-def admin_context(admin: User = Depends(require_platform_admin)) -> AdminContextResponse:
+def admin_context(
+    admin: User = Depends(require_platform_permission("org:read")),
+    db: Session = Depends(get_db),
+) -> AdminContextResponse:
     effective = licensing_test_mode_effective()
-    return AdminContextResponse(licensing_test_mode=effective, test_mode_effective=effective)
+    super_count = count_active_super_admins(db)
+    return AdminContextResponse(
+        licensing_test_mode=effective,
+        test_mode_effective=effective,
+        active_super_admin_count=super_count,
+        super_admin_warning=super_count < 2,
+    )
 
 
 def _counts(orgs: list[Organization]) -> dict[str, int]:
@@ -77,7 +103,7 @@ def list_organizations_admin(
     q: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("org:read")),
 ) -> AdminOrganizationListResponse:
     orgs = db.query(Organization).order_by(Organization.name.asc()).all()
     orgs = filter_orgs_for_admin(orgs)
@@ -95,7 +121,7 @@ def list_organizations_admin(
 def get_organization(
     organization_id: UUID,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("org:read")),
 ) -> AdminOrganizationResponse:
     org = _require_admin_visible_org(db, organization_id)
     return org_to_admin_response(db, org)
@@ -105,7 +131,7 @@ def get_organization(
 def create_organization(
     payload: AdminOrganizationCreate,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("org:create")),
 ) -> AdminOrganizationResponse:
     env = payload.environment.strip().lower()
     if env == "test":
@@ -144,7 +170,7 @@ def update_organization(
     organization_id: UUID,
     payload: AdminOrganizationUpdate,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("org:update")),
 ) -> AdminOrganizationResponse:
     org = _require_admin_visible_org(db, organization_id)
 
@@ -187,7 +213,7 @@ def organization_directory(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=5, ge=1, le=50),
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("org:read")),
 ) -> AdminDirectoryResponse:
     org = _require_admin_visible_org(db, organization_id)
 
@@ -262,7 +288,7 @@ def organization_directory(
 def list_invitations(
     organization_id: UUID,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("invitation:manage")),
 ) -> list[AdminInvitationResponse]:
     _require_admin_visible_org(db, organization_id)
     now = datetime.now(timezone.utc)
@@ -298,9 +324,15 @@ def provision_user(
     organization_id: UUID,
     payload: AdminProvisionUserRequest,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("org_admin:invite")),
 ) -> AdminProvisionUserResponse:
     _require_admin_visible_org(db, organization_id)
+    if payload.role != Role.ORG_ADMIN:
+        raise admin_error(
+            code="ROLE_NOT_ALLOWED",
+            message="Platform staff may only invite an organization administrator.",
+            field="role",
+        )
     try:
         user, _membership, invitation, raw_token, expires_at = provision_user_invitation(
             db,
@@ -357,7 +389,7 @@ def resend_user_invitation(
     organization_id: UUID,
     invitation_id: UUID,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("invitation:manage")),
 ) -> AdminProvisionUserResponse:
     invitation = db.get(UserInvitation, invitation_id)
     if invitation is None or invitation.organization_id != organization_id:
@@ -387,7 +419,7 @@ def revoke_user_invitation(
     organization_id: UUID,
     invitation_id: UUID,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("invitation:manage")),
 ) -> None:
     _require_admin_visible_org(db, organization_id)
     invitation = db.get(UserInvitation, invitation_id)
@@ -401,7 +433,7 @@ def revoke_user_invitation(
 def list_members(
     organization_id: UUID,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("org:read")),
 ) -> list[AdminMembershipResponse]:
     _require_admin_visible_org(db, organization_id)
     rows = (
@@ -431,7 +463,7 @@ def patch_member_role(
     membership_id: UUID,
     payload: AdminMemberRoleUpdate,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("org_admin:replace")),
 ) -> AdminMembershipResponse:
     _require_admin_visible_org(db, organization_id)
     membership = db.get(OrganizationMembership, membership_id)
@@ -440,6 +472,12 @@ def patch_member_role(
     user = db.get(User, membership.user_id)
     if user is None:
         raise admin_error(code="NOT_FOUND", message="User not found", status_code=404)
+    if payload.role != Role.ORG_ADMIN:
+        raise admin_error(
+            code="ROLE_NOT_ALLOWED",
+            message="Platform staff may only assign the organization administrator role.",
+            field="role",
+        )
     update_membership_role(db, admin_user_id=admin.id, membership=membership, role=payload.role)
     db.commit()
     return AdminMembershipResponse(
@@ -458,7 +496,7 @@ def deactivate_member(
     organization_id: UUID,
     membership_id: UUID,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("org_member:deactivate")),
 ) -> None:
     _require_admin_visible_org(db, organization_id)
     membership = db.get(OrganizationMembership, membership_id)
@@ -473,7 +511,7 @@ def list_org_audit(
     organization_id: UUID,
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("org:audit_read")),
 ) -> AdminAuditListResponse:
     _require_admin_visible_org(db, organization_id)
     events = (
@@ -495,3 +533,180 @@ def list_org_audit(
         for event, user in events
     ]
     return AdminAuditListResponse(items=items)
+
+
+@router.get("/permissions/matrix", response_model=PermissionsMatrixResponse)
+def permissions_matrix(
+    _admin: User = Depends(require_platform_permission("platform_permissions:read")),
+) -> PermissionsMatrixResponse:
+    endpoints = platform_endpoint_permissions()
+    perms = sorted({p for p in endpoints.values()})
+    matrix = platform_permission_matrix()
+    return PermissionsMatrixResponse(
+        permissions=perms,
+        roles=list(matrix.keys()),
+        matrix=matrix,
+        endpoints=endpoints,
+    )
+
+
+@router.get("/roles/audit", response_model=RolesAuditReport)
+def roles_audit(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_platform_permission("roles:audit_run")),
+) -> RolesAuditReport:
+    report = run_roles_audit(db)
+    return RolesAuditReport(**report)
+
+
+@router.get("/platform-staff", response_model=list[PlatformStaffRow])
+def list_platform_staff(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_platform_permission("platform_staff:read")),
+) -> list[PlatformStaffRow]:
+    rows: list[PlatformStaffRow] = []
+    for user in db.query(User).order_by(User.full_name.asc()).all():
+        role = resolve_platform_role(user)
+        if role is None:
+            continue
+        status_label = "Active" if user.is_active else "Suspended"
+        rows.append(
+            PlatformStaffRow(
+                id=user.id,
+                email=user.email,
+                full_name=user.full_name,
+                platform_role=role.value,
+                status=status_label,
+                created_at=user.created_at,
+            )
+        )
+    return rows
+
+
+@router.post("/platform-staff/invite", response_model=PlatformStaffRow, status_code=status.HTTP_201_CREATED)
+def invite_staff(
+    payload: PlatformStaffInviteRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("platform_staff:invite")),
+) -> PlatformStaffRow:
+    try:
+        role = PlatformRole(payload.role.strip().upper())
+    except ValueError as exc:
+        raise admin_error(code="INVALID_ROLE", message="Unknown platform role", field="role") from exc
+    temp_password = secrets.token_urlsafe(16)
+    try:
+        user = invite_platform_staff(
+            db,
+            actor_id=admin.id,
+            email=payload.email.lower(),
+            full_name=payload.full_name,
+            role=role,
+            temp_password=temp_password,
+        )
+    except PlatformStaffError as exc:
+        raise admin_error(code=str(exc), message=str(exc).replace("_", " ").capitalize()) from exc
+    db.commit()
+    return PlatformStaffRow(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        platform_role=role.value,
+        status="Active",
+        created_at=user.created_at,
+    )
+
+
+@router.patch("/platform-staff/{user_id}", response_model=PlatformStaffRow)
+def update_staff_role(
+    user_id: UUID,
+    payload: PlatformStaffRoleUpdate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("platform_staff:update")),
+) -> PlatformStaffRow:
+    target = db.get(User, user_id)
+    if target is None or resolve_platform_role(target) is None:
+        raise admin_error(code="NOT_FOUND", message="Platform staff member not found", status_code=404)
+    try:
+        new_role = PlatformRole(payload.role.strip().upper())
+    except ValueError as exc:
+        raise admin_error(code="INVALID_ROLE", message="Unknown platform role", field="role") from exc
+    try:
+        set_platform_role(db, actor_id=admin.id, target=target, role=new_role, reason=payload.reason)
+    except PlatformStaffError as exc:
+        raise admin_error(code=str(exc), message=str(exc).replace("_", " ").capitalize()) from exc
+    db.commit()
+    db.refresh(target)
+    role = resolve_platform_role(target)
+    assert role is not None
+    return PlatformStaffRow(
+        id=target.id,
+        email=target.email,
+        full_name=target.full_name,
+        platform_role=role.value,
+        status="Active" if target.is_active else "Suspended",
+        created_at=target.created_at,
+    )
+
+
+@router.post(
+    "/organizations/{organization_id}/replace-org-admin",
+    response_model=AdminProvisionUserResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def replace_org_admin(
+    organization_id: UUID,
+    payload: ReplaceOrgAdminRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("org_admin:replace")),
+) -> AdminProvisionUserResponse:
+    org = _require_admin_visible_org(db, organization_id)
+    for membership, user in (
+        db.query(OrganizationMembership, User)
+        .join(User, User.id == OrganizationMembership.user_id)
+        .filter(
+            OrganizationMembership.organization_id == organization_id,
+            OrganizationMembership.role == Role.ORG_ADMIN.value,
+            OrganizationMembership.is_active.is_(True),
+        )
+        .all()
+    ):
+        update_membership_role(db, admin_user_id=admin.id, membership=membership, role=Role.EDITOR)
+        record_audit(
+            db,
+            organization_id=organization_id,
+            user_id=admin.id,
+            action="org_admin_replaced_demoted",
+            resource_type="organization_membership",
+            resource_id=str(membership.id),
+            metadata={"previous_user_id": str(user.id), "reason": payload.reason, "source": "platform_control_plane"},
+        )
+    try:
+        user, _membership, invitation, raw_token, expires_at = provision_user_invitation(
+            db,
+            admin_user_id=admin.id,
+            organization_id=organization_id,
+            email=payload.email.lower(),
+            full_name=payload.full_name,
+            role=Role.ORG_ADMIN,
+        )
+    except LicenseDenied as exc:
+        raise admin_error(code="SEATS_FULL", message=str(exc.detail or "No seats available"), status_code=403) from exc
+    record_audit(
+        db,
+        organization_id=organization_id,
+        user_id=admin.id,
+        action="org_admin_replaced",
+        resource_type="organization",
+        resource_id=str(org.id),
+        metadata={"new_admin_email": payload.email.lower(), "reason": payload.reason, "source": "platform_control_plane"},
+    )
+    db.commit()
+    return AdminProvisionUserResponse(
+        user_id=user.id,
+        organization_id=organization_id,
+        email=user.email,
+        role=Role.ORG_ADMIN,
+        invitation_id=invitation.id,
+        invitation_expires_at=expires_at,
+        invitation_setup_path=f"/accept-invite?token={raw_token}",
+    )

@@ -15,7 +15,8 @@ export default function RequirePlatformAdmin({ children }: { children: ReactNode
     }
     fetchAuthMe(session)
       .then((me) => {
-        setAllowed(Boolean(me.is_platform_admin));
+        const perms: string[] = Array.isArray(me.permissions) ? me.permissions : [];
+        setAllowed(Boolean(me.is_platform_admin) || perms.includes("org:read"));
         setReady(true);
       })
       .catch(() => {

@@ -96,12 +96,17 @@ def test_admin_provisions_org_and_client_user(client: TestClient, db_session):
         full_name="Admin",
         hashed_password=hash_password("admin-pass-123"),
         is_platform_admin=True,
+        platform_role="SUPER_ADMIN",
+        platform_auth_version=1,
         is_active=True,
     )
     db_session.add(admin)
     db_session.flush()
 
-    admin_token = create_access_token(str(admin.id), {"role": "PLATFORM_ADMIN"})
+    admin_token = create_access_token(
+        str(admin.id),
+        {"aud": "aqrem-master", "platform_role": "SUPER_ADMIN", "platform_auth_version": 1},
+    )
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
     create_res = client.post(
@@ -116,7 +121,7 @@ def test_admin_provisions_org_and_client_user(client: TestClient, db_session):
     prov_res = client.post(
         f"/api/v1/admin/organizations/{org_id}/users",
         headers=admin_headers,
-        json={"email": "client@clientco.example", "full_name": "Client User", "role": "EDITOR"},
+        json={"email": "client@clientco.example", "full_name": "Client User", "role": "ORG_ADMIN"},
     )
     assert prov_res.status_code == 201, prov_res.text
     setup_path = prov_res.json()["invitation_setup_path"]
@@ -146,12 +151,17 @@ def test_admin_invite_zero_license_returns_actionable_error(client: TestClient, 
         full_name="Admin",
         hashed_password=hash_password("admin-pass-123"),
         is_platform_admin=True,
+        platform_role="SUPER_ADMIN",
+        platform_auth_version=1,
         is_active=True,
     )
     db_session.add(admin)
     db_session.flush()
 
-    admin_token = create_access_token(str(admin.id), {"role": "PLATFORM_ADMIN"})
+    admin_token = create_access_token(
+        str(admin.id),
+        {"aud": "aqrem-master", "platform_role": "SUPER_ADMIN", "platform_auth_version": 1},
+    )
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
     org = Organization(
@@ -173,7 +183,7 @@ def test_admin_invite_zero_license_returns_actionable_error(client: TestClient, 
     prov_res = client.post(
         f"/api/v1/admin/organizations/{org_id}/users",
         headers=admin_headers,
-        json={"email": "client@zeroseat.example", "full_name": "Client User", "role": "EDITOR"},
+        json={"email": "client@zeroseat.example", "full_name": "Client User", "role": "ORG_ADMIN"},
     )
     assert prov_res.status_code == 403, prov_res.text
     body = prov_res.json()
@@ -188,6 +198,8 @@ def test_admin_invite_validation_error_includes_message(client: TestClient, db_s
         full_name="Admin",
         hashed_password=hash_password("admin-pass-123"),
         is_platform_admin=True,
+        platform_role="SUPER_ADMIN",
+        platform_auth_version=1,
         is_active=True,
     )
     db_session.add(admin)
@@ -203,7 +215,10 @@ def test_admin_invite_validation_error_includes_message(client: TestClient, db_s
     db_session.add(org)
     db_session.flush()
 
-    admin_token = create_access_token(str(admin.id), {"role": "PLATFORM_ADMIN"})
+    admin_token = create_access_token(
+        str(admin.id),
+        {"aud": "aqrem-master", "platform_role": "SUPER_ADMIN", "platform_auth_version": 1},
+    )
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
     prov_res = client.post(

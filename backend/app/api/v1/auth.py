@@ -5,6 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_authenticated_user, get_tenant_context
 from app.core.permissions import permissions_for_role
+from app.core.permissions_catalog import platform_permissions_for_role
+from app.core.platform_access import resolve_platform_role
+from app.core.platform_roles import PlatformRole
 from app.core.rate_limit import AUTH_LOGIN_LIMIT, limiter
 from app.core.roles import Role
 from app.core.security import create_access_token, hash_password, verify_password
@@ -38,14 +41,22 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     # Platform administrators may sign in without selecting an organization (admin console).
-    if user.is_platform_admin and payload.organization_id is None:
-        token = create_access_token(str(user.id), {"role": "PLATFORM_ADMIN", "aud": "aqrem-master"})
+    platform_role = resolve_platform_role(user)
+    if platform_role is not None and payload.organization_id is None:
+        token = create_access_token(
+            str(user.id),
+            {
+                "platform_role": platform_role.value,
+                "aud": "aqrem-master",
+                "platform_auth_version": int(getattr(user, "platform_auth_version", 1) or 1),
+            },
+        )
         return TokenResponse(
             access_token=token,
             organization_id=None,
             role=None,
             must_change_password=user.must_change_password,
-            is_platform_admin=True,
+            is_platform_admin=platform_role == PlatformRole.SUPER_ADMIN,
         )
 
     membership_query = db.query(OrganizationMembership).filter(
@@ -180,6 +191,12 @@ def me(
             organization_id = membership.organization_id
             role = Role(membership.role)
 
+    platform_role = resolve_platform_role(user)
+    if platform_role is not None and x_organization_id is None and organization_id is None:
+        perms = sorted(platform_permissions_for_role(platform_role))
+    else:
+        perms = permissions_for_role(role)
+
     return UserResponse(
         id=user.id,
         email=user.email,
@@ -188,7 +205,8 @@ def me(
         role=role,
         is_platform_admin=user.is_platform_admin,
         must_change_password=user.must_change_password,
-        permissions=permissions_for_role(role),
+        permissions=perms,
+        platform_role=platform_role.value if platform_role else None,
     )
 
 

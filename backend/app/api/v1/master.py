@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import require_platform_admin
+from app.core.platform_access import require_platform_permission
 from app.models.environment import ClientEnvironment, ControlPlaneEvent, ProvisioningJob
 from app.models.organization import Organization, User
 from app.services.admin_org import org_to_admin_response
@@ -19,7 +19,7 @@ router = APIRouter()
 @router.get("/environments")
 def list_environments(
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("deployment:read")),
 ) -> list[dict]:
     rows = db.query(ClientEnvironment, Organization).join(Organization, Organization.id == ClientEnvironment.organization_id).all()
     return [
@@ -44,7 +44,7 @@ def list_environments(
 def get_environment_detail(
     organization_id: UUID,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("deployment:read")),
 ) -> dict:
     env = db.query(ClientEnvironment).filter(ClientEnvironment.organization_id == organization_id).first()
     org = db.get(Organization, organization_id)
@@ -99,7 +99,7 @@ def get_environment_detail(
 def provision_organization(
     organization_id: UUID,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("deployment:provision")),
 ) -> dict:
     org = db.get(Organization, organization_id)
     if org is None:
@@ -113,7 +113,7 @@ def provision_organization(
 def retry_job(
     job_id: UUID,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("deployment:retry")),
 ) -> dict:
     job = db.get(ProvisioningJob, job_id)
     if job is None:
@@ -130,7 +130,7 @@ def retry_job(
 def ingest_telemetry(
     payload: dict,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_admin),
+    admin: User = Depends(require_platform_permission("telemetry:ingest")),
 ) -> dict:
     """Allowlisted operational events only (no document or conversation content)."""
     event_type = str(payload.get("event_type", ""))

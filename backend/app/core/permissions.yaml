@@ -1,0 +1,72 @@
+version: 1
+platform_roles:
+  SUPER_ADMIN:
+    - org:read
+    - org:create
+    - org:update
+    - license:update
+    - seats:update
+    - org_admin:invite
+    - org_admin:replace
+    - org_member:deactivate
+    - org:audit_read
+    - invitation:manage
+    - platform_staff:read
+    - platform_staff:invite
+    - platform_staff:update
+    - platform_staff:remove
+    - platform_permissions:read
+    - platform_audit:read
+    - roles:audit_run
+    - deployment:read
+    - deployment:provision
+    - deployment:retry
+    - telemetry:ingest
+  PLATFORM_SUPPORT:
+    - org:read
+    - org:audit_read
+    - platform_permissions:read
+    - platform_audit:read
+    - deployment:read
+    - roles:audit_run
+  PLATFORM_BILLING:
+    - org:read
+    - license:update
+    - seats:update
+    - platform_permissions:read
+    - roles:audit_run
+organization_roles:
+  ORG_ADMIN:
+    - admin_console:access
+  EDITOR: []
+  REVIEWER: []
+  VIEWER: []
+platform_endpoints:
+  GET /api/v1/admin/context: org:read
+  GET /api/v1/admin/organizations: org:read
+  GET /api/v1/admin/organizations/{organization_id}: org:read
+  POST /api/v1/admin/organizations: org:create
+  PATCH /api/v1/admin/organizations/{organization_id}: org:update
+  GET /api/v1/admin/organizations/{organization_id}/directory: org:read
+  GET /api/v1/admin/organizations/{organization_id}/invitations: invitation:manage
+  POST /api/v1/admin/organizations/{organization_id}/users: org_admin:invite
+  POST /api/v1/admin/organizations/{organization_id}/invitations/{invitation_id}/resend: invitation:manage
+  POST /api/v1/admin/organizations/{organization_id}/invitations/{invitation_id}/revoke: invitation:manage
+  GET /api/v1/admin/organizations/{organization_id}/members: org:read
+  PATCH /api/v1/admin/organizations/{organization_id}/members/{membership_id}: org_admin:replace
+  POST /api/v1/admin/organizations/{organization_id}/members/{membership_id}/deactivate: org_member:deactivate
+  GET /api/v1/admin/organizations/{organization_id}/audit: org:audit_read
+  POST /api/v1/admin/organizations/{organization_id}/replace-org-admin: org_admin:replace
+  GET /api/v1/admin/platform-staff: platform_staff:read
+  POST /api/v1/admin/platform-staff/invite: platform_staff:invite
+  PATCH /api/v1/admin/platform-staff/{user_id}: platform_staff:update
+  POST /api/v1/admin/platform-staff/{user_id}/suspend: platform_staff:update
+  POST /api/v1/admin/platform-staff/{user_id}/reactivate: platform_staff:update
+  DELETE /api/v1/admin/platform-staff/{user_id}: platform_staff:remove
+  GET /api/v1/admin/permissions/matrix: platform_permissions:read
+  GET /api/v1/admin/roles/audit: roles:audit_run
+  GET /api/v1/master/environments: deployment:read
+  GET /api/v1/master/organizations/{organization_id}/environment: deployment:read
+  POST /api/v1/master/organizations/{organization_id}/provision: deployment:provision
+  POST /api/v1/master/provisioning-jobs/{job_id}/retry: deployment:retry
+  POST /api/v1/master/telemetry: telemetry:ingest

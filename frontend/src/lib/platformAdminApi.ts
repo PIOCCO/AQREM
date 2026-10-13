@@ -48,6 +48,24 @@ export type DirectoryRow = {
 export type AdminContext = {
   licensing_test_mode: boolean;
   test_mode_effective: boolean;
+  active_super_admin_count?: number;
+  super_admin_warning?: boolean;
+};
+
+export type PlatformStaffMember = {
+  id: string;
+  email: string;
+  full_name: string;
+  platform_role: string;
+  status: string;
+  created_at: string;
+};
+
+export type PermissionsMatrix = {
+  permissions: string[];
+  roles: string[];
+  matrix: Record<string, Record<string, boolean>>;
+  endpoints: Record<string, string>;
 };
 
 const DEFAULT_CONTEXT: AdminContext = {
@@ -133,6 +151,24 @@ export function normalizeOrganization(raw: Record<string, unknown>): AdminOrgani
     license_renews_at: (raw.license_renews_at as string | null) ?? null,
     seats,
   };
+}
+
+export async function fetchPlatformStaff(session: AuthSession): Promise<PlatformStaffMember[]> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/platform-staff`, { headers: adminHeaders(session) });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to load platform team"));
+  return res.json();
+}
+
+export async function fetchPermissionsMatrix(session: AuthSession): Promise<PermissionsMatrix> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/permissions/matrix`, { headers: adminHeaders(session) });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to load permission matrix"));
+  return res.json();
+}
+
+export async function fetchRolesAudit(session: AuthSession): Promise<{ issues: Record<string, unknown>[]; summary: Record<string, number> }> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/roles/audit`, { headers: adminHeaders(session) });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to run roles audit"));
+  return res.json();
 }
 
 export async function fetchAdminContext(session: AuthSession): Promise<AdminContext> {

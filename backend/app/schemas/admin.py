@@ -10,6 +10,46 @@ from app.models.enums import LicenseStatus
 class AdminContextResponse(BaseModel):
     licensing_test_mode: bool
     test_mode_effective: bool
+    active_super_admin_count: int = 0
+    super_admin_warning: bool = False
+
+
+class PlatformStaffRow(BaseModel):
+    id: UUID
+    email: EmailStr
+    full_name: str
+    platform_role: str
+    status: str
+    created_at: datetime
+
+
+class PlatformStaffInviteRequest(BaseModel):
+    email: EmailStr
+    full_name: str = Field(min_length=1, max_length=255)
+    role: str = Field(description="PLATFORM_SUPPORT or PLATFORM_BILLING")
+
+
+class PlatformStaffRoleUpdate(BaseModel):
+    role: str
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class ReplaceOrgAdminRequest(BaseModel):
+    email: EmailStr
+    full_name: str = Field(min_length=1, max_length=255)
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class PermissionsMatrixResponse(BaseModel):
+    permissions: list[str]
+    roles: list[str]
+    matrix: dict[str, dict[str, bool]]
+    endpoints: dict[str, str]
+
+
+class RolesAuditReport(BaseModel):
+    issues: list[dict]
+    summary: dict[str, int]
 
 
 class SeatUsageResponse(BaseModel):

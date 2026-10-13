@@ -18,6 +18,19 @@ export function roleDisplayLabel(role: UserRole | string | null | undefined): st
   return roleLabel(role);
 }
 
+export const PLATFORM_ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: "Super admin",
+  PLATFORM_SUPPORT: "Support",
+  PLATFORM_BILLING: "Billing",
+};
+
+export function platformRoleLabel(role: string): string {
+  return PLATFORM_ROLE_LABELS[role] ?? role;
+}
+
+/** Platform console may only invite organization administrators. */
+export const PLATFORM_ORG_INVITE_ROLES = ["ORG_ADMIN"] as const;
+
 export function licenseStatusLabel(status: string): string {
   const map: Record<string, string> = {
     active: "Active",

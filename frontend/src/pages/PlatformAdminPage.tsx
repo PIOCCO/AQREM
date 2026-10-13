@@ -4,8 +4,8 @@ import { LogoHomeLink } from "../components/brand/LogoHomeLink";
 import { ToastProvider, useToast } from "../components/ui/Toast";
 import { loadSession } from "../lib/api";
 import {
-  ASSIGNABLE_ROLES,
   licenseStatusLabel,
+  platformRoleLabel,
   roleLabel,
 } from "../lib/roleLabels";
 import {
@@ -16,16 +16,20 @@ import {
   fetchOrgAudit,
   fetchOrgInvitations,
   fetchOrganizationDirectory,
+  fetchPermissionsMatrix,
+  fetchPlatformStaff,
   inviteOrganizationUser,
   isAdminApiError,
   resendInvitation,
   revokeInvitation,
   updateAdminOrganization,
-  updateMemberRole,
   type AdminOrganization,
   type DirectoryRow,
+  type PermissionsMatrix,
+  type PlatformStaffMember,
 } from "../lib/platformAdminApi";
 
+type ConsoleSection = "organizations" | "team" | "roles";
 type TabId = "overview" | "members" | "license" | "invitations" | "audit";
 
 function statusBadgeClass(status: string) {
@@ -57,7 +61,7 @@ function formatDate(iso: string | null) {
 function PlatformAdminInner() {
   const toast = useToast();
   const session = loadSession();
-  const [context, setContext] = useState<{ test_mode_effective: boolean } | null>(null);
+  const [context, setContext] = useState<import("../lib/platformAdminApi").AdminContext | null>(null);
   const [orgs, setOrgs] = useState<AdminOrganization[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
@@ -79,6 +83,10 @@ function PlatformAdminInner() {
     { id: string; created_at: string; actor_email: string; action: string; target: string }[]
   >([]);
   const [lastInvite, setLastInvite] = useState<{ path: string; expires: string } | null>(null);
+  const [consoleSection, setConsoleSection] = useState<ConsoleSection>("organizations");
+  const [platformStaff, setPlatformStaff] = useState<PlatformStaffMember[]>([]);
+  const [permMatrix, setPermMatrix] = useState<PermissionsMatrix | null>(null);
+  const [teamLoading, setTeamLoading] = useState(false);
 
   const selected = useMemo(
     () => (Array.isArray(orgs) ? orgs : []).find((o) => o.id === selectedId),
@@ -120,6 +128,22 @@ function PlatformAdminInner() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!session?.token || consoleSection !== "team") return;
+    setTeamLoading(true);
+    fetchPlatformStaff(session)
+      .then(setPlatformStaff)
+      .catch(() => toast.push("Failed to load platform team", "err"))
+      .finally(() => setTeamLoading(false));
+  }, [consoleSection, session?.token]);
+
+  useEffect(() => {
+    if (!session?.token || consoleSection !== "roles") return;
+    fetchPermissionsMatrix(session)
+      .then(setPermMatrix)
+      .catch(() => toast.push("Failed to load roles matrix", "err"));
+  }, [consoleSection, session?.token]);
 
   useEffect(() => {
     refreshOrgs().catch(() => undefined);
@@ -220,16 +244,108 @@ function PlatformAdminInner() {
             Provision client organizations, licenses, and user invitations.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <nav className="flex gap-2 text-sm" aria-label="Platform console">
+            {(
+              [
+                ["organizations", "Organizations"],
+                ["team", "Team & roles"],
+                ["roles", "Roles"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className={`rounded-lg px-3 py-1.5 border ${
+                  consoleSection === id ? "border-chat-accent bg-chat-surface-subtle" : "border-chat-border text-chat-muted"
+                }`}
+                onClick={() => setConsoleSection(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
           <Link to="/" className="text-sm text-chat-muted hover:text-chat-fg">
             Back to app
           </Link>
-          <button type="button" className="aq-btn-primary text-sm" onClick={() => setShowNewOrg(true)}>
-            + New organization
-          </button>
+          {consoleSection === "organizations" ? (
+            <button type="button" className="aq-btn-primary text-sm" onClick={() => setShowNewOrg(true)}>
+              + New organization
+            </button>
+          ) : null}
         </div>
       </header>
 
+      {context?.super_admin_warning ? (
+        <div className="mx-6 mt-4 admin-inline-alert border rounded-lg px-3 py-2 text-sm" role="alert">
+          Fewer than two active super admins. Add another super admin before production cutover.
+        </div>
+      ) : null}
+
+      {consoleSection === "team" ? (
+        <main className="p-6 max-w-5xl">
+          <h2 className="text-lg font-semibold mb-4">Platform team</h2>
+          {teamLoading ? (
+            <p className="text-sm text-chat-muted">Loading team…</p>
+          ) : platformStaff.length === 0 ? (
+            <p className="text-sm text-chat-muted">No platform staff accounts.</p>
+          ) : (
+            <table className="w-full text-sm admin-card overflow-hidden">
+              <thead className="bg-chat-surface-subtle text-left text-xs text-chat-muted">
+                <tr>
+                  <th className="p-3">Name</th>
+                  <th className="p-3">Email</th>
+                  <th className="p-3">Role</th>
+                  <th className="p-3">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {platformStaff.map((row) => (
+                  <tr key={row.id} className="border-t border-chat-border">
+                    <td className="p-3">{row.full_name}</td>
+                    <td className="p-3">{row.email}</td>
+                    <td className="p-3">{platformRoleLabel(row.platform_role)}</td>
+                    <td className="p-3">{row.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </main>
+      ) : null}
+
+      {consoleSection === "roles" && permMatrix ? (
+        <main className="p-6 overflow-x-auto">
+          <h2 className="text-lg font-semibold mb-2">Permission matrix</h2>
+          <p className="text-sm text-chat-muted mb-4">Generated from permissions.yaml (read-only).</p>
+          <table className="text-xs admin-card">
+            <thead>
+              <tr>
+                <th className="p-2 text-left">Permission</th>
+                {permMatrix.roles.map((r) => (
+                  <th key={r} className="p-2">
+                    {platformRoleLabel(r)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {permMatrix.permissions.map((perm) => (
+                <tr key={perm} className="border-t border-chat-border">
+                  <td className="p-2 font-mono">{perm}</td>
+                  {permMatrix.roles.map((r) => (
+                    <td key={r} className="p-2 text-center">
+                      {permMatrix.matrix[r]?.[perm] ? "✓" : "—"}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </main>
+      ) : null}
+
+      {consoleSection === "organizations" ? (
       <div className="flex flex-col lg:flex-row min-h-[calc(100vh-5rem)]">
         <aside
           className="w-full lg:w-[var(--admin-sidebar-width)] shrink-0 border-b lg:border-b-0 lg:border-r border-chat-border bg-chat-surface p-4 space-y-4"
@@ -367,7 +483,8 @@ function PlatformAdminInner() {
                   </div>
 
                   <div className="admin-card p-4 space-y-4">
-                    <h3 className="font-medium text-sm">Invite a member</h3>
+                    <h3 className="font-medium text-sm">Invite organization admin</h3>
+                    <p className="text-xs text-chat-muted">Platform staff can only invite the first or replacement organization administrator.</p>
                     {inviteError ? (
                       <div className="admin-inline-alert border rounded-lg px-3 py-2 text-sm flex flex-wrap gap-2 justify-between" role="alert">
                         <span>{inviteError}</span>
@@ -391,18 +508,7 @@ function PlatformAdminInner() {
                         </label>
                         <input id="inv-email" name="email" type="email" className="admin-input mt-1" required />
                       </div>
-                      <div>
-                        <label htmlFor="inv-role" className="text-xs font-medium">
-                          Role
-                        </label>
-                        <select id="inv-role" name="role" className="admin-input mt-1" defaultValue="EDITOR">
-                          {ASSIGNABLE_ROLES.map((r) => (
-                            <option key={r} value={r}>
-                              {roleLabel(r)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      <input type="hidden" name="role" value="ORG_ADMIN" />
                       <button type="submit" className="aq-btn-primary md:col-span-3 w-fit" disabled={seatsFull}>
                         Send invitation
                       </button>
@@ -443,28 +549,7 @@ function PlatformAdminInner() {
                             <tr key={row.row_id} className="border-t border-chat-border">
                               <td className="p-3">{row.full_name}</td>
                               <td className="p-3">{row.email}</td>
-                              <td className="p-3">
-                                {row.kind === "member" && row.membership_id ? (
-                                  <select
-                                    className="admin-input py-1"
-                                    value={row.role}
-                                    aria-label={`Role for ${row.email}`}
-                                    onChange={(e) =>
-                                      updateMemberRole(auth, selectedId, row.membership_id!, e.target.value).then(
-                                        () => refreshDirectory(),
-                                      )
-                                    }
-                                  >
-                                    {ASSIGNABLE_ROLES.map((r) => (
-                                      <option key={r} value={r}>
-                                        {roleLabel(r)}
-                                      </option>
-                                    ))}
-                                  </select>
-                                ) : (
-                                  roleLabel(row.role)
-                                )}
-                              </td>
+                              <td className="p-3">{roleLabel(row.role)}</td>
                               <td className="p-3">{row.status}</td>
                               <td className="p-3 space-x-2">
                                 {row.kind === "invitation" && row.invitation_id ? (
@@ -631,6 +716,7 @@ function PlatformAdminInner() {
           )}
         </main>
       </div>
+      ) : null}
 
       {showNewOrg ? (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true">
