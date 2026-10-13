@@ -243,14 +243,6 @@ export function IconArrowUp({ className = "h-4 w-4" }: IconProps) {
   );
 }
 
-export function IconShare({ className = "h-4 w-4" }: IconProps) {
-  return (
-    <svg className={`${base} ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-      <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v13" />
-    </svg>
-  );
-}
-
 export function IconRefresh({ className = "h-4 w-4" }: IconProps) {
   return (
     <svg className={`${base} ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">

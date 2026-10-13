@@ -1,28 +1,16 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { IconMore, IconShare, IconSidebar } from "../icons/Icons";
+import { IconMore, IconSidebar } from "../icons/Icons";
 import { IconButton } from "../ui/IconButton";
-import type { AuthSession } from "../../lib/api";
-import type { ChatConversation } from "../../lib/conversations";
-import ShareConversationDialog from "./ShareConversationDialog";
 
 type Props = {
   conversationTitle: string;
   /** Mobile drawer only — desktop toggle lives in the sidebar rail. */
   onOpenSidebar?: () => void;
-  session?: AuthSession | null;
-  conversation?: ChatConversation | null;
 };
 
-export default function ChatConversationHeader({
-  conversationTitle,
-  onOpenSidebar,
-  session,
-  conversation,
-}: Props) {
+export default function ChatConversationHeader({ conversationTitle, onOpenSidebar }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
-  const shareBtnRef = useRef<HTMLButtonElement>(null);
 
   return (
     <header className="ref-chat-header shrink-0">
@@ -42,26 +30,6 @@ export default function ChatConversationHeader({
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button
-            ref={shareBtnRef}
-            type="button"
-            className="ref-header-action-btn aq-interactive"
-            aria-haspopup="dialog"
-            aria-expanded={shareOpen}
-            onClick={() => setShareOpen(true)}
-          >
-            <IconShare className="h-4 w-4" />
-            <span className="hidden sm:inline">Share</span>
-          </button>
-          {session ? (
-            <ShareConversationDialog
-              open={shareOpen}
-              onClose={() => setShareOpen(false)}
-              session={session}
-              conversation={conversation ?? null}
-              anchorRef={shareBtnRef}
-            />
-          ) : null}
           <div className="relative">
             <IconButton
               label="More options"

@@ -10,7 +10,6 @@ import ProjectDetailPage from "./pages/ProjectDetailPage";
 import SettingsPage from "./pages/SettingsPage";
 import AuditLogPage from "./pages/AuditLogPage";
 import ChatPage from "./pages/ChatPage";
-import ShareConversationPage from "./pages/ShareConversationPage";
 import DashboardPage from "./pages/DashboardPage";
 import EvidenceDetailPage from "./pages/EvidenceDetailPage";
 import EvidencePage from "./pages/EvidencePage";
@@ -52,7 +51,6 @@ function AuthenticatedApp() {
                 <Route index element={<ChatPage />} />
                 <Route path="chat" element={<ChatPage />} />
                 <Route path="c/:conversationId" element={<ChatPage />} />
-                <Route path="share/:shareToken" element={<ShareConversationPage />} />
                 <Route path="dashboard" element={<DashboardPage />} />
                 <Route path="projects" element={<ProjectsPage />} />
                 <Route path="projects/:projectId" element={<ProjectDetailPage />} />

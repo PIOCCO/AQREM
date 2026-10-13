@@ -361,12 +361,7 @@ export default function ChatPage() {
   if (atHome) {
     return (
       <div className="chat-view bg-chat-main">
-        <ChatConversationHeader
-          conversationTitle="New chat"
-          onOpenSidebar={outlet?.openMobileSidebar}
-          session={session}
-          conversation={conversation}
-        />
+        <ChatConversationHeader conversationTitle="New chat" onOpenSidebar={outlet?.openMobileSidebar} />
         <div className="min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
           <ChatEmptyState name={name} projectName={projectName} onPickPrompt={setInput} />
         </div>
@@ -402,12 +397,7 @@ export default function ChatPage() {
 
   return (
     <div className="chat-view bg-chat-main">
-      <ChatConversationHeader
-        conversationTitle={conversation!.title}
-        onOpenSidebar={outlet?.openMobileSidebar}
-        session={session}
-        conversation={conversation}
-      />
+      <ChatConversationHeader conversationTitle={conversation!.title} onOpenSidebar={outlet?.openMobileSidebar} />
 
       {empty ? (
         <>
