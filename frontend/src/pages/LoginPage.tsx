@@ -37,8 +37,13 @@ export default function LoginPage() {
       } else {
         navigate(nextPath.startsWith("/") ? nextPath : "/");
       }
-    } catch {
-      setError("Authentication failed. Check your credentials and try again.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      setError(
+        msg && msg !== "Login failed"
+          ? msg
+          : "Authentication failed. Check your credentials and try again.",
+      );
     } finally {
       setLoading(false);
     }

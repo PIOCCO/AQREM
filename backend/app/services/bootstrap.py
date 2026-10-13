@@ -22,6 +22,8 @@ def ensure_platform_admin(db: Session) -> None:
     if not email or not password:
         return
 
+    sync_password = settings.platform_admin_sync_password
+
     existing = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if existing:
         changed = False
@@ -32,6 +34,9 @@ def ensure_platform_admin(db: Session) -> None:
             existing.platform_role = PlatformRole.SUPER_ADMIN.value
             changed = True
         if not existing.hashed_password:
+            existing.hashed_password = hash_password(password)
+            changed = True
+        elif sync_password:
             existing.hashed_password = hash_password(password)
             changed = True
         if changed:

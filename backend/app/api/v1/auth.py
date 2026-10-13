@@ -56,7 +56,7 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
             organization_id=None,
             role=None,
             must_change_password=user.must_change_password,
-            is_platform_admin=platform_role == PlatformRole.SUPER_ADMIN,
+            is_platform_admin=platform_role is not None,
         )
 
     membership_query = db.query(OrganizationMembership).filter(

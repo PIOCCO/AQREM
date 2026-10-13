@@ -115,11 +115,17 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("platform_admin_password", "PLATFORM_ADMIN_PASSWORD"),
     )
+    platform_admin_sync_password: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("platform_admin_sync_password", "PLATFORM_ADMIN_SYNC_PASSWORD"),
+        description="When true (default in dev), reset platform admin password from env on API startup.",
+    )
     invitation_ttl_hours: int = 72
 
     @model_validator(mode="after")
     def _production_guardrails(self) -> Settings:
         if self.app_env == "production":
+            object.__setattr__(self, "platform_admin_sync_password", False)
             if self.licensing_test_mode:
                 object.__setattr__(self, "licensing_test_mode", False)
             if self.allow_public_registration:

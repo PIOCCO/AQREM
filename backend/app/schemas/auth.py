@@ -1,14 +1,24 @@
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.core.roles import Role
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    """Login email is normalized; dev/lab addresses (.local) are allowed."""
+
+    email: str = Field(min_length=3, max_length=320)
     password: str
     organization_id: UUID | None = None
+
+    @field_validator("email")
+    @classmethod
+    def normalize_login_email(cls, value: str) -> str:
+        email = value.strip().lower()
+        if "@" not in email or email.startswith("@") or email.endswith("@"):
+            raise ValueError("Enter a valid email address")
+        return email
 
 
 class TokenResponse(BaseModel):

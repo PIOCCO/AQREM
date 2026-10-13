@@ -129,9 +129,11 @@ export async function loginUser(payload: { email: string; password: string }) {
   const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, email: payload.email.trim() }),
   });
-  if (!res.ok) throw new Error("Login failed");
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Login failed"));
+  }
   return res.json();
 }
 
