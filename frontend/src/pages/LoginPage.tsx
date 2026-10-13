@@ -1,23 +1,43 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Logo } from "../components/brand/Logo";
 import { clearSession, loginUser, saveSession } from "../lib/api";
+
+const LOGIN_ERROR_GENERIC = "Incorrect email or password.";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const sessionExpired = searchParams.get("expired") === "1";
   const nextPath = searchParams.get("next") || "/";
+  const emailId = useId();
+  const passwordId = useId();
+  const emailRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(
     sessionExpired
       ? "Your session is invalid or expired (common after changing servers or ports). Please sign in again."
       : null,
   );
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (sessionExpired) clearSession();
   }, [sessionExpired]);
+
+  useEffect(() => {
+    const mode = searchParams.get("mode");
+    if (mode === "register" || mode === "signup") {
+      const next = new URLSearchParams(searchParams);
+      next.delete("mode");
+      const q = next.toString();
+      navigate(q ? `/login?${q}` : "/login", { replace: true });
+    }
+  }, [searchParams, navigate]);
+
+  useEffect(() => {
+    emailRef.current?.focus();
+  }, []);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -37,43 +57,77 @@ export default function LoginPage() {
       } else {
         navigate(nextPath.startsWith("/") ? nextPath : "/");
       }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "";
-      setError(
-        msg && msg !== "Login failed"
-          ? msg
-          : "Authentication failed. Check your credentials and try again.",
-      );
+    } catch {
+      setError(LOGIN_ERROR_GENERIC);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface-canvas p-6 font-sans">
-      <div className="w-full max-w-md aq-card shadow-panel aq-card-p">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--color-background)] p-6 font-sans">
+      <div className="w-full max-w-[440px] aq-card shadow-panel aq-card-p">
         <div className="mb-6 flex flex-col items-center text-center">
           <Logo variant="mark" size={48} />
-          <p className="text-[var(--color-text-muted)] mt-4 text-sm">Sign in to AQREM</p>
-          <p className="text-[var(--color-text-muted)] mt-1 text-xs">Evidence-backed questionnaire responses</p>
+          <p className="text-[var(--color-text-muted)] mt-4 text-sm">Evidence-backed questionnaire responses</p>
         </div>
-        <h1 className="text-lg font-semibold mb-4">Sign in</h1>
-        <form className="space-y-3" onSubmit={onSubmit}>
-          <input name="email" type="email" placeholder="Email" className="aq-input" required autoComplete="username" />
-          <input
-            name="password"
-            type="password"
-            placeholder="Password"
-            className="aq-input"
-            required
-            autoComplete="current-password"
-          />
-          {error && <div className="aq-alert-error">{error}</div>}
+        <h1 className="text-lg font-semibold mb-4 text-[var(--color-text-primary)]">Sign in to AQREM</h1>
+        <form className="space-y-4" onSubmit={onSubmit} noValidate>
+          <div>
+            <label htmlFor={emailId} className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">
+              Email
+            </label>
+            <input
+              ref={emailRef}
+              id={emailId}
+              name="email"
+              type="email"
+              className="aq-input w-full"
+              required
+              autoComplete="username"
+              disabled={loading}
+            />
+          </div>
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <label htmlFor={passwordId} className="text-sm font-medium text-[var(--color-text-primary)]">
+                Password
+              </label>
+              <span className="text-xs text-[var(--color-text-muted)]" title="Password reset is managed by your administrator">
+                Forgot password? Contact your admin
+              </span>
+            </div>
+            <div className="relative">
+              <input
+                id={passwordId}
+                name="password"
+                type={showPassword ? "text" : "password"}
+                className="aq-input w-full pr-20"
+                required
+                autoComplete="current-password"
+                disabled={loading}
+              />
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--color-link)] hover:underline px-2 py-1 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus-ring)]"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-pressed={showPassword}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
+          </div>
+          {error ? (
+            <div className="aq-alert-error" role="alert">
+              {error}
+            </div>
+          ) : null}
           <button type="submit" disabled={loading} className="aq-btn-primary w-full">
             {loading ? (
               <>
                 <span className="aq-spinner border-t-primary-foreground border-slate-600/30" aria-hidden />
-                Please wait…
+                Signing in…
               </>
             ) : (
               "Sign in"
@@ -81,14 +135,13 @@ export default function LoginPage() {
           </button>
         </form>
         <p className="text-xs text-[var(--color-text-muted)] mt-4">
-          Access is provisioned by your administrator. If you received an invitation link, use that URL to set your
-          password.
+          Need access? Ask your organization admin for an invitation.
         </p>
-        <p className="text-xs text-fg-muted mt-2">
-          Platform administrators: sign in with your admin account (from{" "}
-          <code className="text-[11px]">PLATFORM_ADMIN_EMAIL</code>), then open{" "}
-          <a href="/platform-admin" className="text-chat-accent hover:underline">
-            /platform-admin
+        <p className="text-xs text-[var(--color-text-muted)] mt-2">
+          Platform operators: use <code className="text-[11px]">PLATFORM_ADMIN_EMAIL</code> from{" "}
+          <code className="text-[11px]">backend/.env</code>, then open{" "}
+          <a href="/master-admin" className="text-[var(--color-link)] hover:underline">
+            Admin console
           </a>
           .
         </p>

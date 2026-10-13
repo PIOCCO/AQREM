@@ -22,23 +22,14 @@ from app.services.platform_provisioning import accept_invitation
 router = APIRouter()
 
 
-@router.post("/register")
-@limiter.limit(AUTH_LOGIN_LIMIT)
-def register_removed(request: Request) -> None:
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Public registration is disabled. Contact your administrator for access.",
-    )
-
-
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit(AUTH_LOGIN_LIMIT)
 def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     user = db.query(User).filter(User.email == payload.email.lower()).first()
     if user is None or not user.is_active or not user.hashed_password:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
     if not verify_password(payload.password, user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
     # Platform administrators may sign in without selecting an organization (admin console).
     platform_role = resolve_platform_role(user)

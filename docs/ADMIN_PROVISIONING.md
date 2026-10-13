@@ -34,4 +34,4 @@ Sign in at `/login` → redirected to **`/platform-admin`**.
 
 Platform routes (Bearer token, platform admin user): `/api/v1/admin/*`
 
-Public registration: `POST /api/v1/auth/register` → **403**
+Public registration: **not available** (`POST /api/v1/auth/register` is not routed — **404**).

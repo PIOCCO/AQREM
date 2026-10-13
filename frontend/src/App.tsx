@@ -1,3 +1,4 @@
+import { type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import AppShell from "./components/layout/AppShell";
 import RequireAuth from "./components/RequireAuth";
@@ -39,6 +40,10 @@ import SourcesPage from "./pages/SourcesPage";
 import LoginEntryRedirect from "./components/LoginEntryRedirect";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
 import RouteErrorBoundary from "./components/ui/RouteErrorBoundary";
+
+function PublicTheme({ children }: { children: ReactNode }) {
+  return <ThemeProvider>{children}</ThemeProvider>;
+}
 
 function AuthenticatedApp() {
   return (
@@ -86,7 +91,16 @@ function AuthenticatedApp() {
 export default function App() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginEntryRedirect />} />
+      <Route
+        path="/login"
+        element={
+          <PublicTheme>
+            <LoginEntryRedirect />
+          </PublicTheme>
+        }
+      />
+      <Route path="/register" element={<Navigate to="/login" replace />} />
+      <Route path="/signup" element={<Navigate to="/login" replace />} />
       <Route
         path="/change-password"
         element={
@@ -95,7 +109,14 @@ export default function App() {
           </RequireAuth>
         }
       />
-      <Route path="/accept-invite" element={<AcceptInvitePage />} />
+      <Route
+        path="/accept-invite"
+        element={
+          <PublicTheme>
+            <AcceptInvitePage />
+          </PublicTheme>
+        }
+      />
       <Route path="/platform-admin" element={<Navigate to="/master-admin" replace />} />
       <Route
         path="/master-admin"

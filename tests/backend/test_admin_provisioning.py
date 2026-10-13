@@ -76,7 +76,8 @@ def _postgres_available() -> bool:
 
 
 @pytest.mark.skipif(not _postgres_available(), reason="PostgreSQL not available")
-def test_public_registration_rejected(client: TestClient):
+def test_public_registration_not_routed(client: TestClient, db_session):
+    before = db_session.query(User).count()
     res = client.post(
         "/api/v1/auth/register",
         json={
@@ -86,7 +87,8 @@ def test_public_registration_rejected(client: TestClient):
             "organization_name": "Evil Co",
         },
     )
-    assert res.status_code == 403
+    assert res.status_code == 404
+    assert db_session.query(User).count() == before
 
 
 @pytest.mark.skipif(not _postgres_available(), reason="PostgreSQL not available")

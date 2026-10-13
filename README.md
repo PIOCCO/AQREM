@@ -41,15 +41,15 @@ pip install -e backend[dev]
 TEST_DATABASE_URL=postgresql+psycopg://aqrem:aqrem@localhost:5432/aqrem_test pytest tests/backend -q
 ```
 
-### Register & ingest demo repo (API)
+### Provision access & ingest demo repo (API)
 
-Set `PLATFORM_ADMIN_EMAIL` / `PLATFORM_ADMIN_PASSWORD` in `.env`, start the API, sign in at `/platform-admin`, or use the admin API:
+Set `PLATFORM_ADMIN_EMAIL` / `PLATFORM_ADMIN_PASSWORD` in `.env`, start the API, sign in at `/master-admin`, create organizations and invitations via `/api/v1/admin/*`. There is **no** public registration endpoint.
 
 ```bash
 # Platform admin login (after bootstrap), then create org + invite users via /api/v1/admin/*
-# Public POST /api/v1/auth/register returns 403
+# Obtain TOKEN from POST /api/v1/auth/login (platform admin, no org id)
 
-# Create project, source, and trigger demo-path sync (set TOKEN/ORG from register response)
+# Create project, source, and trigger demo-path sync (set TOKEN/ORG from login response)
 curl -s -X POST http://localhost:8000/api/v1/projects \
   -H "Authorization: Bearer $TOKEN" -H "X-Organization-Id: $ORG" \
   -H 'Content-Type: application/json' \
@@ -156,7 +156,7 @@ python3 scripts/azure_openai_smoke.py
 ## End-to-end workflow (local)
 
 1. `docker compose up -d postgres redis azurite && docker compose up --build api worker`
-2. Register / sign in via the UI or API (`/api/v1/auth/register`)
+2. Accept an invitation or sign in at `/login` (accounts are provisioned by administrators only)
 3. Create a **project** and connect a **source** (demo folder, file upload, or GitHub)
 4. Wait for the sync job to finish (`ready` status on the source)
 5. Create a **questionnaire**, upload CSV/XLSX, **generate** answers, **review** in the queue

@@ -10,7 +10,9 @@ const loginSource = readFileSync(
 
 describe("LoginPage", () => {
   it("shows sign in only without public registration UI", () => {
-    expect(loginSource).toMatch(/Sign in/i);
+    expect(loginSource).toMatch(/Sign in to AQREM/);
+    expect(loginSource).toMatch(/Need access\? Ask your organization admin/);
+    expect(loginSource).toMatch(/role="alert"/);
     expect(loginSource).not.toMatch(/>\s*Register\s*</);
     expect(loginSource).not.toMatch(/registerUser/);
     expect(loginSource).not.toMatch(/Create account/);
