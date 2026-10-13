@@ -1,12 +1,14 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+const devPort = Number(process.env.AQREM_WEB_PORT || process.env.VITE_DEV_PORT || 5173);
+
 export default defineConfig({
   plugins: [react()],
   server: {
     // Listen on all interfaces (required for Tailscale / LAN access).
     host: true,
-    port: 5173,
+    port: devPort,
     strictPort: true,
     proxy: {
       "/api": {
@@ -17,7 +19,7 @@ export default defineConfig({
   },
   preview: {
     host: true,
-    port: 5173,
+    port: devPort,
     strictPort: true,
     proxy: {
       "/api": {

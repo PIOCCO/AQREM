@@ -30,7 +30,7 @@ function LogoMarkImage({ size, alt }: { size: number; alt: string }) {
         alt={alt}
         className="aq-logo-img aq-logo-img--light h-full w-auto object-contain"
         decoding="sync"
-        fetchPriority="high"
+        fetchpriority="high"
       />
       <img
         src={white1x}
@@ -41,7 +41,7 @@ function LogoMarkImage({ size, alt }: { size: number; alt: string }) {
         aria-hidden
         className="aq-logo-img aq-logo-img--dark h-full w-auto object-contain"
         decoding="sync"
-        fetchPriority="high"
+        fetchpriority="high"
       />
     </span>
   );
