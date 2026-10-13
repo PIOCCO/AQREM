@@ -27,7 +27,7 @@ export default defineConfig({
     {
       name: "sidebar-layout",
       testMatch:
-        /sidebar-layout\.spec\.ts|activity-page\.spec\.ts|chat-composer-layout\.spec\.ts|chat-composer-autogrow\.spec\.ts/,
+        /sidebar-layout\.spec\.ts|chat-share\.spec\.ts|activity-page\.spec\.ts|chat-composer-layout\.spec\.ts|chat-composer-autogrow\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         storageState: "e2e/.auth/employee.json",

@@ -149,11 +149,13 @@ function ConversationMenu({
   title,
   onRename,
   onDelete,
+  onShare,
 }: {
   conversationId: string;
   title: string;
   onRename: (title: string) => void;
   onDelete: (conversationId: string) => void;
+  onShare: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -195,6 +197,9 @@ function ConversationMenu({
         <div className="absolute right-0 top-full z-50 mt-1 w-40 rounded-lg border border-chat-border bg-chat-surface py-1 text-sm shadow-composer">
           <button type="button" className="chat-menu-item w-full flex items-center gap-2" onClick={() => { setEditing(true); setDraft(title); }}>
             <IconEdit /> Rename
+          </button>
+          <button type="button" className="chat-menu-item w-full flex items-center gap-2" onClick={() => { onShare(); setOpen(false); }}>
+            Share link
           </button>
           <button
             type="button"
@@ -431,6 +436,10 @@ export default function ChatSidebar({
                               conversationId={c.id}
                               title={c.title}
                               onRename={(t) => rename(c.id, t)}
+                              onShare={() => {
+                                const url = `${window.location.origin}/c/${c.id}`;
+                                void navigator.clipboard.writeText(url).then(() => toast.push("Conversation link copied"));
+                              }}
                               onDelete={(id) => {
                                 const wasActive = activeConversationId === id;
                                 remove(id);
