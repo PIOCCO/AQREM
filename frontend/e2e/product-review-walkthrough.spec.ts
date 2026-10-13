@@ -1,6 +1,6 @@
 /**
- * One-off product review walkthrough (uses seeded QA employee credentials).
- * Run: npm run test:e2e -- e2e/product-review-walkthrough.spec.ts
+ * Product review walkthrough (seeded QA employee). Run:
+ * npx playwright test --config=playwright.review.config.ts
  */
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
@@ -9,7 +9,8 @@ import { join } from "node:path";
 const credPath = join(import.meta.dirname, ".qa-credentials.json");
 
 test.describe("product review — employee UI", () => {
-  test("login, chat answer with citations, greeting, nav smoke", async ({ page }) => {
+  test("login, greeting without evidence, insufficient-evidence chat, nav smoke", async ({ page }) => {
+    test.setTimeout(90_000);
     const cred = JSON.parse(readFileSync(credPath, "utf8")) as {
       employee_email: string;
       employee_password: string;
@@ -25,18 +26,21 @@ test.describe("product review — employee UI", () => {
     await expect(page.locator("aside.chat-sidebar")).toBeVisible({ timeout: 25_000 });
 
     const composer = page.getByPlaceholder(/Ask AQREM anything/i);
-    await composer.fill("How often are access permissions reviewed?");
-    await composer.press("Enter");
-
-    const assistant = page.locator(".ref-msg-assistant").first();
-    await expect(assistant).toBeVisible({ timeout: 45_000 });
-    await expect(assistant).toContainText(/couldn't find evidence|90 days|Insufficient evidence/i);
-    await page.screenshot({ path: "test-results/review-chat-answer.png", fullPage: true });
 
     await composer.fill("hi");
     await composer.press("Enter");
-    await page.waitForTimeout(3000);
+    await page.waitForURL(/\/c\//, { timeout: 20_000 });
+    const greetingAssistant = page.locator(".ref-msg-assistant").first();
+    await expect(greetingAssistant).toBeVisible({ timeout: 45_000 });
+    await expect(greetingAssistant).toContainText(/Hello/i);
+    await expect(page.locator(".ref-source-pill")).toHaveCount(0);
     await page.screenshot({ path: "test-results/review-chat-greeting.png", fullPage: true });
+
+    await composer.fill("How often are access permissions reviewed?");
+    await composer.press("Enter");
+    await expect(page.locator(".ref-msg-assistant").nth(1)).toBeVisible({ timeout: 45_000 });
+    await expect(page.locator("body")).toContainText(/couldn't find evidence|Insufficient evidence|0 sources/i);
+    await page.screenshot({ path: "test-results/review-chat-answer.png", fullPage: true });
 
     for (const path of ["/projects", "/evidence", "/questionnaires", "/review-queue", "/answer-library", "/audit", "/settings"]) {
       await page.goto(path);
@@ -45,7 +49,6 @@ test.describe("product review — employee UI", () => {
     }
 
     await page.goto("/");
-    const adminLink = page.getByRole("link", { name: /Admin console/i });
-    await expect(adminLink).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Admin console/i })).toHaveCount(0);
   });
 });
