@@ -26,16 +26,19 @@ class AdminInvitationCreateResponse(BaseModel):
 
 class AdminInvitationHistoryRow(BaseModel):
     id: UUID
+    record_type: str = Field(description="admin_invitation or employee_link")
     kind: str
-    email: EmailStr
-    role: Role
+    email: str
+    role: Role | None = None
     status: str
-    invitee_full_name: str | None
-    expires_at: datetime
+    invitee_full_name: str | None = None
+    expires_at: datetime | None = None
     created_at: datetime
-    accepted_at: datetime | None
-    revoked_at: datetime | None
-    created_by_user_id: UUID | None
+    accepted_at: datetime | None = None
+    revoked_at: datetime | None = None
+    created_by_user_id: UUID | None = None
+    joined_count: int | None = None
+    pending_approval_count: int | None = None
 
 
 class EmployeeLinkCreateRequest(BaseModel):

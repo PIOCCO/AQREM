@@ -401,15 +401,18 @@ export async function updatePlatformStaffRole(
 
 export type InvitationHistoryRow = {
   id: string;
+  record_type: "admin_invitation" | "employee_link" | string;
   kind: string;
   email: string;
-  role: string;
+  role: string | null;
   status: string;
   invitee_full_name: string | null;
-  expires_at: string;
+  expires_at: string | null;
   created_at: string;
   accepted_at: string | null;
   revoked_at: string | null;
+  joined_count?: number | null;
+  pending_approval_count?: number | null;
 };
 
 export type InvitationsSetupStatus = {

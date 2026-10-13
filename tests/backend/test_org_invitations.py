@@ -162,6 +162,24 @@ def test_employee_join_domain_and_rotation(client: TestClient, db_session):
     assert preview.status_code == 200
 
 
+def test_invitation_history_lists_pending_until_expired(client: TestClient, db_session):
+    _user, token = _seed_super_admin(db_session)
+    org_id = _create_org(client, token, name="History Org")
+    created = client.post(
+        f"/api/v1/admin/organizations/{org_id}/invitations/admin",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"email": "hist@corp.example", "full_name": "Hist Admin", "expires_days": 7},
+    )
+    assert created.status_code == 201
+    history = client.get(
+        f"/api/v1/admin/organizations/{org_id}/invitations/history",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert history.status_code == 200
+    body = history.json()
+    assert any(r["status"] == "pending" and r["record_type"] == "admin_invitation" for r in body)
+
+
 def test_token_hashes_never_equal_raw_in_db(client: TestClient, db_session):
     from app.models.invitation import UserInvitation
     from app.models.employee_join import EmployeeJoinLink

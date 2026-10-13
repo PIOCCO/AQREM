@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.admin_errors import admin_error
@@ -27,6 +28,7 @@ from app.services.email.invitations import email_delivery_configured
 from app.services.invitations.admin_invitation import (
     invitation_public_status,
     provision_admin_invitation,
+    purge_expired_admin_invitations,
     resend_admin_invitation,
     revoke_active_admin_invitations,
 )
@@ -65,7 +67,10 @@ def invitations_setup_status(
         db.query(UserInvitation)
         .filter(
             UserInvitation.organization_id == organization_id,
-            UserInvitation.invitation_kind == "org_admin",
+            or_(
+                UserInvitation.invitation_kind == "org_admin",
+                UserInvitation.role == Role.ORG_ADMIN.value,
+            ),
         )
         .order_by(UserInvitation.created_at.desc())
         .first()
@@ -89,6 +94,20 @@ def invitations_setup_status(
     )
 
 
+def _employee_link_history_status(link: EmployeeJoinLink, *, now: datetime) -> str:
+    exp = link.expires_at
+    if exp is not None:
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if exp < now:
+            return "expired"
+    if link.status == LINK_DISABLED:
+        return "revoked"
+    if link.status == LINK_PAUSED:
+        return "paused"
+    return "pending"
+
+
 @router.get("/organizations/{organization_id}/invitations/history", response_model=list[AdminInvitationHistoryRow])
 def invitation_history(
     organization_id: UUID,
@@ -97,15 +116,28 @@ def invitation_history(
     admin: User = Depends(require_platform_permission("invitation:read")),
 ) -> list[AdminInvitationHistoryRow]:
     _visible_org(db, organization_id)
+    purge_expired_admin_invitations(db, organization_id=organization_id)
+    db.commit()
+
     now = datetime.now(timezone.utc)
     invites = (
         db.query(UserInvitation)
         .filter(
             UserInvitation.organization_id == organization_id,
-            UserInvitation.invitation_kind == "org_admin",
+            or_(
+                UserInvitation.invitation_kind == "org_admin",
+                UserInvitation.role == Role.ORG_ADMIN.value,
+            ),
         )
         .order_by(UserInvitation.created_at.desc())
         .limit(200)
+        .all()
+    )
+    links = (
+        db.query(EmployeeJoinLink)
+        .filter(EmployeeJoinLink.organization_id == organization_id)
+        .order_by(EmployeeJoinLink.created_at.desc())
+        .limit(50)
         .all()
     )
     rows: list[AdminInvitationHistoryRow] = []
@@ -116,7 +148,8 @@ def invitation_history(
         rows.append(
             AdminInvitationHistoryRow(
                 id=inv.id,
-                kind=inv.invitation_kind,
+                record_type="admin_invitation",
+                kind=inv.invitation_kind or "org_admin",
                 email=inv.email,
                 role=Role(inv.role),
                 status=st,
@@ -128,6 +161,31 @@ def invitation_history(
                 created_by_user_id=inv.created_by_user_id,
             )
         )
+    for link in links:
+        st = _employee_link_history_status(link, now=now)
+        filter_status = st if st != "paused" else "pending"
+        if status_filter and status_filter != "all" and filter_status != status_filter:
+            continue
+        domain_hint = ", ".join(link.allowed_domains or []) or "Any email (approval required)"
+        rows.append(
+            AdminInvitationHistoryRow(
+                id=link.id,
+                record_type="employee_link",
+                kind="employee_link",
+                email=f"Employee link · {domain_hint}",
+                role=Role.VIEWER,
+                status=st,
+                invitee_full_name=None,
+                expires_at=link.expires_at,
+                created_at=link.created_at,
+                accepted_at=None,
+                revoked_at=link.disabled_at,
+                created_by_user_id=link.created_by_user_id,
+                joined_count=link.joined_count,
+                pending_approval_count=link.pending_approval_count,
+            )
+        )
+    rows.sort(key=lambda r: r.created_at, reverse=True)
     return rows
 
 

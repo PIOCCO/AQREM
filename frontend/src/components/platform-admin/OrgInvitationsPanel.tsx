@@ -243,7 +243,7 @@ export function OrgInvitationsPanel({
 
       <div className="admin-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <h3 className="font-medium text-sm">Invitation history</h3>
+          <h3 className="font-medium text-sm">Invitation &amp; link history</h3>
           <select
             className="admin-input text-xs py-1"
             value={historyFilter}
@@ -254,45 +254,63 @@ export function OrgInvitationsPanel({
             <option value="pending">Pending</option>
             <option value="accepted">Accepted</option>
             <option value="expired">Expired</option>
-            <option value="revoked">Revoked</option>
+            <option value="revoked">Revoked / disabled</option>
           </select>
         </div>
+        <p className="text-xs text-chat-muted mb-3">
+          Active admin invites and employee links stay listed until they expire; expired unused admin invites are then
+          removed automatically.
+        </p>
         {loading ? (
           <p className="text-sm text-chat-muted">Loading…</p>
         ) : history.length === 0 ? (
-          <p className="text-sm text-chat-muted">No admin invitations yet.</p>
+          <p className="text-sm text-chat-muted">No invitations or employee links yet.</p>
         ) : (
           <table className="w-full text-sm">
             <thead className="text-xs text-chat-muted text-left">
               <tr>
-                <th className="pb-2">Email</th>
-                <th className="pb-2">Role</th>
+                <th className="pb-2">Type</th>
+                <th className="pb-2">Details</th>
                 <th className="pb-2">Status</th>
                 <th className="pb-2">Expires</th>
+                <th className="pb-2">Created</th>
                 <th className="pb-2">Actions</th>
               </tr>
             </thead>
             <tbody>
               {history.map((row) => (
-                <tr key={row.id} className="border-t border-chat-border">
-                  <td className="py-2">{row.email}</td>
-                  <td className="py-2">{roleLabel(row.role)}</td>
+                <tr key={`${row.record_type}-${row.id}`} className="border-t border-chat-border">
+                  <td className="py-2 capitalize">
+                    {row.record_type === "employee_link" ? "Employee link" : "Admin invite"}
+                  </td>
+                  <td className="py-2">
+                    <div>{row.invitee_full_name ? `${row.invitee_full_name} · ` : ""}{row.email}</div>
+                    {row.record_type === "employee_link" ? (
+                      <div className="text-xs text-chat-muted">
+                        {row.joined_count ?? 0} joined · {row.pending_approval_count ?? 0} pending approval
+                      </div>
+                    ) : row.role ? (
+                      <div className="text-xs text-chat-muted">{roleLabel(row.role as string)}</div>
+                    ) : null}
+                  </td>
                   <td className="py-2 capitalize">{row.status}</td>
                   <td className="py-2">{formatDate(row.expires_at)}</td>
+                  <td className="py-2">{formatDate(row.created_at)}</td>
                   <td className="py-2 space-x-2">
-                    {row.status === "pending" ? (
+                    {row.record_type === "admin_invitation" && row.status === "pending" ? (
                       <>
                         <button
                           type="button"
                           className="text-xs underline"
                           onClick={() =>
-                            resendInvitation(session, org.id, row.id).then((r) =>
+                            resendInvitation(session, org.id, row.id).then((r) => {
+                              void reload();
                               setSecret({
                                 title: "Admin invitation link",
                                 path: r.invitation_setup_path,
                                 expires: r.invitation_expires_at,
-                              }),
-                            )
+                              });
+                            })
                           }
                         >
                           Resend

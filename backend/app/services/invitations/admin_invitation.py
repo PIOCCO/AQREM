@@ -235,6 +235,22 @@ def preview_admin_invitation(db: Session, *, token: str) -> tuple[UserInvitation
     return invitation, org
 
 
+def purge_expired_admin_invitations(db: Session, *, organization_id: UUID) -> int:
+    """Remove unused admin invites past expiry (accepted/revoked rows are kept for audit)."""
+    now = _utcnow()
+    q = db.query(UserInvitation).filter(
+        UserInvitation.organization_id == organization_id,
+        UserInvitation.used_at.is_(None),
+        UserInvitation.revoked_at.is_(None),
+        UserInvitation.expires_at < now,
+    )
+    count = q.count()
+    if count:
+        q.delete(synchronize_session=False)
+        db.flush()
+    return count
+
+
 def invitation_public_status(inv: UserInvitation, *, now: datetime | None = None) -> str:
     now = now or _utcnow()
     if inv.used_at is not None:
