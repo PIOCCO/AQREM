@@ -35,6 +35,7 @@ from app.schemas.admin import (
     AdminOrganizationListResponse,
     AdminOrganizationResponse,
     AdminOrganizationUpdate,
+    DeactivateMemberRequest,
     AdminProvisionUserRequest,
     AdminProvisionUserResponse,
     PermissionsMatrixResponse,
@@ -495,6 +496,7 @@ def patch_member_role(
 def deactivate_member(
     organization_id: UUID,
     membership_id: UUID,
+    payload: DeactivateMemberRequest,
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("org_member:deactivate")),
 ) -> None:
@@ -502,7 +504,23 @@ def deactivate_member(
     membership = db.get(OrganizationMembership, membership_id)
     if membership is None or membership.organization_id != organization_id:
         raise admin_error(code="NOT_FOUND", message="Membership not found", status_code=404)
-    deactivate_membership(db, admin_user_id=admin.id, membership=membership)
+    reason = payload.reason.strip()
+    active_admins = (
+        db.query(OrganizationMembership)
+        .filter(
+            OrganizationMembership.organization_id == organization_id,
+            OrganizationMembership.is_active.is_(True),
+            OrganizationMembership.role == Role.ORG_ADMIN.value,
+        )
+        .count()
+    )
+    if membership.role == Role.ORG_ADMIN.value and membership.is_active and active_admins <= 1:
+        raise admin_error(
+            code="LAST_ORG_ADMIN",
+            message="Cannot remove the last organization admin without replacing them first",
+            status_code=409,
+        )
+    deactivate_membership(db, admin_user_id=admin.id, membership=membership, reason=reason)
     db.commit()
 
 

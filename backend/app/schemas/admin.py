@@ -26,7 +26,11 @@ class PlatformStaffRow(BaseModel):
 class PlatformStaffInviteRequest(BaseModel):
     email: EmailStr
     full_name: str = Field(min_length=1, max_length=255)
-    role: str = Field(description="PLATFORM_SUPPORT or PLATFORM_BILLING")
+    role: str = Field(description="SUPER_ADMIN, PLATFORM_SUPPORT, or PLATFORM_BILLING")
+
+
+class DeactivateMemberRequest(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
 
 
 class PlatformStaffRoleUpdate(BaseModel):

@@ -355,12 +355,48 @@ export async function updateMemberRole(
   if (!res.ok) throw new Error(await readApiError(res, "Failed to update role"));
 }
 
-export async function deactivateMember(session: AuthSession, orgId: string, membershipId: string) {
+export async function deactivateMember(
+  session: AuthSession,
+  orgId: string,
+  membershipId: string,
+  reason: string,
+) {
   const res = await fetch(
     `${API_BASE}/api/v1/admin/organizations/${orgId}/members/${membershipId}/deactivate`,
-    { method: "POST", headers: adminHeaders(session) },
+    {
+      method: "POST",
+      headers: adminHeaders(session),
+      body: JSON.stringify({ reason }),
+    },
   );
-  if (!res.ok) throw new Error(await readApiError(res, "Failed to remove member"));
+  if (!res.ok) await parseError(res, "Failed to remove member");
+}
+
+export async function invitePlatformStaff(
+  session: AuthSession,
+  payload: { email: string; full_name: string; role: string },
+): Promise<PlatformStaffMember> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/platform-staff/invite`, {
+    method: "POST",
+    headers: adminHeaders(session),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await parseError(res, "Failed to invite platform user");
+  return res.json();
+}
+
+export async function updatePlatformStaffRole(
+  session: AuthSession,
+  userId: string,
+  payload: { role: string; reason: string },
+): Promise<PlatformStaffMember> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/platform-staff/${userId}`, {
+    method: "PATCH",
+    headers: adminHeaders(session),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await parseError(res, "Failed to update platform role");
+  return res.json();
 }
 
 export async function fetchOrgInvitations(session: AuthSession, orgId: string) {

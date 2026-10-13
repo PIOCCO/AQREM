@@ -332,6 +332,8 @@ def deactivate_membership(
     *,
     admin_user_id: UUID,
     membership: OrganizationMembership,
+    reason: str | None = None,
+    source: str = "platform_control_plane",
 ) -> None:
     membership.is_active = False
     membership.auth_version = int(membership.auth_version or 1) + 1
@@ -339,10 +341,15 @@ def deactivate_membership(
         db,
         organization_id=membership.organization_id,
         user_id=admin_user_id,
-        action="membership_deactivated",
+        action="platform_member_removed",
         resource_type="organization_membership",
         resource_id=str(membership.id),
-        metadata={"user_id": str(membership.user_id)},
+        metadata={
+            "user_id": str(membership.user_id),
+            "reason": reason,
+            "source": source,
+            "platform_action": f"Platform: remove member",
+        },
     )
 
 

@@ -8,6 +8,9 @@ import {
   platformRoleLabel,
   roleLabel,
 } from "../lib/roleLabels";
+import { InvitePlatformStaffDialog } from "../components/platform-admin/InvitePlatformStaffDialog";
+import { LicenseSummaryCard } from "../components/platform-admin/LicenseSummaryCard";
+import { RemoveMemberDialog } from "../components/platform-admin/RemoveMemberDialog";
 import {
   createAdminOrganization,
   deactivateMember,
@@ -19,6 +22,7 @@ import {
   fetchPermissionsMatrix,
   fetchPlatformStaff,
   inviteOrganizationUser,
+  invitePlatformStaff,
   isAdminApiError,
   resendInvitation,
   revokeInvitation,
@@ -103,6 +107,13 @@ function PlatformAdminInner() {
   const [platformStaff, setPlatformStaff] = useState<PlatformStaffMember[]>([]);
   const [permMatrix, setPermMatrix] = useState<PermissionsMatrix | null>(null);
   const [teamLoading, setTeamLoading] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<{ membershipId: string; name: string } | null>(null);
+  const [removeLoading, setRemoveLoading] = useState(false);
+  const [staffInviteOpen, setStaffInviteOpen] = useState(false);
+  const [staffInviteRole, setStaffInviteRole] = useState<"SUPER_ADMIN" | "PLATFORM_SUPPORT" | "PLATFORM_BILLING">(
+    "PLATFORM_SUPPORT",
+  );
+  const [staffInviteLoading, setStaffInviteLoading] = useState(false);
 
   const selected = useMemo(
     () => (Array.isArray(orgs) ? orgs : []).find((o) => o.id === selectedId),
@@ -308,7 +319,11 @@ function PlatformAdminInner() {
           <button
             type="button"
             className="aq-btn-secondary text-xs py-1.5 h-auto"
-            onClick={() => setConsoleSection("team")}
+            onClick={() => {
+              setStaffInviteRole("SUPER_ADMIN");
+              setConsoleSection("team");
+              setStaffInviteOpen(true);
+            }}
           >
             Add super admin
           </button>
@@ -316,8 +331,20 @@ function PlatformAdminInner() {
       ) : null}
 
       {consoleSection === "team" ? (
-        <main className="p-6 max-w-5xl">
-          <h2 className="text-lg font-semibold mb-4">Platform team</h2>
+        <main className="admin-main-canvas p-6 max-w-5xl">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <h2 className="text-lg font-semibold">Platform team</h2>
+            <button
+              type="button"
+              className="aq-btn-primary text-sm"
+              onClick={() => {
+                setStaffInviteRole("PLATFORM_SUPPORT");
+                setStaffInviteOpen(true);
+              }}
+            >
+              Invite platform user
+            </button>
+          </div>
           {teamLoading ? (
             <p className="text-sm text-chat-muted">Loading team…</p>
           ) : platformStaff.length === 0 ? (
@@ -350,7 +377,10 @@ function PlatformAdminInner() {
       {consoleSection === "roles" && permMatrix ? (
         <main className="p-6 overflow-x-auto">
           <h2 className="text-lg font-semibold mb-2">Permission matrix</h2>
-          <p className="text-sm text-chat-muted mb-4">Generated from permissions.yaml (read-only).</p>
+          <p className="text-sm text-chat-muted mb-4">
+            Generated from permissions.yaml (read-only). Custom platform roles are not supported — only the built-in
+            roles below.
+          </p>
           <table className="text-xs admin-card">
             <thead>
               <tr>
@@ -516,23 +546,7 @@ function PlatformAdminInner() {
                         Manage license
                       </button>
                     </div>
-                    <div className="admin-card p-4">
-                      <p className="text-xs text-chat-muted">License</p>
-                      <div className="flex flex-wrap items-center gap-2 mt-2">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${statusBadgeClass(selected.license_status)}`}>
-                          {licenseStatusLabel(selected.license_status)}
-                        </span>
-                        <span className="text-sm text-[var(--color-text-secondary)] capitalize">{selected.environment}</span>
-                      </div>
-                      <p className="text-sm text-[var(--color-text-primary)] mt-3">
-                        {selected.seats.seats_limit} licensed seats
-                      </p>
-                      <p className="text-xs text-chat-muted mt-1">
-                        {selected.license_renews_at
-                          ? `Renews ${formatDate(selected.license_renews_at)}`
-                          : "No renewal date on file"}
-                      </p>
-                    </div>
+                    <LicenseSummaryCard org={selected} onManageLicense={() => setTab("license")} />
                   </div>
 
                   <div className="admin-card p-4 space-y-4">
@@ -633,11 +647,11 @@ function PlatformAdminInner() {
                                 ) : row.membership_id ? (
                                   <button
                                     type="button"
-                                    className="text-xs underline text-red-700"
+                                    className="aq-btn-danger text-xs py-1 px-2 h-auto min-h-0"
                                     onClick={() =>
-                                      deactivateMember(auth, selectedId, row.membership_id!).then(() => {
-                                        refreshOrgs();
-                                        refreshDirectory();
+                                      setRemoveTarget({
+                                        membershipId: row.membership_id!,
+                                        name: row.full_name || row.email,
                                       })
                                     }
                                   >
@@ -755,14 +769,47 @@ function PlatformAdminInner() {
               )}
 
               {tab === "overview" && (
-                <div className="admin-card p-4 text-sm space-y-2">
-                  <p>
-                    <strong>Seats:</strong> {selected.seats.seats_used} / {selected.seats.seats_limit} used
+                <div className="admin-card p-4 text-sm space-y-3">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-[var(--color-text-muted)]">Organization ID</p>
+                      <p className="font-mono text-[var(--color-text-primary)]">{selected.id}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[var(--color-text-muted)]">Slug</p>
+                      <p>{selected.slug}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[var(--color-text-muted)]">Environment</p>
+                      <p className="capitalize">{selected.environment}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[var(--color-text-muted)]">Account status</p>
+                      <p>{selected.is_active ? "Active" : "Inactive"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[var(--color-text-muted)]">Seats</p>
+                      <p>
+                        {selected.seats.seats_used} / {selected.seats.seats_limit} used (
+                        {selected.seats.active_members} members, {selected.seats.pending_invitations} pending invites)
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[var(--color-text-muted)]">Owner label</p>
+                      <p>{selected.owner_display_name ?? "—"}</p>
+                    </div>
+                  </div>
+                  <p className="text-[var(--color-text-muted)] text-xs">
+                    Platform console shows metadata and counts only — never tenant documents or conversations.
                   </p>
-                  <p>
-                    <strong>Slug:</strong> {selected.slug}
-                  </p>
-                  <p className="text-chat-muted">Use the Members tab to invite users or the License tab to adjust seats.</p>
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <button type="button" className="aq-btn-secondary text-xs" onClick={() => setTab("members")}>
+                      Manage members
+                    </button>
+                    <button type="button" className="aq-btn-secondary text-xs" onClick={() => setTab("license")}>
+                      Edit license
+                    </button>
+                  </div>
                 </div>
               )}
             </>
@@ -770,6 +817,54 @@ function PlatformAdminInner() {
         </main>
       </div>
       ) : null}
+
+      <RemoveMemberDialog
+        open={Boolean(removeTarget && selected)}
+        memberName={removeTarget?.name ?? ""}
+        orgName={selected?.name ?? ""}
+        loading={removeLoading}
+        onCancel={() => setRemoveTarget(null)}
+        onConfirm={async (reason) => {
+          if (!removeTarget || !selectedId) return;
+          setRemoveLoading(true);
+          try {
+            await deactivateMember(auth, selectedId, removeTarget.membershipId, reason);
+            toast.push(`${removeTarget.name} removed from ${selected?.name}`, "ok");
+            setRemoveTarget(null);
+            await refreshOrgs();
+            await refreshDirectory();
+          } catch (err) {
+            toast.push(err instanceof Error ? err.message : "Remove failed", "err");
+          } finally {
+            setRemoveLoading(false);
+          }
+        }}
+      />
+
+      <InvitePlatformStaffDialog
+        open={staffInviteOpen}
+        defaultRole={staffInviteRole}
+        loading={staffInviteLoading}
+        onClose={() => setStaffInviteOpen(false)}
+        onSubmit={async (payload) => {
+          setStaffInviteLoading(true);
+          try {
+            await invitePlatformStaff(auth, payload);
+            toast.push(`Invited ${payload.email}`, "ok");
+            setStaffInviteOpen(false);
+            setTeamLoading(true);
+            fetchPlatformStaff(auth)
+              .then(setPlatformStaff)
+              .finally(() => setTeamLoading(false));
+            const ctx = await fetchAdminContext(auth);
+            setContext(ctx);
+          } catch (err) {
+            toast.push(err instanceof Error ? err.message : "Invite failed", "err");
+          } finally {
+            setStaffInviteLoading(false);
+          }
+        }}
+      />
 
       {showNewOrg ? (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true">
@@ -863,7 +958,7 @@ function LicenseTab({
 
   return (
     <form className="admin-card p-4 max-w-lg space-y-4" onSubmit={save}>
-      {dirty ? <p className="text-xs text-amber-700">Unsaved changes</p> : null}
+      {dirty ? <p className="text-xs text-[var(--color-warning)]">Unsaved changes</p> : null}
       {error ? (
         <div className="text-sm admin-inline-alert border rounded px-3 py-2" role="alert">
           {error}
