@@ -1,14 +1,16 @@
-import { FormEvent, useCallback, useEffect, useId, useState } from "react";
+import { FormEvent, useCallback, useEffect, useId, useState, type ReactNode } from "react";
 import { useAuth } from "../lib/authContext";
 import {
   configureDataStorage,
   fetchDataStorage,
+  refreshDataStorageHealth,
   runDataStoragePreflight,
   type DataStorageConfig,
   type PreflightReport,
 } from "../lib/orgAdminApi";
 
 type LocationChoice = "managed" | "customer";
+type BusyAction = "test" | "save" | "refresh" | null;
 
 const CONNECTION_METHODS = [
   { value: "public_tls", label: "Public endpoint with TLS (IP allow-list)" },
@@ -16,6 +18,38 @@ const CONNECTION_METHODS = [
   { value: "secure_connector", label: "Secure connector (on-premises, outbound only)" },
   { value: "customer_deployed", label: "Deploy in my environment" },
 ] as const;
+
+function ActionButton({
+  variant,
+  disabled,
+  loading,
+  loadingLabel,
+  children,
+  type = "button",
+  onClick,
+}: {
+  variant: "primary" | "secondary";
+  disabled?: boolean;
+  loading?: boolean;
+  loadingLabel: string;
+  children: ReactNode;
+  type?: "button" | "submit";
+  onClick?: () => void;
+}) {
+  const cls = variant === "primary" ? "admin-btn-primary" : "admin-btn-secondary";
+  return (
+    <button type={type} className={cls} disabled={disabled || loading} onClick={onClick}>
+      {loading ? (
+        <>
+          <span className="admin-btn-spinner" aria-hidden />
+          {loadingLabel}
+        </>
+      ) : (
+        children
+      )}
+    </button>
+  );
+}
 
 export default function ClientAdminDataStoragePage() {
   const { session } = useAuth();
@@ -34,7 +68,14 @@ export default function ClientAdminDataStoragePage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<BusyAction>(null);
+
+  const testLabel =
+    location === "customer"
+      ? "Test my database connection"
+      : location === "managed"
+        ? "Test AQREM-managed connection"
+        : "Test connection";
 
   const load = useCallback(async () => {
     if (!session) return;
@@ -63,35 +104,44 @@ export default function ClientAdminDataStoragePage() {
     void load();
   }, [load]);
 
-  async function onPreflight(e: FormEvent) {
-    e.preventDefault();
+  function buildPayload() {
+    return {
+      storage_mode: location === "managed" ? "managed_colocated" : "customer_postgres",
+      connection_method: connectionMethod,
+      host: host || null,
+      port: port ? Number(port) : 5432,
+      database_name: databaseName || null,
+      schema_name: schemaName,
+      ssl_mode: sslMode,
+      username: username || null,
+      password: password || null,
+    };
+  }
+
+  async function onPreflight(e?: FormEvent) {
+    e?.preventDefault();
     if (!session) return;
     setError(null);
     setSuccess(null);
     setPreflight(null);
-    setBusy(true);
+    if (location === null) {
+      setError("Select a database option before running validation.");
+      return;
+    }
+    setBusyAction("test");
     try {
-      if (location === null) {
-        setError("Select a database option before running validation.");
-        return;
-      }
-      const report = await runDataStoragePreflight(session, {
-        storage_mode: location === "managed" ? "managed_colocated" : "customer_postgres",
-        connection_method: connectionMethod,
-        host: host || null,
-        port: port ? Number(port) : 5432,
-        database_name: databaseName || null,
-        schema_name: schemaName,
-        ssl_mode: sslMode,
-        username: username || null,
-        password: password || null,
-      });
+      const report = await runDataStoragePreflight(session, buildPayload());
       setPreflight(report);
-      if (report.ok) setSuccess("Preflight passed. Save to apply migrations and activate this database.");
+      if (report.ok) {
+        setSuccess("Connection test passed. Click Save and activate to apply this configuration.");
+      } else {
+        const fail = report.checks.find((c) => c.status === "fail");
+        setError(fail?.detail ?? "Connection test failed.");
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Preflight failed");
+      setError(err instanceof Error ? err.message : "Connection test failed");
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
@@ -104,33 +154,47 @@ export default function ClientAdminDataStoragePage() {
     }
     setError(null);
     setSuccess(null);
-    setBusy(true);
+    setBusyAction("save");
     try {
-      const cfg = await configureDataStorage(session, {
-        storage_mode: location === "managed" ? "managed_colocated" : "customer_postgres",
-        connection_method: connectionMethod,
-        host: host || null,
-        port: port ? Number(port) : 5432,
-        database_name: databaseName || null,
-        schema_name: schemaName,
-        ssl_mode: sslMode,
-        username: username || null,
-        password: password || null,
-      });
+      const cfg = await configureDataStorage(session, buildPayload());
       setStatus(cfg);
       setPassword("");
       setSuccess(
         location === "managed"
-          ? "AQREM-managed PostgreSQL is active. The setup checklist will reflect this after you return to Overview."
-          : "Your PostgreSQL connection is validated and active. Credentials are stored in the secret vault only.",
+          ? "AQREM-managed PostgreSQL is active."
+          : "Your PostgreSQL connection is validated and active.",
       );
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
+
+  async function onRefreshHealth() {
+    if (!session) return;
+    setError(null);
+    setSuccess(null);
+    setBusyAction("refresh");
+    try {
+      if (status?.setup_complete) {
+        const cfg = await refreshDataStorageHealth(session);
+        setStatus(cfg);
+        setSuccess("Health check completed.");
+      } else {
+        await load();
+        setSuccess("Status refreshed.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Refresh failed");
+      await load();
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  const actionsDisabled = busyAction !== null;
 
   if (loading) {
     return <p className="p-8 text-sm text-chat-muted">Loading data storage…</p>;
@@ -336,67 +400,36 @@ export default function ClientAdminDataStoragePage() {
                 <code className="text-xs">docs/sql/tenant_database_setup.sql</code> before connecting.
               </p>
             </div>
-            <button
-              type="button"
-              className="admin-btn-secondary"
-              disabled={busy}
-              onClick={(ev) => void onPreflight(ev as unknown as FormEvent)}
-            >
-              Run preflight check
-            </button>
-            {preflight ? (
-              <ul className="space-y-2 text-sm" aria-label="Preflight results">
-                {preflight.checks.map((c) => (
-                  <li
-                    key={c.id}
-                    className={`rounded px-3 py-2 border ${
-                      c.status === "pass"
-                        ? "border-[var(--admin-status-active-bg)]"
-                        : c.status === "warn"
-                          ? "border-amber-600/40"
-                          : "border-red-500/40"
-                    }`}
-                  >
-                    <span className="font-medium">{c.title}</span>
-                    <span className="text-chat-muted"> — {c.status}</span>
-                    <p className="mt-1 text-chat-muted">{c.detail}</p>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
           </>
+        ) : location === "managed" ? (
+          <p className="text-sm text-chat-muted">
+            AQREM provisions and operates PostgreSQL for your organization. Test runs SELECT 1 and a schema compatibility
+            check against the managed database before you activate.
+          </p>
         ) : (
-          <div className="space-y-3">
-            <p className="text-sm text-chat-muted">
-              AQREM provisions and operates PostgreSQL for your organization. Saving runs a connectivity and schema check
-              before activating this mode.
-            </p>
-            <button
-              type="button"
-              className="admin-btn-secondary"
-              disabled={busy}
-              onClick={(ev) => void onPreflight(ev as unknown as FormEvent)}
-            >
-              Test AQREM-managed connection
-            </button>
-            {preflight ? (
-              <ul className="space-y-2 text-sm" aria-label="Managed validation results">
-                {preflight.checks.map((c) => (
-                  <li
-                    key={c.id}
-                    className={`rounded px-3 py-2 border ${
-                      c.status === "pass" ? "border-[var(--admin-status-active-bg)]" : "border-red-500/40"
-                    }`}
-                  >
-                    <span className="font-medium">{c.title}</span>
-                    <span className="text-chat-muted"> — {c.status}</span>
-                    <p className="mt-1 text-chat-muted">{c.detail}</p>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
+          <p className="text-sm text-chat-muted">Select a database option above to continue.</p>
         )}
+
+        {preflight ? (
+          <ul className="space-y-2 text-sm" aria-label="Connection test results">
+            {preflight.checks.map((c) => (
+              <li
+                key={c.id}
+                className={`rounded px-3 py-2 border ${
+                  c.status === "pass"
+                    ? "border-[var(--admin-status-active-bg)]"
+                    : c.status === "warn"
+                      ? "border-amber-600/40"
+                      : "border-red-500/40"
+                }`}
+              >
+                <span className="font-medium">{c.title}</span>
+                <span className="text-chat-muted"> — {c.status}</span>
+                <p className="mt-1 text-chat-muted">{c.detail}</p>
+              </li>
+            ))}
+          </ul>
+        ) : null}
 
         {error ? (
           <div className="admin-inline-alert border rounded px-3 py-2 text-sm" role="alert">
@@ -412,13 +445,28 @@ export default function ClientAdminDataStoragePage() {
           </div>
         ) : null}
 
-        <div className="flex flex-wrap gap-3">
-          <button type="submit" className="admin-btn-primary" disabled={busy}>
-            {busy ? "Saving…" : "Save and activate"}
-          </button>
-          <button type="button" className="admin-btn-secondary" disabled={busy} onClick={() => void load()}>
+        <div className="flex flex-wrap gap-4 pt-2 border-t border-chat-border">
+          <ActionButton
+            variant="secondary"
+            disabled={location === null || actionsDisabled}
+            loading={busyAction === "test"}
+            loadingLabel="Testing…"
+            onClick={() => void onPreflight()}
+          >
+            {testLabel}
+          </ActionButton>
+          <ActionButton variant="primary" type="submit" disabled={location === null || actionsDisabled} loading={busyAction === "save"} loadingLabel="Saving…">
+            Save and activate
+          </ActionButton>
+          <ActionButton
+            variant="secondary"
+            disabled={actionsDisabled}
+            loading={busyAction === "refresh"}
+            loadingLabel="Refreshing…"
+            onClick={() => void onRefreshHealth()}
+          >
             Refresh status
-          </button>
+          </ActionButton>
         </div>
       </form>
     </div>

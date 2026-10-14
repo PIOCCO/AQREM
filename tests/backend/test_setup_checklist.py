@@ -107,3 +107,77 @@ def test_customer_postgres_requires_healthy_preflight(db_session):
     data = build_setup_checklist(db_session, organization_id=org.id, control_db=db_session)
     by_id = {s["id"]: s for s in data["steps"]}
     assert by_id["postgres_database"]["status"] == "pending"
+
+
+def test_managed_preflight_surfaces_validation_failure(client: TestClient, db_session, monkeypatch):
+    org, token = _seed(db_session)
+
+    def _fail(_org_id):
+        return False, "Managed database unreachable (test).", None
+
+    from app.tenant_store import setup_health
+
+    monkeypatch.setattr(setup_health, "validate_managed_colocated", _fail)
+
+    res = client.post(
+        "/api/v1/org-admin/data-storage/preflight",
+        headers=_headers(token, str(org.id)),
+        json={"storage_mode": "managed_colocated"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is False
+    assert "unreachable" in body["checks"][0]["detail"].lower()
+
+
+def test_save_managed_does_not_activate_when_validation_fails(client: TestClient, db_session, monkeypatch):
+    org, token = _seed(db_session)
+
+    def _fail(_org_id):
+        return False, "Schema check failed (test).", None
+
+    from app.tenant_store import setup_health
+
+    monkeypatch.setattr(setup_health, "validate_managed_colocated", _fail)
+
+    res = client.put(
+        "/api/v1/org-admin/data-storage",
+        headers=_headers(token, str(org.id)),
+        json={"storage_mode": "managed_colocated"},
+    )
+    assert res.status_code == 400
+    assert "Schema check failed" in res.json()["message"]
+
+    get_res = client.get("/api/v1/org-admin/data-storage", headers=_headers(token, str(org.id)))
+    assert get_res.json()["setup_complete"] is False
+
+
+def test_refresh_health_requires_active_setup(client: TestClient, db_session):
+    org, token = _seed(db_session)
+    res = client.post(
+        "/api/v1/org-admin/data-storage/refresh-health",
+        headers=_headers(token, str(org.id)),
+    )
+    assert res.status_code == 400
+    assert "Activate" in res.json()["message"]
+
+
+def test_refresh_health_after_save_updates_timestamp(client: TestClient, db_session):
+    org, token = _seed(db_session)
+    save = client.put(
+        "/api/v1/org-admin/data-storage",
+        headers=_headers(token, str(org.id)),
+        json={"storage_mode": "managed_colocated"},
+    )
+    assert save.status_code == 200
+    first_ts = save.json()["last_health_check_at"]
+
+    refresh = client.post(
+        "/api/v1/org-admin/data-storage/refresh-health",
+        headers=_headers(token, str(org.id)),
+    )
+    assert refresh.status_code == 200
+    body = refresh.json()
+    assert body["last_health_status"] == "healthy"
+    assert body["last_health_check_at"]
+    assert body["last_health_check_at"] >= first_ts

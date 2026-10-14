@@ -798,7 +798,7 @@ def preflight_data_storage(
     from app.tenant_store.setup_health import validate_managed_colocated
 
     if payload.storage_mode != "customer_postgres":
-        ok, summary, latency = validate_managed_colocated(control_db, tenant.organization_id)
+        ok, summary, latency = validate_managed_colocated(tenant.organization_id)
         return PreflightReportResponse(
             ok=ok,
             latency_ms=latency,
@@ -867,7 +867,7 @@ def configure_data_storage(
 
     try:
         if payload.storage_mode == MANAGED_COLOCATED:
-            ok, summary, latency = validate_managed_colocated(control_db, tenant.organization_id)
+            ok, summary, latency = validate_managed_colocated(tenant.organization_id)
             if not ok:
                 raise org_admin_error(
                     code="MANAGED_VALIDATION_FAILED",
@@ -958,6 +958,33 @@ def configure_data_storage(
         metadata={"before_mode": before_mode, "after_mode": cfg.storage_mode, "connection_method": cfg.connection_method},
     )
     control_db.commit()
+    return _tenant_storage_response(cfg)
+
+
+@router.post("/data-storage/refresh-health", response_model=TenantStorageResponse)
+def refresh_data_storage_health(
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    control_db: Session = Depends(get_db),
+) -> TenantStorageResponse:
+    from app.tenant_store.resolver import ensure_managed_config
+    from app.tenant_store.setup_health import refresh_config_health
+
+    cfg = ensure_managed_config(control_db, tenant.organization_id)
+    if cfg.setup_validated_at is None:
+        raise org_admin_error(
+            code="NOT_CONFIGURED",
+            message="Activate a database mode before refreshing health.",
+        )
+    ok, summary, latency = refresh_config_health(cfg)
+    now = datetime.now(UTC)
+    cfg.last_health_check_at = now
+    cfg.last_health_status = "healthy" if ok else "failed"
+    cfg.last_health_summary = summary
+    if latency is not None:
+        cfg.last_latency_ms = latency
+    control_db.commit()
+    if not ok:
+        raise org_admin_error(code="HEALTH_CHECK_FAILED", message=summary)
     return _tenant_storage_response(cfg)
 
 

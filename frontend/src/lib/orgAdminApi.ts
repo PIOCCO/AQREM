@@ -253,3 +253,12 @@ export async function configureDataStorage(
   if (!res.ok) throw new Error(await readApiError(res, "Failed to save data storage"));
   return res.json();
 }
+
+export async function refreshDataStorageHealth(session: AuthSession): Promise<DataStorageConfig> {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/data-storage/refresh-health`), {
+    method: "POST",
+    headers: headers(session),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Health refresh failed"));
+  return res.json();
+}
