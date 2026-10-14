@@ -364,6 +364,14 @@ export async function inviteOrganizationUser(
   }>;
 }
 
+export async function sendAdminInvitationEmail(session: AuthSession, orgId: string, invitationId: string) {
+  const res = await fetch(
+    apiUrl(`/api/v1/admin/organizations/${orgId}/invitations/admin/${invitationId}/send-email`),
+    { method: "POST", headers: adminHeaders(session) },
+  );
+  if (!res.ok) await parseError(res, "Failed to send invitation email");
+}
+
 export async function resendInvitation(session: AuthSession, orgId: string, invitationId: string) {
   const res = await fetch(
     apiUrl(`/api/v1/admin/organizations/${orgId}/invitations/${invitationId}/resend`),
@@ -532,6 +540,8 @@ export type InvitationHistoryRow = {
   pending_approval_count?: number | null;
   invite_url?: string | null;
   invite_path?: string | null;
+  email_delivery_status?: string | null;
+  email_delivery_error?: string | null;
 };
 
 export type InvitationsSetupStatus = {
