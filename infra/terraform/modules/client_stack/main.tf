@@ -213,6 +213,11 @@ resource "azurerm_container_app" "web" {
     external_enabled = true
     target_port      = 8080
     transport        = "http"
+
+    traffic_weight {
+      percentage      = 100
+      latest_revision = true
+    }
   }
 }
 
