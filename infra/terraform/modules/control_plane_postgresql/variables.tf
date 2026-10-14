@@ -10,6 +10,44 @@ variable "location" {
   type = string
 }
 
+variable "delegated_subnet_id" {
+  type = string
+}
+
+variable "private_dns_zone_id" {
+  type = string
+}
+
+variable "tenant_id" {
+  type = string
+}
+
+variable "entra_auth_enabled" {
+  type    = bool
+  default = true
+}
+
+variable "password_auth_enabled" {
+  type        = bool
+  default     = false
+  description = "Keep false in production; Entra-only avoids passwords in Terraform state."
+}
+
+variable "allow_public_firewall_bootstrap" {
+  type        = bool
+  default     = false
+  description = "Never in prod. Ignored when public_network_access_enabled is false."
+}
+
+variable "entra_admin_principal_ids" {
+  type = map(object({
+    object_id      = string
+    principal_name = string
+    principal_type = string
+  }))
+  default = {}
+}
+
 variable "administrator_login" {
   type    = string
   default = "aqremcp"
@@ -45,17 +83,10 @@ variable "zone" {
   default = "1"
 }
 
-variable "public_network_access_enabled" {
-  type        = bool
-  default     = true
-  description = "Stage 1 bootstrap; disable when private subnet is wired (Stage 2 cells)."
-}
-
 variable "high_availability_mode" {
-  type        = string
-  default     = null
-  nullable    = true
-  description = "SameZone or ZoneRedundant when enabled."
+  type     = string
+  default  = null
+  nullable = true
 }
 
 variable "key_vault_id" {
@@ -67,11 +98,6 @@ variable "key_vault_id" {
 variable "key_vault_secret_name" {
   type    = string
   default = "platform-postgresql-admin-password"
-}
-
-variable "connection_string_secret_name" {
-  type    = string
-  default = "platform-postgresql-connection-string"
 }
 
 variable "tags" {

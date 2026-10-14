@@ -1,17 +1,29 @@
+data "azurerm_client_config" "current" {}
+
 resource "azurerm_resource_group" "platform" {
   name     = local.resource_group_name
   location = var.location
   tags     = local.common_tags
 }
 
+module "platform_network" {
+  source = "../../modules/platform_network"
+
+  name_prefix         = local.name_prefix
+  vnet_name           = "${local.name_prefix}-vnet"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.platform.name
+  tags                = local.common_tags
+}
+
 module "monitoring" {
   source = "../../modules/monitoring"
 
-  name                  = "${local.name_prefix}-law"
-  app_insights_name     = "${local.name_prefix}-appi"
-  location              = var.location
-  resource_group_name   = azurerm_resource_group.platform.name
-  tags                  = local.common_tags
+  name                = "${local.name_prefix}-law"
+  app_insights_name   = "${local.name_prefix}-appi"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.platform.name
+  tags                = local.common_tags
 }
 
 module "platform_key_vault" {
@@ -21,6 +33,27 @@ module "platform_key_vault" {
   location            = var.location
   resource_group_name = azurerm_resource_group.platform.name
   tags                = local.common_tags
+}
+
+resource "azurerm_private_endpoint" "platform_kv" {
+  name                = "${local.name_prefix}-kv-pe"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.platform.name
+  subnet_id           = module.platform_network.subnet_private_endpoints_id
+
+  private_service_connection {
+    name                           = "kv"
+    private_connection_resource_id = module.platform_key_vault.id
+    subresource_names              = ["vault"]
+    is_manual_connection           = false
+  }
+
+  private_dns_zone_group {
+    name                 = "kv-dns"
+    private_dns_zone_ids = [module.platform_network.key_vault_private_dns_zone_id]
+  }
+
+  tags = local.common_tags
 }
 
 module "acr" {
@@ -36,41 +69,94 @@ module "acr" {
 module "control_plane_postgresql" {
   source = "../../modules/control_plane_postgresql"
 
-  server_name         = "${local.name_prefix}-cp-pg"
-  location            = var.location
-  resource_group_name = azurerm_resource_group.platform.name
-  sku_name            = var.control_plane_postgres_sku
-  key_vault_id        = module.platform_key_vault.id
-  tags                = local.common_tags
+  server_name           = "${local.name_prefix}-cp-pg"
+  location              = var.location
+  resource_group_name   = azurerm_resource_group.platform.name
+  sku_name              = var.control_plane_postgres_sku
+  delegated_subnet_id   = module.platform_network.subnet_postgresql_id
+  private_dns_zone_id   = module.platform_network.postgresql_private_dns_zone_id
+  tenant_id             = data.azurerm_client_config.current.tenant_id
+  entra_auth_enabled    = true
+  password_auth_enabled = false
+  entra_admin_principal_ids = var.platform_pg_bootstrap_entra_admin_object_id != null ? {
+    bootstrap = {
+      object_id      = var.platform_pg_bootstrap_entra_admin_object_id
+      principal_name = var.platform_pg_bootstrap_entra_admin_name
+      principal_type = "ServicePrincipal"
+    }
+  } : {}
+  tags = local.common_tags
+
+  depends_on = [module.platform_network]
 }
 
 module "openai" {
   count  = var.deploy_openai ? 1 : 0
   source = "../../modules/openai"
 
-  resource_group_name           = azurerm_resource_group.platform.name
-  location                      = var.location
-  openai_account_name           = local.openai_account_name
-  public_network_access_enabled = var.openai_public_network_access_enabled
-  chat_model_name               = var.chat_model_name
-  chat_model_version            = var.chat_model_version
-  chat_deployment_name          = var.chat_deployment_name
-  chat_capacity                 = var.chat_capacity
-  embedding_model_name          = var.embedding_model_name
-  embedding_model_version       = var.embedding_model_version
-  embedding_deployment_name     = var.embedding_deployment_name
-  embedding_capacity            = var.embedding_capacity
-  embedding_dimensions          = var.embedding_dimensions
-  key_vault_id                  = module.platform_key_vault.id
-  store_api_key_in_key_vault    = false
-  managed_identity_principal_id = var.gateway_managed_identity_principal_id
-  assign_openai_user_role       = var.gateway_managed_identity_principal_id != null
-  tags                          = local.common_tags
+  resource_group_name                = azurerm_resource_group.platform.name
+  location                           = var.location
+  openai_account_name                = local.openai_account_name
+  public_network_access_enabled      = var.openai_public_network_access_enabled
+  chat_model_name                    = var.chat_model_name
+  chat_model_version                 = var.chat_model_version
+  chat_deployment_name               = var.chat_deployment_name
+  chat_capacity                      = var.chat_capacity
+  embedding_model_name               = var.embedding_model_name
+  embedding_model_version            = var.embedding_model_version
+  embedding_deployment_name          = var.embedding_deployment_name
+  embedding_capacity                 = var.embedding_capacity
+  embedding_dimensions               = var.embedding_dimensions
+  assign_openai_user_role            = false
+  tags                               = local.common_tags
   purge_cognitive_account_on_destroy = var.purge_cognitive_account_on_destroy
 }
 
-module "model_gateway" {
-  count  = var.deploy_model_gateway ? 1 : 0
+module "model_gateway_custom" {
+  count  = var.enable_custom_gateway ? 1 : 0
+  source = "../../modules/model_gateway_custom"
+
+  identity_name                         = "${local.name_prefix}-gw-mi"
+  container_app_environment_name        = "${local.name_prefix}-gw-cae"
+  container_app_name                    = "${local.name_prefix}-gateway"
+  location                              = var.location
+  resource_group_name                 = azurerm_resource_group.platform.name
+  infrastructure_subnet_id              = module.platform_network.subnet_container_apps_id
+  registry_login_server                 = module.acr.login_server
+  container_image                       = var.gateway_container_image
+  azure_openai_endpoint                 = module.openai[0].azure_openai_endpoint
+  azure_openai_api_version              = var.azure_openai_api_version
+  openai_account_id                     = module.openai[0].azure_openai_resource_id
+  deployment_name_chat                  = var.chat_deployment_name
+  deployment_name_embeddings            = var.embedding_deployment_name
+  control_plane_postgresql_host         = module.control_plane_postgresql.fqdn
+  applicationinsights_connection_string = module.monitoring.application_insights_connection_string
+  tags                                  = local.common_tags
+
+  depends_on = [module.control_plane_postgresql, module.openai]
+}
+
+resource "azurerm_postgresql_flexible_server_active_directory_administrator" "gateway" {
+  count = var.enable_custom_gateway ? 1 : 0
+
+  server_name         = module.control_plane_postgresql.server_name
+  resource_group_name = azurerm_resource_group.platform.name
+  tenant_id           = data.azurerm_client_config.current.tenant_id
+  object_id           = module.model_gateway_custom[0].identity_principal_id
+  principal_name      = module.model_gateway_custom[0].identity_name
+  principal_type      = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "gateway_openai_user" {
+  count = var.enable_custom_gateway && var.deploy_openai ? 1 : 0
+
+  scope                = module.openai[0].azure_openai_resource_id
+  role_definition_name = "Cognitive Services OpenAI User"
+  principal_id         = module.model_gateway_custom[0].identity_principal_id
+}
+
+module "model_gateway_apim" {
+  count  = var.enable_apim ? 1 : 0
   source = "../../modules/model_gateway_apim"
 
   name                = "${local.name_prefix}-apim"

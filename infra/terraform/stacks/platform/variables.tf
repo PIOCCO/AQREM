@@ -30,13 +30,18 @@ variable "tags" {
 
 variable "publisher_email" {
   type        = string
-  description = "APIM publisher contact email."
+  description = "APIM publisher contact email (when enable_apim=true)."
 }
 
-variable "deploy_model_gateway" {
+variable "enable_apim" {
   type        = bool
-  default     = true
-  description = "Set false for dev cost savings; clients cannot reach OpenAI without an alternate gateway."
+  default     = false
+  description = "Defer ~$700/mo APIM Standard v2 until scale/compliance requires it."
+}
+
+variable "enable_custom_gateway" {
+  type    = bool
+  default = true
 }
 
 variable "deploy_front_door" {
@@ -47,6 +52,12 @@ variable "deploy_front_door" {
 variable "deploy_openai" {
   type    = bool
   default = true
+}
+
+variable "clients_per_cell" {
+  type        = number
+  default     = 25
+  description = "Soft pack limit per cell; request ACA core quota increase in runbook when scaling."
 }
 
 variable "apim_sku_name" {
@@ -67,6 +78,28 @@ variable "acr_sku" {
 variable "control_plane_postgres_sku" {
   type    = string
   default = "B_Standard_B1ms"
+}
+
+variable "gateway_container_image" {
+  type    = string
+  default = "aqremprodacr.azurecr.io/aqrem-model-gateway:latest"
+}
+
+variable "platform_pg_bootstrap_entra_admin_object_id" {
+  type        = string
+  default     = null
+  nullable    = true
+  description = "Provisioning pipeline SP object id for bootstrap PG admin (remove after gateway admin granted)."
+}
+
+variable "platform_pg_bootstrap_entra_admin_name" {
+  type    = string
+  default = "aqrem-provisioner"
+}
+
+variable "azure_openai_api_version" {
+  type    = string
+  default = "2024-10-21"
 }
 
 variable "chat_model_name" {
@@ -120,10 +153,9 @@ variable "openai_public_network_access_enabled" {
 }
 
 variable "gateway_managed_identity_principal_id" {
-  type        = string
-  default     = null
-  nullable    = true
-  description = "Principal ID for APIM/system MI to grant Cognitive Services OpenAI User (configure after APIM identity exists)."
+  type     = string
+  default  = null
+  nullable = true
 }
 
 variable "purge_cognitive_account_on_destroy" {

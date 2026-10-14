@@ -26,12 +26,20 @@ output "control_plane_database_name" {
   value = module.control_plane_postgresql.database_name
 }
 
-output "control_plane_postgresql_password_secret" {
-  value = module.control_plane_postgresql.password_secret_name
+output "control_plane_postgresql_auth_mode" {
+  value = module.control_plane_postgresql.auth_mode
 }
 
 output "model_gateway_url" {
-  value = var.deploy_model_gateway ? module.model_gateway[0].gateway_url : null
+  value = var.enable_custom_gateway ? module.model_gateway_custom[0].gateway_url : (var.enable_apim ? module.model_gateway_apim[0].gateway_url : null)
+}
+
+output "front_door_profile_id" {
+  value = var.deploy_front_door ? module.front_door[0].profile_id : null
+}
+
+output "front_door_endpoint_id" {
+  value = var.deploy_front_door ? module.front_door[0].endpoint_id : null
 }
 
 output "front_door_endpoint_hostname" {
@@ -44,6 +52,10 @@ output "azure_openai_endpoint" {
 
 output "aqrem_platform_llm_env" {
   value = var.deploy_openai ? module.openai[0].aqrem_backend_env : null
+}
+
+output "clients_per_cell" {
+  value = var.clients_per_cell
 }
 
 output "origin_protection_note" {
