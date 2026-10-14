@@ -667,14 +667,29 @@ function PlatformAdminInner({
                                     </button>
                                     <button
                                       type="button"
-                                      className="text-xs underline text-red-700"
-                                      onClick={() =>
-                                        revokeInvitation(auth, selectedId, row.invitation_id!).then(() =>
-                                          refreshDirectory(),
-                                        )
-                                      }
+                                      className="aq-btn-danger text-xs py-1 px-2 h-auto min-h-0"
+                                      onClick={async () => {
+                                        if (
+                                          !window.confirm(
+                                            `Remove pending invitation for ${row.email}? The link will stop working.`,
+                                          )
+                                        ) {
+                                          return;
+                                        }
+                                        try {
+                                          await revokeInvitation(auth, selectedId, row.invitation_id!);
+                                          toast.push(`Invitation removed for ${row.email}`, "ok");
+                                          await refreshOrgs();
+                                          await refreshDirectory();
+                                        } catch (err) {
+                                          toast.push(
+                                            err instanceof Error ? err.message : "Failed to remove invitation",
+                                            "err",
+                                          );
+                                        }
+                                      }}
                                     >
-                                      Revoke
+                                      Remove
                                     </button>
                                   </>
                                 ) : row.membership_id ? (

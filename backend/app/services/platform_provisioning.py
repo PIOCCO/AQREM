@@ -194,6 +194,32 @@ def resend_invitation(
     return raw_token, expires_at
 
 
+def revoke_pending_invitations_for_email(
+    db: Session,
+    *,
+    admin_user_id: UUID,
+    organization_id: UUID,
+    email: str,
+) -> int:
+    """Revoke all pending invitations for an email within an organization."""
+    now = datetime.now(timezone.utc)
+    normalized = email.strip().lower()
+    invites = (
+        db.query(UserInvitation)
+        .filter(
+            UserInvitation.organization_id == organization_id,
+            UserInvitation.email == normalized,
+            UserInvitation.used_at.is_(None),
+            UserInvitation.revoked_at.is_(None),
+            UserInvitation.expires_at > now,
+        )
+        .all()
+    )
+    for inv in invites:
+        revoke_invitation(db, admin_user_id=admin_user_id, invitation=inv)
+    return len(invites)
+
+
 def revoke_invitation(
     db: Session,
     *,
@@ -212,6 +238,35 @@ def revoke_invitation(
         resource_id=str(invitation.id),
         metadata={"email": invitation.email},
     )
+    if invitation.used_at is None:
+        user = db.query(User).filter(User.email == invitation.email.strip().lower()).first()
+        if user is not None:
+            membership = (
+                db.query(OrganizationMembership)
+                .filter(
+                    OrganizationMembership.organization_id == invitation.organization_id,
+                    OrganizationMembership.user_id == user.id,
+                    OrganizationMembership.is_active.is_(True),
+                )
+                .first()
+            )
+            if membership is not None:
+                membership.is_active = False
+                membership.auth_version = int(membership.auth_version or 1) + 1
+                record_audit(
+                    db,
+                    organization_id=invitation.organization_id,
+                    user_id=admin_user_id,
+                    action="platform_member_removed",
+                    resource_type="organization_membership",
+                    resource_id=str(membership.id),
+                    metadata={
+                        "user_id": str(user.id),
+                        "reason": "invitation_revoked",
+                        "source": "platform_control_plane",
+                        "platform_action": "Platform: remove member (invitation revoked)",
+                    },
+                )
 
 
 def update_membership_role(
@@ -339,6 +394,14 @@ def deactivate_membership(
 ) -> None:
     membership.is_active = False
     membership.auth_version = int(membership.auth_version or 1) + 1
+    user = db.get(User, membership.user_id)
+    if user is not None and user.email:
+        revoke_pending_invitations_for_email(
+            db,
+            admin_user_id=admin_user_id,
+            organization_id=membership.organization_id,
+            email=user.email,
+        )
     record_audit(
         db,
         organization_id=membership.organization_id,

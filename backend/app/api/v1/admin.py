@@ -238,12 +238,17 @@ def organization_directory(
     member_rows = (
         db.query(OrganizationMembership, User)
         .join(User, User.id == OrganizationMembership.user_id)
-        .filter(OrganizationMembership.organization_id == organization_id)
+        .filter(
+            OrganizationMembership.organization_id == organization_id,
+            OrganizationMembership.is_active.is_(True),
+            User.is_active.is_(True),
+        )
         .order_by(User.full_name.asc())
         .all()
     )
+    active_member_emails: set[str] = set()
     for membership, user in member_rows:
-        status_label = "Active" if membership.is_active and user.is_active else "Inactive"
+        active_member_emails.add(user.email.strip().lower())
         rows.append(
             AdminDirectoryRow(
                 row_id=f"m-{membership.id}",
@@ -253,7 +258,7 @@ def organization_directory(
                 full_name=user.full_name,
                 email=user.email,
                 role=Role(membership.role),
-                status=status_label,
+                status="Active",
             )
         )
 
@@ -270,12 +275,14 @@ def organization_directory(
         .all()
     )
     for inv in invites:
+        if inv.email.strip().lower() in active_member_emails:
+            continue
         rows.append(
             AdminDirectoryRow(
                 row_id=f"i-{inv.id}",
                 kind="invitation",
                 invitation_id=inv.id,
-                full_name="—",
+                full_name=inv.invitee_full_name or "—",
                 email=inv.email,
                 role=Role(inv.role),
                 status="Pending invite",
