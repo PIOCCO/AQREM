@@ -179,17 +179,42 @@ def accept_invite(
                 status_code=400,
                 detail={"message": "This email is a platform administrator account and cannot accept an organization invitation."},
             ) from exc
-        if str(exc) in {"EMAIL_MISMATCH", "VERIFICATION_REQUIRED", "VERIFICATION_EXPIRED", "VERIFICATION_INVALID"}:
+        if str(exc) == "VERIFICATION_REQUIRED":
+            raise HTTPException(
+                status_code=400,
+                detail={"message": "Send a verification code to your email first, then enter it here."},
+            ) from exc
+        if str(exc) == "VERIFICATION_EXPIRED":
+            raise HTTPException(
+                status_code=400,
+                detail={"message": "That verification code expired. Click Resend code and use the newest email."},
+            ) from exc
+        if str(exc) == "VERIFICATION_LOCKED":
+            raise HTTPException(
+                status_code=400,
+                detail={"message": "Too many wrong codes. Click Resend code to get a new one."},
+            ) from exc
+        if str(exc) == "VERIFICATION_INVALID":
+            raise HTTPException(
+                status_code=400,
+                detail={"message": "That verification code is incorrect. Use the code from your latest email."},
+            ) from exc
+        if str(exc) in {"EMAIL_MISMATCH"}:
             raise HTTPException(status_code=400, detail={"message": "Verification failed for this invitation."}) from exc
+        if str(exc).startswith("ORG_SIGNIN_BLOCKED:"):
+            reason = str(exc).split(":", 1)[1]
+            raise HTTPException(status_code=403, detail={"message": reason}) from exc
+        if str(exc) in {"Organization deleted", "Organization unavailable"}:
+            raise HTTPException(
+                status_code=403,
+                detail={"message": "This organization is no longer available. Ask your platform team for a new invitation."},
+            ) from exc
         raise HTTPException(status_code=400, detail={"message": "This invitation is not valid."}) from None
     db.commit()
 
     org = db.get(Organization, membership.organization_id)
     if org is None:
         raise HTTPException(status_code=400, detail={"message": "This invitation is not valid."})
-    allowed, reason = org_allows_sign_in(org)
-    if not allowed:
-        raise HTTPException(status_code=403, detail=reason)
 
     member_role = Role(membership.role)
     audience = AUD_ORG_ADMIN if member_role == Role.ORG_ADMIN else AUD_EMPLOYEE

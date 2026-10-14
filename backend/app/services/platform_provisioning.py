@@ -329,15 +329,18 @@ def accept_invitation(
     password: str,
     full_name: str | None = None,
 ) -> tuple[User, OrganizationMembership]:
-    token_hash = hash_invitation_token(token)
+    from app.services.invitations.admin_invitation_accept import assert_admin_accept_verified
+    from app.services.invitations.tokens import hash_token
+    from app.services.licensing import org_allows_sign_in
+
+    token_hash = hash_token(token.strip())
     invitation = db.query(UserInvitation).filter(UserInvitation.token_hash == token_hash).first()
     if invitation is None:
         raise ValueError("Invalid invitation")
-    from app.services.invitations.admin_invitation_accept import assert_admin_accept_verified
-
-    assert_admin_accept_verified(invitation, email=email, verification_code=verification_code)
     if invitation.used_at is not None:
         raise ValueError("Invitation already used")
+    if invitation.revoked_at is not None:
+        raise ValueError("Invitation revoked")
     now = datetime.now(timezone.utc)
     expires = invitation.expires_at
     if expires.tzinfo is None:
@@ -345,7 +348,20 @@ def accept_invitation(
     if expires < now:
         raise ValueError("Invitation expired")
 
-    user = db.query(User).filter(User.email == invitation.email).first()
+    org = db.get(Organization, invitation.organization_id)
+    if org is None or not org.is_active:
+        raise ValueError("Organization unavailable")
+    if getattr(org, "deleted_at", None) is not None:
+        raise ValueError("Organization deleted")
+    allowed, reason = org_allows_sign_in(org)
+    if not allowed:
+        raise ValueError(f"ORG_SIGNIN_BLOCKED:{reason}")
+
+    assert_admin_accept_verified(invitation, email=email, verification_code=verification_code)
+
+    user = db.query(User).filter(User.email == invitation.email.strip().lower()).first()
+    if user is None:
+        user = db.query(User).filter(User.email == invitation.email).first()
     if user is None:
         raise ValueError("User not found for invitation")
     if user.is_platform_admin or (user.platform_role or "").strip():

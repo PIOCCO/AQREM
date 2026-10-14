@@ -202,7 +202,7 @@ export async function acceptInvitation(payload: {
       full_name: payload.full_name,
     }),
   });
-  if (!res.ok) throw new Error("Invitation failed");
+  if (!res.ok) throw new Error(await readApiError(res, "Could not accept invitation"));
   return res.json();
 }
 

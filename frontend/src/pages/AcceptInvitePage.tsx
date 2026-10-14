@@ -141,8 +141,8 @@ export default function AcceptInvitePage() {
       const orgId = resolveOrganizationIdForSession(data.access_token, data.organization_id ?? null);
       saveSession(data.access_token, orgId);
       navigate(resolvePostAuthPath({ ...data, organization_id: orgId }));
-    } catch {
-      setError("Could not accept invitation. The link may be expired, already used, or not valid for this account.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not accept invitation.");
     } finally {
       setLoading(false);
     }
