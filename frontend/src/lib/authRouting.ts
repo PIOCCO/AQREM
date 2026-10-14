@@ -28,6 +28,9 @@ export function isTenantSessionToken(token: string): boolean {
 /** Canonical platform console path (L1). */
 export const SUPER_ADMIN_BASE = "/super-admin";
 
+/** Organization admin console path (L2). */
+export const ORG_ADMIN_BASE = "/org-admin";
+
 export function organizationIdFromToken(token: string): string | null {
   const raw = parseJwtPayload(token)?.organization_id;
   return normalizeOrganizationId(typeof raw === "string" ? raw : null);
@@ -56,7 +59,7 @@ export function resolvePostAuthPath(payload: PostAuthPayload, nextPath = "/"): s
   const platformToken = isPlatformSessionToken(payload.access_token);
 
   if (platformToken && !orgId) return SUPER_ADMIN_BASE;
-  if (payload.role === "ORG_ADMIN") return "/admin";
+  if (payload.role === "ORG_ADMIN") return ORG_ADMIN_BASE;
   if (platformToken && (nextPath.includes("super-admin") || nextPath.includes("master-admin"))) {
     return SUPER_ADMIN_BASE;
   }

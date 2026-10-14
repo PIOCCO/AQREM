@@ -21,10 +21,10 @@ function StepIcon({ status }: { status: string }) {
 }
 
 const STEP_LINKS: Record<string, { to: string; label: string }> = {
-  model_token: { to: "/admin/model-token", label: "Connect token" },
-  documents: { to: "/admin/documents", label: "Upload documents" },
-  access: { to: "/admin/users", label: "Set up access" },
-  employee_link: { to: "/admin/users", label: "Configure access first" },
+  model_token: { to: "/org-admin/model-token", label: "Connect token" },
+  documents: { to: "/org-admin/documents", label: "Upload documents" },
+  access: { to: "/org-admin/users", label: "Set up access" },
+  employee_link: { to: "/org-admin/users", label: "Configure access first" },
 };
 
 function SetupRow({ step }: { step: SetupStep }) {

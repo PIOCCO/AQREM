@@ -16,7 +16,7 @@ describe("resolvePostAuthPath", () => {
         organization_id: "11111111-1111-4111-8111-111111111111",
         role: "ORG_ADMIN",
       }),
-    ).toBe("/admin");
+    ).toBe("/org-admin");
   });
 
   it("sends platform token without org to master admin", () => {

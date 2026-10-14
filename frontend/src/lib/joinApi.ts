@@ -1,7 +1,11 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+import { resolveApiBase } from "./apiBase";
+
+function apiUrl(path: string): string {
+  return `${resolveApiBase()}${path}`;
+}
 
 export async function previewJoin(token: string): Promise<{ organization_name: string }> {
-  const res = await fetch(`${API_BASE}/api/v1/public/join/preview`, {
+  const res = await fetch(apiUrl("/api/v1/public/join/preview"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token }),
@@ -11,7 +15,7 @@ export async function previewJoin(token: string): Promise<{ organization_name: s
 }
 
 export async function startJoin(payload: { token: string; email: string; full_name: string }) {
-  const res = await fetch(`${API_BASE}/api/v1/public/join/start`, {
+  const res = await fetch(apiUrl("/api/v1/public/join/start"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -28,7 +32,7 @@ export async function startJoin(payload: { token: string; email: string; full_na
 }
 
 export async function verifyJoinEmail(payload: { token: string; pending_id: string; code: string }) {
-  const res = await fetch(`${API_BASE}/api/v1/public/join/verify-email`, {
+  const res = await fetch(apiUrl("/api/v1/public/join/verify-email"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -38,7 +42,7 @@ export async function verifyJoinEmail(payload: { token: string; pending_id: stri
 }
 
 export async function completeJoin(payload: { token: string; pending_id: string; password: string }) {
-  const res = await fetch(`${API_BASE}/api/v1/public/join/complete`, {
+  const res = await fetch(apiUrl("/api/v1/public/join/complete"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -51,17 +55,24 @@ export async function completeJoin(payload: { token: string; pending_id: string;
   return res.json() as Promise<{ status: string; access_token?: string; organization_id?: string }>;
 }
 
-export async function previewAcceptInvitation(token: string) {
-  const res = await fetch(`${API_BASE}/api/v1/auth/accept-invitation/preview`, {
+export type AcceptInvitationPreview = {
+  organization_name: string;
+  role: string;
+  email: string;
+  invitee_full_name: string | null;
+  status?: "pending" | "expired" | "revoked" | "accepted";
+};
+
+export async function previewAcceptInvitation(token: string): Promise<AcceptInvitationPreview> {
+  const res = await fetch(apiUrl("/api/v1/auth/accept-invitation/preview"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token }),
   });
-  if (!res.ok) throw new Error("invalid");
-  return res.json() as Promise<{
-    organization_name: string;
-    role: string;
-    email: string;
-    invitee_full_name: string | null;
-  }>;
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const msg = (body as { detail?: { message?: string } }).detail?.message;
+    throw new Error(msg ?? "invalid");
+  }
+  return res.json();
 }

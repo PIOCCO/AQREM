@@ -68,7 +68,12 @@ export default function AcceptInvitePage() {
     if (!token) return;
     previewAcceptInvitation(token)
       .then(setPreview)
-      .catch(() => setError("This invitation is not valid."));
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "";
+        if (/expired/i.test(msg)) setError("This invitation has expired. Ask your platform team to send a new link.");
+        else if (/revoked|used|accepted/i.test(msg)) setError("This invitation is no longer valid.");
+        else setError("This invitation is not valid.");
+      });
   }, [token]);
 
   const wrongAccount =

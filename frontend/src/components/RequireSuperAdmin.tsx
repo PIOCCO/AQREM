@@ -1,7 +1,13 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { clearSession, fetchAuthMePlatform, loadSession, saveSession } from "../lib/api";
-import { isPlatformSessionToken, SUPER_ADMIN_BASE } from "../lib/authRouting";
+import { clearSession, fetchAuthMe, fetchAuthMePlatform, loadSession, saveSession } from "../lib/api";
+import {
+  isPlatformSessionToken,
+  isTenantSessionToken,
+  ORG_ADMIN_BASE,
+  SUPER_ADMIN_BASE,
+} from "../lib/authRouting";
+import { hasAdminConsoleAccess } from "../lib/permissions";
 import { LoadingState } from "./ui/States";
 
 /**
@@ -10,6 +16,7 @@ import { LoadingState } from "./ui/States";
 export default function RequireSuperAdmin({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [allowed, setAllowed] = useState(false);
+  const [redirectTo, setRedirectTo] = useState<string | null>(null);
 
   useEffect(() => {
     const session = loadSession();
@@ -18,6 +25,19 @@ export default function RequireSuperAdmin({ children }: { children: ReactNode })
       return;
     }
     if (!isPlatformSessionToken(session.token)) {
+      if (isTenantSessionToken(session.token)) {
+        fetchAuthMe(session)
+          .then((me) => {
+            if (hasAdminConsoleAccess(me.permissions) || me.role === "ORG_ADMIN") {
+              setRedirectTo(ORG_ADMIN_BASE);
+            } else {
+              setRedirectTo("/");
+            }
+          })
+          .catch(() => setRedirectTo("/"))
+          .finally(() => setReady(true));
+        return;
+      }
       setAllowed(false);
       setReady(true);
       return;
@@ -35,6 +55,8 @@ export default function RequireSuperAdmin({ children }: { children: ReactNode })
         setReady(true);
       });
   }, []);
+
+  if (redirectTo) return <Navigate to={redirectTo} replace />;
 
   if (!ready) {
     return (

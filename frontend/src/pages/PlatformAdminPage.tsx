@@ -223,12 +223,30 @@ function PlatformAdminInner({
       setInviteSetup(null);
       return;
     }
-    if (tab === "members" || tab === "overview") {
+    if (tab === "members" || tab === "overview" || tab === "invitations") {
       fetchInvitationsSetup(loadSession()!, selectedId)
         .then(setInviteSetup)
         .catch(() => setInviteSetup(null));
     }
   }, [tab, selectedId, sessionToken]);
+
+  const invitationsTabCount = useMemo(() => {
+    const fromSeats = selected?.seats.pending_invitations ?? 0;
+    if (inviteSetup?.pending_org_admin_invite) {
+      return Math.max(fromSeats, 1);
+    }
+    return fromSeats;
+  }, [selected?.seats.pending_invitations, inviteSetup?.pending_org_admin_invite]);
+
+  const adminSetupLabel = useMemo(() => {
+    if (!inviteSetup) return selected && selected.seats.pending_invitations > 0 ? "Pending" : "Set up";
+    if (inviteSetup.has_active_org_admin || inviteSetup.admin_accepted) return "Complete";
+    if (inviteSetup.pending_org_admin_invite) return "Pending";
+    if (inviteSetup.admin_invitation_status === "expired" || inviteSetup.admin_invitation_status === "revoked") {
+      return "Needs attention";
+    }
+    return "Set up";
+  }, [inviteSetup, selected]);
 
   useEffect(() => {
     if (tab === "members" || tab === "overview") refreshDirectory().catch(() => undefined);
@@ -590,7 +608,7 @@ function PlatformAdminInner({
                     ["overview", "Overview"],
                     ["members", `Members ${membersTabCount}`],
                     ["license", "License"],
-                    ["invitations", `Invitations ${selected.seats.pending_invitations}`],
+                    ["invitations", `Invitations ${invitationsTabCount}`],
                     ["audit", "Audit log"],
                   ] as const
                 ).map(([id, label]) => (
@@ -858,7 +876,7 @@ function PlatformAdminInner({
                       <li className="flex justify-between gap-2">
                         <span>Admin invited</span>
                         <button type="button" className="text-xs underline" onClick={() => setTab("invitations")}>
-                          {selected.seats.pending_invitations > 0 ? "Pending" : "Set up"}
+                          {adminSetupLabel}
                         </button>
                       </li>
                       <li className="flex justify-between gap-2">

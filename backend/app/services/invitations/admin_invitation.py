@@ -181,12 +181,12 @@ def provision_admin_invitation(
             organization_id=organization_id,
             user_id=user.id,
             role=Role.ORG_ADMIN.value,
-            is_active=True,
+            is_active=False,
         )
         db.add(membership)
     else:
         membership.role = Role.ORG_ADMIN.value
-        membership.is_active = True
+        membership.is_active = False
 
     raw_token = generate_opaque_token()
     expires_at = now + timedelta(days=expires_days)

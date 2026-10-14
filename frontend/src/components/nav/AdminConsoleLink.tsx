@@ -9,13 +9,13 @@ type Props = {
 
 export function AdminConsoleLink({ variant, onNavigate }: Props) {
   const location = useLocation();
-  const inAdmin = location.pathname.startsWith("/admin");
+  const inAdmin = location.pathname.startsWith("/org-admin") || location.pathname.startsWith("/admin");
 
   if (variant === "rail") {
     return (
       <Tooltip label="Admin console">
         <NavLink
-          to="/admin"
+          to="/org-admin"
           onClick={onNavigate}
           className={({ isActive }) => `sidebar-rail-btn ${isActive || inAdmin ? "sidebar-rail-btn-active" : ""}`}
           aria-label="Admin console"
@@ -30,7 +30,7 @@ export function AdminConsoleLink({ variant, onNavigate }: Props) {
 
   if (variant === "menu") {
     return (
-      <NavLink to="/admin" className="chat-menu-item block" onClick={onNavigate} data-testid="admin-console-link-menu">
+      <NavLink to="/org-admin" className="chat-menu-item block" onClick={onNavigate} data-testid="admin-console-link-menu">
         Admin console
       </NavLink>
     );
@@ -38,7 +38,7 @@ export function AdminConsoleLink({ variant, onNavigate }: Props) {
 
   return (
     <NavLink
-      to="/admin"
+      to="/org-admin"
       onClick={onNavigate}
       className={({ isActive }) => `ref-nav-item ${isActive || inAdmin ? "ref-nav-item-active" : ""}`}
       aria-label="Admin console"

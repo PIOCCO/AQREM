@@ -6,15 +6,15 @@ import { roleDisplayLabel } from "../../lib/roleLabels";
 import { fetchOrgOverview } from "../../lib/orgAdminApi";
 
 const NAV = [
-  { to: "/admin", end: true, label: "Setup" },
-  { to: "/admin/documents", label: "Documents" },
-  { to: "/admin/access", label: "Access" },
-  { to: "/admin/data-storage", label: "Data storage" },
-  { to: "/admin/model-token", label: "Model token" },
-  { to: "/admin/users", label: "Users & access" },
-  { to: "/admin/usage", label: "Usage" },
-  { to: "/admin/audit", label: "Security & audit" },
-  { to: "/admin/privacy", label: "Privacy" },
+  { to: "/org-admin", end: true, label: "Overview" },
+  { to: "/org-admin/users", label: "Members" },
+  { to: "/org-admin/usage", label: "Usage" },
+  { to: "/org-admin/documents", label: "Documents" },
+  { to: "/org-admin/access", label: "Access" },
+  { to: "/org-admin/data-storage", label: "Settings" },
+  { to: "/org-admin/model-token", label: "Model token" },
+  { to: "/org-admin/audit", label: "Audit log" },
+  { to: "/org-admin/privacy", label: "Privacy" },
 ];
 
 export default function ClientAdminShell() {

@@ -5,10 +5,11 @@ import { clearSession, fetchAuthMe, loadSession, saveSession } from "../lib/api"
 import {
   isPlatformSessionToken,
   isTenantSessionToken,
-  organizationIdFromToken,
+  ORG_ADMIN_BASE,
   resolveOrganizationIdForSession,
   SUPER_ADMIN_BASE,
 } from "../lib/authRouting";
+import { hasAdminConsoleAccess } from "../lib/permissions";
 import { LoadingState } from "./ui/States";
 
 /**
@@ -53,6 +54,16 @@ export default function RequireTenantWorkspace({ children }: { children: ReactNo
       .then((me) => {
         if (me.must_change_password && !window.location.pathname.startsWith("/change-password")) {
           window.location.assign("/change-password");
+          return;
+        }
+        if (
+          (hasAdminConsoleAccess(me.permissions) || me.role === "ORG_ADMIN") &&
+          !window.location.pathname.startsWith(ORG_ADMIN_BASE) &&
+          !window.location.pathname.startsWith("/admin")
+        ) {
+          setRedirectTo(ORG_ADMIN_BASE);
+          setValid(false);
+          setReady(true);
           return;
         }
         setValid(true);

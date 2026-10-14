@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import AppShell from "./components/layout/AppShell";
 import RequireAuth from "./components/RequireAuth";
 import { ToastProvider } from "./components/ui/Toast";
@@ -56,6 +56,37 @@ import RouteErrorBoundary from "./components/ui/RouteErrorBoundary";
 
 function PublicTheme({ children }: { children: ReactNode }) {
   return <ThemeProvider>{children}</ThemeProvider>;
+}
+
+/** Legacy `/admin` URLs → `/org-admin` (preserve subpath). */
+function AdminLegacyRedirect() {
+  const { pathname, search, hash } = useLocation();
+  const target = pathname.replace(/^\/admin(?=\/|$)/, "/org-admin") + search + hash;
+  return <Navigate to={target} replace />;
+}
+
+const orgAdminRouteTree = (
+  <>
+    <Route index element={<ClientAdminSetupPage />} />
+    <Route path="documents" element={<ClientAdminDocumentsPage />} />
+    <Route path="access" element={<ClientAdminAccessPage />} />
+    <Route path="data-storage" element={<ClientAdminDataStoragePage />} />
+    <Route path="model-token" element={<ClientAdminModelTokenPage />} />
+    <Route path="users" element={<ClientAdminUsersPage />} />
+    <Route path="usage" element={<ClientAdminUsagePage />} />
+    <Route path="audit" element={<ClientAdminAuditPage />} />
+    <Route path="privacy" element={<ClientAdminPrivacyPage />} />
+  </>
+);
+
+function OrgAdminRouteShell() {
+  return (
+    <RequireTenantWorkspace>
+      <RequireOrgAdminOnly>
+        <ClientAdminShell />
+      </RequireOrgAdminOnly>
+    </RequireTenantWorkspace>
+  );
 }
 
 function AuthenticatedApp() {
@@ -208,26 +239,10 @@ export default function App() {
         <Route path="audit" element={<SuperAdminAuditPage />} />
         <Route path="settings" element={<SuperAdminSettingsPage />} />
       </Route>
-      <Route
-        path="/admin"
-        element={
-          <RequireTenantWorkspace>
-            <RequireOrgAdminOnly>
-              <ClientAdminShell />
-            </RequireOrgAdminOnly>
-          </RequireTenantWorkspace>
-        }
-      >
-        <Route index element={<ClientAdminSetupPage />} />
-        <Route path="documents" element={<ClientAdminDocumentsPage />} />
-        <Route path="access" element={<ClientAdminAccessPage />} />
-        <Route path="data-storage" element={<ClientAdminDataStoragePage />} />
-        <Route path="model-token" element={<ClientAdminModelTokenPage />} />
-        <Route path="users" element={<ClientAdminUsersPage />} />
-        <Route path="usage" element={<ClientAdminUsagePage />} />
-        <Route path="audit" element={<ClientAdminAuditPage />} />
-        <Route path="privacy" element={<ClientAdminPrivacyPage />} />
+      <Route path="/org-admin" element={<OrgAdminRouteShell />}>
+        {orgAdminRouteTree}
       </Route>
+      <Route path="/admin/*" element={<AdminLegacyRedirect />} />
       <Route
         path="/*"
         element={

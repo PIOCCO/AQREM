@@ -8,6 +8,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.core.roles import Role
 from app.models.invitation import UserInvitation
 from app.models.employee_join import EmployeeJoinPending
 from app.models.organization import OrganizationMembership
@@ -74,6 +75,9 @@ def count_pending_invitations(db: Session, organization_id: UUID) -> int:
     )
     extra = 0
     for inv in pending:
+        if inv.invitation_kind == "org_admin" or inv.role == Role.ORG_ADMIN.value:
+            extra += 1
+            continue
         user = db.query(User).filter(User.email == inv.email.lower()).first()
         if user is None:
             extra += 1

@@ -1,7 +1,10 @@
+import { resolveApiBase } from "./apiBase";
+
+function apiUrl(p: string) { return `${resolveApiBase()}${p}`; }
+
 import { readApiError } from "./errors";
 import type { AuthSession } from "./api";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 function headers(session: AuthSession): HeadersInit {
   return {
@@ -37,18 +40,18 @@ export type OrgOverview = {
 };
 
 export async function recordAdminConsoleEnter(session: AuthSession): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/console-enter`, { headers: headers(session) });
+  const res = await fetch(apiUrl(`/api/v1/org-admin/console-enter`), { headers: headers(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Admin console access denied"));
 }
 
 export async function fetchOrgOverview(session: AuthSession): Promise<OrgOverview> {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/overview`, { headers: headers(session) });
+  const res = await fetch(apiUrl(`/api/v1/org-admin/overview`), { headers: headers(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load overview"));
   return res.json();
 }
 
 export async function fetchAccessGroups(session: AuthSession) {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/access/groups`, { headers: headers(session) });
+  const res = await fetch(apiUrl(`/api/v1/org-admin/access/groups`), { headers: headers(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load groups"));
   return res.json() as Promise<
     Array<{ id: string; name: string; slug: string; is_system: boolean; member_count: number }>
@@ -56,7 +59,7 @@ export async function fetchAccessGroups(session: AuthSession) {
 }
 
 export async function fetchDocumentsNeedingReview(session: AuthSession) {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/access/documents/needs-review/count`, {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/access/documents/needs-review/count`), {
     headers: headers(session),
   });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load review count"));
@@ -65,7 +68,7 @@ export async function fetchDocumentsNeedingReview(session: AuthSession) {
 
 export async function fetchDocuments(session: AuthSession, page = 1, pageSize = 10) {
   const res = await fetch(
-    `${API_BASE}/api/v1/org-admin/documents?page=${page}&page_size=${pageSize}`,
+    apiUrl(`/api/v1/org-admin/documents?page=${page}&page_size=${pageSize}`),
     { headers: headers(session) },
   );
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load documents"));
@@ -84,7 +87,7 @@ export async function uploadDocuments(
   if (visibilityGroupIds?.length) {
     form.append("visibility_group_ids", visibilityGroupIds.join(","));
   }
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/documents/upload`, {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/documents/upload`), {
     method: "POST",
     headers: { Authorization: `Bearer ${session.token}`, "X-Organization-Id": session.organizationId! },
     body: form,
@@ -94,7 +97,7 @@ export async function uploadDocuments(
 }
 
 export async function removeDocument(session: AuthSession, documentId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/documents/${documentId}`, {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/documents/${documentId}`), {
     method: "DELETE",
     headers: headers(session),
   });
@@ -102,7 +105,7 @@ export async function removeDocument(session: AuthSession, documentId: string) {
 }
 
 export async function retryDocument(session: AuthSession, documentId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/documents/${documentId}/retry`, {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/documents/${documentId}/retry`), {
     method: "POST",
     headers: headers(session),
   });
@@ -121,13 +124,13 @@ export type ModelTokenInfo = {
 };
 
 export async function fetchModelToken(session: AuthSession): Promise<ModelTokenInfo> {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/model-token`, { headers: headers(session) });
+  const res = await fetch(apiUrl(`/api/v1/org-admin/model-token`), { headers: headers(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load model token status"));
   return res.json();
 }
 
 export async function saveModelToken(session: AuthSession, token: string) {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/model-token`, {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/model-token`), {
     method: "PUT",
     headers: headers(session),
     body: JSON.stringify({ token }),
@@ -137,7 +140,7 @@ export async function saveModelToken(session: AuthSession, token: string) {
 }
 
 export async function testModelToken(session: AuthSession) {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/model-token/test`, {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/model-token/test`), {
     method: "POST",
     headers: headers(session),
   });
@@ -146,7 +149,7 @@ export async function testModelToken(session: AuthSession) {
 }
 
 export async function fetchMembers(session: AuthSession) {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/members`, { headers: headers(session) });
+  const res = await fetch(apiUrl(`/api/v1/org-admin/members`), { headers: headers(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load members"));
   return res.json();
 }
@@ -155,7 +158,7 @@ export async function inviteMember(
   session: AuthSession,
   payload: { email: string; full_name: string; role: string },
 ) {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/members/invite`, {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/members/invite`), {
     method: "POST",
     headers: headers(session),
     body: JSON.stringify(payload),
@@ -165,7 +168,7 @@ export async function inviteMember(
 }
 
 export async function removeOrgMember(session: AuthSession, membershipId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/members/${membershipId}/deactivate`, {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/members/${membershipId}/deactivate`), {
     method: "POST",
     headers: headers(session),
   });
@@ -173,19 +176,19 @@ export async function removeOrgMember(session: AuthSession, membershipId: string
 }
 
 export async function fetchOrgUsage(session: AuthSession) {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/usage`, { headers: headers(session) });
+  const res = await fetch(apiUrl(`/api/v1/org-admin/usage`), { headers: headers(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load usage"));
   return res.json();
 }
 
 export async function fetchOrgAudit(session: AuthSession, limit = 50) {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/audit?limit=${limit}`, { headers: headers(session) });
+  const res = await fetch(apiUrl(`/api/v1/org-admin/audit?limit=${limit}`), { headers: headers(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load audit log"));
   return res.json();
 }
 
 export async function fetchChatSharing(session: AuthSession): Promise<{ enabled: boolean; default_ttl_days: number }> {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/chat-sharing`, { headers: headers(session) });
+  const res = await fetch(apiUrl(`/api/v1/org-admin/chat-sharing`), { headers: headers(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load chat sharing settings"));
   return res.json();
 }
@@ -194,7 +197,7 @@ export async function updateChatSharing(
   session: AuthSession,
   payload: { enabled: boolean; default_ttl_days?: number },
 ): Promise<{ enabled: boolean; default_ttl_days: number }> {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/chat-sharing`, {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/chat-sharing`), {
     method: "PUT",
     headers: headers(session),
     body: JSON.stringify(payload),
@@ -204,13 +207,13 @@ export async function updateChatSharing(
 }
 
 export async function fetchTelemetrySchema(session: AuthSession) {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/telemetry-schema`, { headers: headers(session) });
+  const res = await fetch(apiUrl(`/api/v1/org-admin/telemetry-schema`), { headers: headers(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load telemetry schema"));
   return res.json();
 }
 
 export async function recordEmployeeLinkCopied(session: AuthSession) {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/employee-link/copied`, {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/employee-link/copied`), {
     method: "POST",
     headers: headers(session),
   });
@@ -253,7 +256,7 @@ export type DataStoragePayload = {
 };
 
 export async function fetchDataStorage(session: AuthSession): Promise<DataStorageConfig> {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/data-storage`, { headers: headers(session) });
+  const res = await fetch(apiUrl(`/api/v1/org-admin/data-storage`), { headers: headers(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load data storage"));
   return res.json();
 }
@@ -262,7 +265,7 @@ export async function runDataStoragePreflight(
   session: AuthSession,
   payload: DataStoragePayload,
 ): Promise<PreflightReport> {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/data-storage/preflight`, {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/data-storage/preflight`), {
     method: "POST",
     headers: headers(session),
     body: JSON.stringify(payload),
@@ -275,7 +278,7 @@ export async function configureDataStorage(
   session: AuthSession,
   payload: DataStoragePayload,
 ): Promise<DataStorageConfig> {
-  const res = await fetch(`${API_BASE}/api/v1/org-admin/data-storage`, {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/data-storage`), {
     method: "PUT",
     headers: headers(session),
     body: JSON.stringify(payload),
