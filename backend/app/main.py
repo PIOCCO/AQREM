@@ -30,6 +30,9 @@ logger = logging.getLogger("aqrem")
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     settings = get_settings()
+    from app.core.container_config import validate_container_startup
+
+    validate_container_startup(os.environ.get("CONTAINER_ROLE", "api"), settings)
     summary = llm_provider_summary(settings)
     logger.info(
         "LLM provider=%s configured=%s auth=%s",
