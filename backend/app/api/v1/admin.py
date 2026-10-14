@@ -2,7 +2,7 @@ import secrets
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.admin_errors import admin_error
@@ -447,6 +447,7 @@ def list_invitations(
 def provision_user(
     organization_id: UUID,
     payload: AdminProvisionUserRequest,
+    request: Request,
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("invitation:create_admin")),
 ) -> AdminProvisionUserResponse:
@@ -510,7 +511,7 @@ def provision_user(
         invitation_id=invitation.id,
         invitation_expires_at=expires_at,
         invitation_setup_path=invitation_setup_path(raw_token),
-        invitation_setup_url=invitation_setup_url(raw_token),
+        invitation_setup_url=invitation_setup_url(raw_token, request=request),
     )
 
 
@@ -518,6 +519,7 @@ def provision_user(
 def resend_user_invitation(
     organization_id: UUID,
     invitation_id: UUID,
+    request: Request,
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("invitation:create_admin")),
 ) -> AdminProvisionUserResponse:
@@ -541,7 +543,7 @@ def resend_user_invitation(
         invitation_id=invitation.id,
         invitation_expires_at=expires_at,
         invitation_setup_path=invitation_setup_path(raw_token),
-        invitation_setup_url=invitation_setup_url(raw_token),
+        invitation_setup_url=invitation_setup_url(raw_token, request=request),
     )
 
 
@@ -865,6 +867,7 @@ def delete_platform_staff(
 def replace_org_admin(
     organization_id: UUID,
     payload: ReplaceOrgAdminRequest,
+    request: Request,
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("org_admin:replace")),
 ) -> AdminProvisionUserResponse:
@@ -925,5 +928,5 @@ def replace_org_admin(
         invitation_id=invitation.id,
         invitation_expires_at=expires_at,
         invitation_setup_path=invitation_setup_path(raw_token),
-        invitation_setup_url=invitation_setup_url(raw_token),
+        invitation_setup_url=invitation_setup_url(raw_token, request=request),
     )

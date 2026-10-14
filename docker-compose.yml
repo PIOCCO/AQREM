@@ -42,6 +42,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://aqrem:aqrem@postgres:5432/aqrem
       REDIS_URL: redis://redis:6379/0
+      # Set in .env: PUBLIC_BASE_URL=http://<tailscale-ip>:5173 (must match the URL you open in the browser)
       AZURE_STORAGE_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
     ports:
       - "8000:8000"

@@ -631,12 +631,21 @@ def invite_member(
         payload={"seats_used": seats.seats_used, "seats_limit": seats.seats_limit},
     )
     db.commit()
-    from app.services.invitations.invite_urls import absolute_from_invite_path, invite_path
+    from app.services.invitations.invite_urls import build_invite_url, invite_path
 
     path = invite_path("member", raw_token)
+    try:
+        setup_url = build_invite_url("member", raw_token, request=request)
+    except ValueError as exc:
+        raise org_admin_error(
+            code="PUBLIC_URL_NOT_CONFIGURED",
+            message="Invitation was created but the public base URL is not configured. Set PUBLIC_BASE_URL (PUBLIC_APP_URL) on the server or ensure the reverse proxy forwards Host and X-Forwarded-* headers.",
+            status_code=503,
+        ) from exc
     return {
         "invitation_setup_path": path,
-        "invitation_setup_url": absolute_from_invite_path(path),
+        "invitation_setup_url": setup_url,
+        "invite_url": setup_url,
         "expires_at": expires_at.isoformat(),
     }
 
