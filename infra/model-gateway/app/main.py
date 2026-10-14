@@ -11,16 +11,19 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from app.auth import verify_api_key
 from app.config import get_settings
 from app.db import ensure_schema
-from app.limits import check_and_consume, record_usage
+from app.limits import check_and_consume, configure_engine, record_usage
+from app.keys_api import router as keys_router
 from app.proxy import UpstreamError, forward_json, forward_stream, resolve_path
 
 logger = logging.getLogger("aqrem.gateway")
 app = FastAPI(title="AQREM Model Gateway", version="0.1.0")
+app.include_router(keys_router)
 
 
 @app.on_event("startup")
 def startup() -> None:
     settings = get_settings()
+    configure_engine(settings)
     ensure_schema(settings)
     logging.basicConfig(level=logging.INFO)
 

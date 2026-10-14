@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     upstream_timeout_seconds: float = 120.0
 
     applicationinsights_connection_string: str | None = None
+    internal_provisioning_token: str | None = None
+    limit_db_stale_seconds: float = Field(default=120.0, validation_alias="LIMIT_DB_STALE_SECONDS")
 
 
 def get_settings() -> Settings:

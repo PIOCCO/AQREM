@@ -37,10 +37,10 @@ resource "azurerm_cdn_frontdoor_custom_domain" "client" {
 }
 
 resource "azurerm_cdn_frontdoor_route" "client" {
-  name                          = "${var.client_id}-route"
-  cdn_frontdoor_endpoint_id     = var.front_door_endpoint_id
-  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.client.id
-  cdn_frontdoor_origin_ids      = [azurerm_cdn_frontdoor_origin.client_web.id]
+  name                            = "${var.client_id}-route"
+  cdn_frontdoor_endpoint_id       = var.front_door_endpoint_id
+  cdn_frontdoor_origin_group_id   = azurerm_cdn_frontdoor_origin_group.client.id
+  cdn_frontdoor_origin_ids        = [azurerm_cdn_frontdoor_origin.client_web.id]
   cdn_frontdoor_custom_domain_ids = [azurerm_cdn_frontdoor_custom_domain.client.id]
 
   supported_protocols    = ["Http", "Https"]

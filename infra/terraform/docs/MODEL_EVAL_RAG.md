@@ -1,6 +1,10 @@
 # RAG model evaluation set (provisional)
 
-Before locking **`gpt-4.1-mini`** in production, run this **20-question** set against each candidate (e.g. `gpt-4.1-mini`, `gpt-4.1-nano`, `gpt-4o-mini` if still available) via the **same gateway aliases** and measure:
+**Production gate:** `gpt-4.1-mini` retirement **2027-10-14** fails the “>12 months from go-live” rule (Oct 2026). Keep it as **dev default** until this eval compares **`gpt-4.1-nano`**, **`gpt-4.1-mini`**, and the best **newer small GA** model in **westeurope** (check [retirements](https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirements) and [region availability](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure-region-availability)).
+
+**Pricing:** use [official Azure OpenAI pricing](https://azure.microsoft.com/en-us/pricing/details/cognitive-services/openai-service/) for your region — do not rely on third-party catalogs (mark any uncited numbers **unverified**).
+
+Before locking a model in production, run this **20-question** set against each candidate via the **same gateway aliases** and measure:
 
 - Answer correctness (human 0/1)
 - Citation present when required (0/1)

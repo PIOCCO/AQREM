@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import Generator
-from typing import Any
 
 import psycopg
 from azure.identity import DefaultAzureCredential
@@ -11,6 +10,8 @@ from psycopg.rows import dict_row
 from app.config import Settings
 
 AZURE_PG_SCOPE = "https://ossrdbms-aad.database.windows.net/.default"
+
+SCHEMA = "gateway"
 
 
 def _connect(settings: Settings) -> psycopg.Connection:
@@ -24,6 +25,7 @@ def _connect(settings: Settings) -> psycopg.Connection:
             user=settings.database_user,
             password=token,
             sslmode="require",
+            options="-c search_path=gateway,public",
             row_factory=dict_row,
         )
     raise RuntimeError("Database not configured (DATABASE_URL or Entra PG settings required)")
@@ -43,8 +45,10 @@ def connection(settings: Settings) -> Generator[psycopg.Connection, None, None]:
 
 
 def ensure_schema(settings: Settings) -> None:
-    ddl = """
-    CREATE TABLE IF NOT EXISTS gateway_client (
+    """Runtime bootstrap only when migrations were not applied (dev). Production uses SQL migrations."""
+    ddl = f"""
+    CREATE SCHEMA IF NOT EXISTS {SCHEMA};
+    CREATE TABLE IF NOT EXISTS {SCHEMA}.client (
       client_id TEXT PRIMARY KEY,
       organization_id UUID NOT NULL,
       rpm_limit INT NOT NULL DEFAULT 60,
@@ -53,9 +57,9 @@ def ensure_schema(settings: Settings) -> None:
       active BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
-    CREATE TABLE IF NOT EXISTS gateway_api_key (
+    CREATE TABLE IF NOT EXISTS {SCHEMA}.api_key (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      client_id TEXT NOT NULL REFERENCES gateway_client(client_id) ON DELETE CASCADE,
+      client_id TEXT NOT NULL REFERENCES {SCHEMA}.client(client_id) ON DELETE CASCADE,
       key_prefix TEXT NOT NULL,
       key_hash BYTEA NOT NULL,
       label TEXT NOT NULL DEFAULT 'primary',
@@ -63,16 +67,16 @@ def ensure_schema(settings: Settings) -> None:
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       UNIQUE (client_id, label)
     );
-    CREATE TABLE IF NOT EXISTS gateway_usage_daily (
-      client_id TEXT NOT NULL,
+    CREATE TABLE IF NOT EXISTS {SCHEMA}.usage_daily (
+      client_id TEXT NOT NULL REFERENCES {SCHEMA}.client(client_id) ON DELETE CASCADE,
       usage_date DATE NOT NULL,
       prompt_tokens BIGINT NOT NULL DEFAULT 0,
       completion_tokens BIGINT NOT NULL DEFAULT 0,
       total_tokens BIGINT NOT NULL DEFAULT 0,
       PRIMARY KEY (client_id, usage_date)
     );
-    CREATE TABLE IF NOT EXISTS gateway_rate_window (
-      client_id TEXT NOT NULL,
+    CREATE TABLE IF NOT EXISTS {SCHEMA}.rate_window (
+      client_id TEXT NOT NULL REFERENCES {SCHEMA}.client(client_id) ON DELETE CASCADE,
       window_start TIMESTAMPTZ NOT NULL,
       request_count INT NOT NULL DEFAULT 0,
       token_count BIGINT NOT NULL DEFAULT 0,

@@ -1,0 +1,70 @@
+name: Terraform IaC checks
+
+on:
+  pull_request:
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/terraform-iac.yml"
+  push:
+    branches:
+      - "cursor/**"
+    paths:
+      - "infra/terraform/**"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.11.4"
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive infra/terraform
+
+      - name: Validate root OpenAI module stack
+        working-directory: infra/terraform
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validate platform stack
+        working-directory: infra/terraform/stacks/platform
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validate client stack
+        working-directory: infra/terraform/stacks/client
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: TFLint
+        uses: terraform-linters/setup-tflint@v4
+      - run: tflint --init
+        working-directory: infra/terraform/stacks/platform
+      - run: tflint
+        working-directory: infra/terraform/stacks/platform
+      - run: tflint --init
+        working-directory: infra/terraform/stacks/client
+      - run: tflint
+        working-directory: infra/terraform/stacks/client
+
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/terraform/stacks/platform
+          framework: terraform
+          soft_fail: false
+          quiet: true
+
+      - name: Checkov client stack
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/terraform/stacks/client
+          framework: terraform
+          soft_fail: false
+          quiet: true

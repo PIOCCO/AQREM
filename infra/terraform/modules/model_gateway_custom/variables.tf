@@ -27,6 +27,24 @@ variable "internal_load_balancer_enabled" {
   default = false
 }
 
+variable "zone_redundant" {
+  type        = bool
+  default     = true
+  description = "Zone-redundant platform gateway CAE (min 2 replicas across zones when supported)."
+}
+
+variable "internal_provisioning_token" {
+  type      = string
+  default   = null
+  nullable  = true
+  sensitive = true
+}
+
+variable "limit_db_stale_seconds" {
+  type    = number
+  default = 120
+}
+
 variable "registry_login_server" {
   type = string
 }

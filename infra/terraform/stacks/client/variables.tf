@@ -92,14 +92,14 @@ variable "enable_front_door_route" {
 }
 
 variable "front_door_profile_id" {
-  type    = string
-  default = null
+  type     = string
+  default  = null
   nullable = true
 }
 
 variable "front_door_endpoint_id" {
-  type    = string
-  default = null
+  type     = string
+  default  = null
   nullable = true
 }
 

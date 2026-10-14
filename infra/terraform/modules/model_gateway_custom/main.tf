@@ -6,12 +6,13 @@ resource "azurerm_user_assigned_identity" "gateway" {
 }
 
 resource "azurerm_container_app_environment" "this" {
-  name                       = var.container_app_environment_name
-  location                   = var.location
-  resource_group_name        = var.resource_group_name
-  infrastructure_subnet_id   = var.infrastructure_subnet_id
+  name                           = var.container_app_environment_name
+  location                       = var.location
+  resource_group_name            = var.resource_group_name
+  infrastructure_subnet_id       = var.infrastructure_subnet_id
   internal_load_balancer_enabled = var.internal_load_balancer_enabled
-  tags                       = var.tags
+  tags                           = var.tags
+  # Zone redundancy: enable at CAE create when provider exposes zone_redundant; until then min_replicas>=2.
 
   workload_profile {
     name                  = "Consumption"
@@ -94,6 +95,14 @@ resource "azurerm_container_app" "gateway" {
         name        = "APPLICATIONINSIGHTS_CONNECTION_STRING"
         secret_name = "appinsights-cs"
       }
+      env {
+        name        = "INTERNAL_PROVISIONING_TOKEN"
+        secret_name = "internal-provisioning-token"
+      }
+      env {
+        name  = "LIMIT_DB_STALE_SECONDS"
+        value = tostring(var.limit_db_stale_seconds)
+      }
 
       liveness_probe {
         transport = "HTTP"
@@ -111,6 +120,11 @@ resource "azurerm_container_app" "gateway" {
   secret {
     name  = "appinsights-cs"
     value = coalesce(var.applicationinsights_connection_string, "disabled")
+  }
+
+  secret {
+    name  = "internal-provisioning-token"
+    value = coalesce(var.internal_provisioning_token, "unset")
   }
 
   ingress {

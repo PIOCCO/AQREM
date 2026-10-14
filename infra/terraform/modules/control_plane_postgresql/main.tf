@@ -6,16 +6,16 @@ resource "random_password" "admin" {
 }
 
 resource "azurerm_postgresql_flexible_server" "this" {
-  name                   = var.server_name
-  resource_group_name    = var.resource_group_name
-  location               = var.location
-  version                = var.postgres_version
-  sku_name               = var.sku_name
-  storage_mb             = var.storage_mb
-  backup_retention_days  = var.backup_retention_days
-  zone                   = var.zone
-  delegated_subnet_id    = var.delegated_subnet_id
-  private_dns_zone_id    = var.private_dns_zone_id
+  name                          = var.server_name
+  resource_group_name           = var.resource_group_name
+  location                      = var.location
+  version                       = var.postgres_version
+  sku_name                      = var.sku_name
+  storage_mb                    = var.storage_mb
+  backup_retention_days         = var.backup_retention_days
+  zone                          = var.zone
+  delegated_subnet_id           = var.delegated_subnet_id
+  private_dns_zone_id           = var.private_dns_zone_id
   public_network_access_enabled = false
 
   administrator_login    = var.password_auth_enabled ? var.administrator_login : null

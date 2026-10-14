@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import bcrypt
-from psycopg.rows import dict_row
 
 from app.config import Settings
 from app.db import connection
@@ -16,8 +15,8 @@ def verify_api_key(settings: Settings, raw_key: str) -> dict | None:
             """
             SELECT c.client_id, c.organization_id, c.rpm_limit, c.tpm_limit, c.monthly_token_budget,
                    k.key_hash
-            FROM gateway_api_key k
-            JOIN gateway_client c ON c.client_id = k.client_id
+            FROM gateway.api_key k
+            JOIN gateway.client c ON c.client_id = k.client_id
             WHERE k.active AND c.active AND k.key_prefix = %s
             """,
             (prefix,),

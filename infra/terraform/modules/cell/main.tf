@@ -41,7 +41,7 @@ resource "azurerm_subnet" "postgresql" {
   delegation {
     name = "postgresql"
     service_delegation {
-      name = "Microsoft.DBforPostgreSQL/flexibleServers"
+      name    = "Microsoft.DBforPostgreSQL/flexibleServers"
       actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
     }
   }
@@ -87,12 +87,12 @@ resource "azurerm_subnet_network_security_group_association" "cae" {
 }
 
 resource "azurerm_container_app_environment" "this" {
-  name                         = var.container_app_environment_name
-  location                     = var.location
-  resource_group_name          = local.rg_name
-  infrastructure_subnet_id     = azurerm_subnet.container_apps.id
+  name                           = var.container_app_environment_name
+  location                       = var.location
+  resource_group_name            = local.rg_name
+  infrastructure_subnet_id       = azurerm_subnet.container_apps.id
   internal_load_balancer_enabled = false
-  tags                         = var.tags
+  tags                           = var.tags
 
   workload_profile {
     name                  = "Consumption"

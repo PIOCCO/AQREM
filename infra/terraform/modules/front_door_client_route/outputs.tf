@@ -1,11 +1,11 @@
-output "custom_domain_id" {
-  value = azurerm_cdn_frontdoor_custom_domain.client.id
-}
-
 output "route_id" {
   value = azurerm_cdn_frontdoor_route.client.id
 }
 
-output "afd_origin_protection_note" {
-  value = "Configure Container Apps ingress restriction: service tag AzureFrontDoor.Backend + header X-Azure-FDID = Front Door profile resource GUID."
+output "origin_host_name" {
+  value = azurerm_cdn_frontdoor_origin.client_web.host_name
+}
+
+output "custom_domain_host" {
+  value = var.custom_domain_host
 }

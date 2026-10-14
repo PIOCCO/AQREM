@@ -1,0 +1,81 @@
+name: onboard-client
+
+on:
+  workflow_dispatch:
+    inputs:
+      client_id:
+        description: "Client id (allow-list format)"
+        required: true
+      plan:
+        description: "Plan tier"
+        required: true
+        type: choice
+        options: [starter, professional, business]
+      region:
+        description: "Azure region"
+        default: westeurope
+      db_mode:
+        description: "Database mode"
+        default: managed
+        type: choice
+        options: [managed, byo]
+      seats:
+        description: "Licensed seats"
+        default: "10"
+      public_base_url:
+        description: "Client PUBLIC_BASE_URL (https://...)"
+        required: true
+      resume_deployment_id:
+        description: "Optional UUID to resume FAILED deployment"
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  validate-inputs:
+    runs-on: ubuntu-latest
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          python3 -c "import re,sys; cid=sys.argv[1]; sys.exit(0 if re.fullmatch(r'[a-z][a-z0-9-]{2,31}', cid) else 1)" "${{ inputs.client_id }}"
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+  plan:
+    needs: validate-inputs
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.11.4"
+      - name: Terraform plan
+        working-directory: infra/terraform/stacks/client
+        run: |
+          terraform init
+          terraform plan -var-file=../../parameters/clients/acme.sample.tfvars.json \
+            -var="client_id=${{ inputs.client_id }}" \
+            -out=onboard.tfplan
+      - name: Upload plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: onboard-tfplan
+          path: infra/terraform/stacks/client/onboard.tfplan
+
+  apply:
+    needs: plan
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: echo "Apply gated: download plan artifact and run terraform apply only after manual approval in protected environment."

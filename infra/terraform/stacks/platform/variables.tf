@@ -85,11 +85,23 @@ variable "gateway_container_image" {
   default = "aqremprodacr.azurecr.io/aqrem-model-gateway:latest"
 }
 
+variable "gateway_zone_redundant" {
+  type    = bool
+  default = true
+}
+
+variable "gateway_internal_provisioning_token" {
+  type      = string
+  default   = null
+  nullable  = true
+  sensitive = true
+}
+
 variable "platform_pg_bootstrap_entra_admin_object_id" {
   type        = string
   default     = null
   nullable    = true
-  description = "Provisioning pipeline SP object id for bootstrap PG admin (remove after gateway admin granted)."
+  description = "Provisioning pipeline SP object id for bootstrap PG admin (runs SQL migrations and role grants)."
 }
 
 variable "platform_pg_bootstrap_entra_admin_name" {

@@ -120,7 +120,7 @@ module "model_gateway_custom" {
   container_app_environment_name        = "${local.name_prefix}-gw-cae"
   container_app_name                    = "${local.name_prefix}-gateway"
   location                              = var.location
-  resource_group_name                 = azurerm_resource_group.platform.name
+  resource_group_name                   = azurerm_resource_group.platform.name
   infrastructure_subnet_id              = module.platform_network.subnet_container_apps_id
   registry_login_server                 = module.acr.login_server
   container_image                       = var.gateway_container_image
@@ -131,20 +131,28 @@ module "model_gateway_custom" {
   deployment_name_embeddings            = var.embedding_deployment_name
   control_plane_postgresql_host         = module.control_plane_postgresql.fqdn
   applicationinsights_connection_string = module.monitoring.application_insights_connection_string
+  internal_provisioning_token           = var.gateway_internal_provisioning_token != null ? var.gateway_internal_provisioning_token : random_password.gateway_internal[0].result
   tags                                  = local.common_tags
 
   depends_on = [module.control_plane_postgresql, module.openai]
 }
 
-resource "azurerm_postgresql_flexible_server_active_directory_administrator" "gateway" {
+resource "random_password" "gateway_internal" {
+  count = var.enable_custom_gateway && var.gateway_internal_provisioning_token == null ? 1 : 0
+
+  length  = 48
+  special = true
+}
+
+# Gateway connects via Entra + role membership in aqrem_gateway_app (see infra/platform/db/migrations/003_*).
+# Do NOT grant gateway MI Entra admin on the control-plane server.
+
+resource "azurerm_role_assignment" "gateway_acr_pull" {
   count = var.enable_custom_gateway ? 1 : 0
 
-  server_name         = module.control_plane_postgresql.server_name
-  resource_group_name = azurerm_resource_group.platform.name
-  tenant_id           = data.azurerm_client_config.current.tenant_id
-  object_id           = module.model_gateway_custom[0].identity_principal_id
-  principal_name      = module.model_gateway_custom[0].identity_name
-  principal_type      = "ServicePrincipal"
+  scope                = module.acr.id
+  role_definition_name = "AcrPull"
+  principal_id         = module.model_gateway_custom[0].identity_principal_id
 }
 
 resource "azurerm_role_assignment" "gateway_openai_user" {

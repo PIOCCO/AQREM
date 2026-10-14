@@ -1,0 +1,19 @@
+name: decommission-client
+
+on:
+  workflow_dispatch:
+    inputs:
+      client_id:
+        required: true
+      confirm_client_id:
+        description: "Type client_id again to confirm"
+        required: true
+
+jobs:
+  decommission:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: |
+          test "${{ inputs.client_id }}" = "${{ inputs.confirm_client_id }}"
+          echo "1) Revoke gateway keys 2) Export DB + blob inventory 3) Retention wait 4) Delete RG 5) DECOMMISSIONED"

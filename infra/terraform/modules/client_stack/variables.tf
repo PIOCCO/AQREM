@@ -60,8 +60,8 @@ variable "db_mode" {
 }
 
 variable "postgresql_server_name" {
-  type    = string
-  default = null
+  type     = string
+  default  = null
   nullable = true
 }
 

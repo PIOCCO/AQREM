@@ -1,0 +1,22 @@
+name: update-clients
+
+on:
+  workflow_dispatch:
+    inputs:
+      wave:
+        description: "Rollout wave"
+        type: choice
+        options: [pilot, ten_percent, fifty_percent, hundred_percent]
+      image_tag:
+        description: "Semver+gitSha tag for api/worker/web"
+        required: true
+
+jobs:
+  rollout:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          echo "Wave ${{ inputs.wave }} — update pinned image tags per client, CA revision traffic split, health checks between waves."
+          echo "Automatic rollback: revert traffic weight to previous revision on failed /ready checks."
