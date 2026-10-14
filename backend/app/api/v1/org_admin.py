@@ -283,7 +283,17 @@ async def upload_documents(
         raise org_admin_error(code="GROUPS_REQUIRED", message="Pick at least one group.", field="visibility_mode")
     settings = get_settings()
     source = _ensure_document_source(db, tenant)
-    storage = get_blob_storage()
+    try:
+        storage = get_blob_storage()
+    except Exception as exc:
+        raise org_admin_error(
+            code="STORAGE_UNAVAILABLE",
+            message=(
+                "Blob storage is not reachable. For Docker Compose, ensure the azurite service is running "
+                "or set LOCAL_UPLOAD_DIR to a writable path and clear AZURE_STORAGE_CONNECTION_STRING."
+            ),
+            status_code=503,
+        ) from exc
     created: list[str] = []
     for upload in files:
         raw_name = upload.filename or "upload.bin"

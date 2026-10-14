@@ -133,7 +133,10 @@ class Settings(BaseSettings):
 
     access_token_expire_minutes: int = 60 * 24
 
-    cors_allowed_origins: str = ""
+    cors_allowed_origins: str = Field(
+        default="",
+        validation_alias=AliasChoices("cors_allowed_origins", "CORS_ALLOWED_ORIGINS"),
+    )
     llm_max_question_chars: int = 8_000
     llm_max_evidence_block_chars: int = 2_000
     llm_max_answer_chars: int = 16_000

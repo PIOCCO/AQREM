@@ -106,7 +106,7 @@ export default function ClientAdminDocumentsPage() {
       const msg = e instanceof Error ? e.message : "Upload failed";
       if (msg === "Failed to fetch") {
         setError(
-          "Upload failed (network or CORS). Confirm the API is reachable, set CORS_ALLOWED_ORIGINS to your frontend URL (e.g. http://100.80.43.124:5173), and check file storage (LOCAL_UPLOAD_DIR) is writable.",
+          "Upload failed (network or CORS). Restart the API after editing .env, set PUBLIC_BASE_URL or CORS_ALLOWED_ORIGINS to your frontend origin (e.g. http://100.80.43.124:5173), and use APP_ENV=development for local Docker Compose. If the API returns 503, finish Data storage setup (validate PostgreSQL and Save and activate) before uploading.",
         );
       } else {
         setError(msg);

@@ -137,9 +137,18 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=429, content={"message": "Too many requests. Please retry later."})
 
     app.add_middleware(SecurityHeadersMiddleware)
+    cors_origins = settings.cors_origins_list
+    if settings.app_env == "production" and not cors_origins:
+        logger.warning(
+            "CORS is not configured (set CORS_ALLOWED_ORIGINS and/or PUBLIC_BASE_URL). "
+            "Browser clients on a different host/port will fail preflight with 400 and show a CORS error."
+        )
+    else:
+        logger.info("CORS allow_origins=%s app_env=%s", cors_origins, settings.app_env)
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins_list,
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=[

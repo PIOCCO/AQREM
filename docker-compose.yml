@@ -40,9 +40,13 @@ services:
     env_file:
       - .env
     environment:
+      # Override Dockerfile APP_ENV=production so local Compose matches dev .env (CORS * fallback when unset).
+      APP_ENV: development
       DATABASE_URL: postgresql+psycopg://aqrem:aqrem@postgres:5432/aqrem
       REDIS_URL: redis://redis:6379/0
+      LOCAL_UPLOAD_DIR: /data/uploads
       # Set in .env: PUBLIC_BASE_URL=http://<tailscale-ip>:5173 (must match the URL you open in the browser)
+      # Optional: CORS_ALLOWED_ORIGINS=http://<tailscale-ip>:5173 (also derived from PUBLIC_BASE_URL in production)
       AZURE_STORAGE_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
     ports:
       - "8000:8000"
@@ -51,6 +55,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      azurite:
+        condition: service_started
     volumes:
       - ./backend:/app/backend
       - ./worker:/app/worker
@@ -64,14 +70,18 @@ services:
     env_file:
       - .env
     environment:
+      APP_ENV: development
       DATABASE_URL: postgresql+psycopg://aqrem:aqrem@postgres:5432/aqrem
       REDIS_URL: redis://redis:6379/0
+      LOCAL_UPLOAD_DIR: /data/uploads
       AZURE_STORAGE_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      azurite:
+        condition: service_started
     volumes:
       - ./backend:/app/backend
       - ./worker:/app/worker
