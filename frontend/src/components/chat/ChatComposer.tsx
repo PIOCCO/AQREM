@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type ClipboardEvent,
   type DragEvent,
   type KeyboardEvent,
 } from "react";
@@ -15,13 +16,8 @@ import {
   scrollTextareaCaretIntoView,
 } from "../../lib/composerGrow";
 import { Tooltip } from "../ui/Tooltip";
-
-export type PendingAttachment = {
-  id: string;
-  file: File;
-  status: "pending" | "uploading" | "done" | "error";
-  error?: string;
-};
+import { ChatAttachmentChips } from "./ChatAttachmentChips";
+import type { ChatAttachmentChip } from "../../hooks/useChatAttachments";
 
 type Props = {
   value: string;
@@ -31,10 +27,13 @@ type Props = {
   streaming?: boolean;
   disabled?: boolean;
   loading?: boolean;
-  attachments: PendingAttachment[];
-  onPickFiles: (files: FileList | null) => void;
+  attachments: ChatAttachmentChip[];
+  onPickFiles: (files: File[]) => void;
   onRemoveAttachment: (id: string) => void;
+  onRetryAttachment: (id: string) => void;
   uploadDisabledReason?: string | null;
+  helperText?: string | null;
+  sendBlocked?: boolean;
   conversationKey?: string | null;
 };
 
@@ -52,7 +51,10 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
     attachments,
     onPickFiles,
     onRemoveAttachment,
+    onRetryAttachment,
     uploadDisabledReason,
+    helperText,
+    sendBlocked,
     conversationKey,
   },
   forwardedRef,
@@ -152,7 +154,7 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
     }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (!disabled && !loading && (value.trim() || attachments.some((a) => a.status === "pending"))) {
+      if (!disabled && !loading && !sendBlocked && (value.trim() || attachments.some((a) => a.status === "ready" || a.status === "indexing"))) {
         onSend();
         requestAnimationFrame(() => {
           scheduleResize({ instant: true });
@@ -167,13 +169,30 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
     scheduleResize();
   }
 
-  function onPaste() {
+  function onPaste(e: ClipboardEvent<HTMLTextAreaElement>) {
     typingUntilRef.current = Date.now() + 160;
+    const items = e.clipboardData?.items;
+    const files: File[] = [];
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === "file") {
+          const f = item.getAsFile();
+          if (f) files.push(f);
+        }
+      }
+    }
+    if (files.length) {
+      e.preventDefault();
+      if (!uploadDisabledReason && !disabled) onPickFiles(files);
+      return;
+    }
     requestAnimationFrame(() => scheduleResize());
   }
 
   function onFileChange(e: ChangeEvent<HTMLInputElement>) {
-    onPickFiles(e.target.files);
+    const list = e.target.files;
+    if (list?.length) onPickFiles(Array.from(list));
     e.target.value = "";
   }
 
@@ -181,15 +200,18 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
     e.preventDefault();
     setDragOver(false);
     if (uploadDisabledReason || disabled) return;
-    onPickFiles(e.dataTransfer.files);
+    if (e.dataTransfer.files?.length) onPickFiles(Array.from(e.dataTransfer.files));
   }
 
+  const hasSendableAttachment = attachments.some((a) => a.status === "ready" || a.status === "indexing");
   const canSend =
     !disabled &&
     !loading &&
-    (value.trim().length > 0 || attachments.some((a) => a.status === "pending"));
+    !sendBlocked &&
+    (value.trim().length > 0 || hasSendableAttachment);
 
   const attachTitle = uploadDisabledReason ?? "Attach documents";
+  const accept = ".pdf,.md,.txt,text/plain,text/markdown,application/pdf";
 
   return (
     <div
@@ -201,39 +223,22 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
       onDragLeave={() => setDragOver(false)}
       onDrop={onDrop}
     >
+      {helperText ? (
+        <p className="text-xs text-chat-muted mb-2 px-1">{helperText}</p>
+      ) : null}
       <div
         ref={shellRef}
         className={`chat-composer shadow-composer ${dragOver ? "ring-2 ring-[var(--color-accent)]" : ""}`}
         data-testid="chat-composer-shell"
       >
-        {attachments.length > 0 ? (
-          <ul className="chat-composer-attachments" aria-label="Attached files">
-            {attachments.map((a) => (
-              <li key={a.id} className="chat-composer-attachment-chip">
-                <span className="max-w-[12rem] truncate">{a.file.name}</span>
-                <span className="text-chat-muted shrink-0">
-                  {a.file.size ? `${Math.max(1, Math.round(a.file.size / 1024))} KB` : ""}
-                </span>
-                {a.status === "uploading" ? <span className="chat-spinner" aria-label="Uploading" /> : null}
-                {a.status === "error" ? <span className="text-[var(--color-danger)]">Failed</span> : null}
-                <button
-                  type="button"
-                  className="text-chat-muted hover:text-chat-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-focus-ring)] rounded"
-                  onClick={() => onRemoveAttachment(a.id)}
-                  aria-label={`Remove ${a.file.name}`}
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        <ChatAttachmentChips attachments={attachments} onRemove={onRemoveAttachment} onRetry={onRetryAttachment} />
 
         <div className="chat-composer-row">
           <input
             ref={fileRef}
             type="file"
             multiple
+            accept={accept}
             className="sr-only"
             aria-label="Attach documents"
             onChange={onFileChange}
@@ -276,7 +281,7 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
               </button>
             </Tooltip>
           ) : (
-            <Tooltip label={canSend ? "Send message" : "Enter a message to send"}>
+            <Tooltip label={canSend ? "Send message" : sendBlocked ? "Wait for uploads to finish" : "Enter a message to send"}>
               <button
                 type="button"
                 className={`chat-composer-send aq-interactive ${canSend ? "chat-composer-send-ready" : ""}`}

@@ -23,10 +23,13 @@ class RetrievalService:
         organization_id: UUID,
         project_id: UUID | None,
         source_id: UUID | None,
+        file_names: list[str] | None = None,
         access: UserAccessContext | None,
         limit: int,
     ) -> list[EvidenceItem]:
         q = self.db.query(EvidenceItem).filter(EvidenceItem.organization_id == organization_id)
+        if file_names:
+            q = q.filter(EvidenceItem.file_name.in_(file_names))
         if project_id:
             q = q.filter(
                 or_(
@@ -50,6 +53,7 @@ class RetrievalService:
         query: str,
         project_id: UUID | None = None,
         source_id: UUID | None = None,
+        file_names: list[str] | None = None,
         limit: int = 8,
         access: UserAccessContext | None = None,
     ) -> list[EvidenceItem]:
@@ -72,6 +76,9 @@ class RetrievalService:
         if source_id:
             scope_filter += " AND source_id = :source_id"
             params["source_id"] = str(source_id)
+        if file_names:
+            scope_filter += " AND file_name = ANY(:file_names)"
+            params["file_names"] = file_names
 
         if access is not None:
             scope_filter += f" AND ({acl_sql_fragment().strip()})"
@@ -98,13 +105,18 @@ class RetrievalService:
             ordered = sorted(items, key=lambda i: order.get(i.id, 999))
             return [i for i in ordered if i.organization_id == organization_id]
 
-        return self._keyword_query(
+        items = self._keyword_query(
             organization_id=organization_id,
             project_id=project_id,
             source_id=source_id,
+            file_names=file_names,
             access=access,
             limit=limit,
         )
+        if file_names:
+            allowed = set(file_names)
+            items = [i for i in items if i.file_name in allowed]
+        return items
 
 
 def retrieve_sync(db: Session, **kwargs) -> list[EvidenceItem]:

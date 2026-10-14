@@ -3,9 +3,10 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.models.enums import AnswerOutcome
+from app.models.client_admin import ClientDocument
+from app.models.enums import AnswerOutcome, SyncJobStatus
 from app.models.project import Project
-from app.models.source import Source
+from app.models.source import Source, SourceSyncJob
 from app.schemas.evidence import EvidenceItemSummaryResponse
 from app.services.chat.intent import build_conversational_answer, classify_chat_intent
 from app.services.chat.messages import format_insufficient_evidence_message
@@ -116,6 +117,40 @@ class ChatAskService:
             )
         return citations
 
+    def _resolve_attachment_files(
+        self,
+        *,
+        organization_id: UUID,
+        user_id: UUID | None,
+        attachment_document_ids: list[UUID],
+    ) -> tuple[list[str], str | None]:
+        if not attachment_document_ids:
+            return [], None
+        names: list[str] = []
+        indexing = False
+        for doc_id in attachment_document_ids:
+            doc = self.db.get(ClientDocument, doc_id)
+            if doc is None or doc.organization_id != organization_id:
+                continue
+            if user_id and user_id not in doc.visibility_user_ids:
+                continue
+            if doc.sync_job_id:
+                job = self.db.get(SourceSyncJob, doc.sync_job_id)
+                if job and job.status in (SyncJobStatus.QUEUED.value, SyncJobStatus.RUNNING.value):
+                    indexing = True
+            if doc.status in ("uploading", "indexing", "queued"):
+                indexing = True
+            if doc.status == "indexed":
+                names.append(doc.file_name)
+            elif doc.status == "failed":
+                continue
+            else:
+                names.append(doc.file_name)
+        note = None
+        if indexing:
+            note = "Indexing your file — the answer may take a moment and might not include all attachment text yet."
+        return names, note
+
     async def ask(
         self,
         *,
@@ -124,6 +159,7 @@ class ChatAskService:
         project_id: UUID | None,
         user_id: UUID | None = None,
         access: UserAccessContext | None = None,
+        attachment_document_ids: list[UUID] | None = None,
     ) -> dict:
         safe_query = clamp_question(query)
         access = self._resolve_access(
@@ -131,6 +167,11 @@ class ChatAskService:
         )
         project_name = _project_label(self.db, project_id)
         sources_searched = _count_project_sources(self.db, organization_id, project_id)
+        attachment_names, indexing_note = self._resolve_attachment_files(
+            organization_id=organization_id,
+            user_id=user_id,
+            attachment_document_ids=list(attachment_document_ids or []),
+        )
 
         intent = classify_chat_intent(safe_query)
         if intent:
@@ -194,6 +235,7 @@ class ChatAskService:
             question=safe_query,
             project_id=project_id,
             access=access,
+            attachment_file_names=attachment_names or None,
         )
         query_time_ms = int((time.perf_counter() - started) * 1000)
 
@@ -206,6 +248,8 @@ class ChatAskService:
 
         citations = self._build_citations(items, selected)
         answer = grounded.composed_answer
+        if indexing_note:
+            answer = f"{indexing_note}\n\n{answer}"
         if behavior.outcome == AnswerOutcome.INSUFFICIENT_EVIDENCE:
             answer = format_insufficient_evidence_message(
                 project_name=project_name,

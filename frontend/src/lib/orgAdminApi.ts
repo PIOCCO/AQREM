@@ -66,6 +66,8 @@ export async function fetchDocumentsNeedingReview(session: AuthSession) {
   return res.json() as Promise<{ count: number }>;
 }
 
+const UPLOAD_TIMEOUT_MS = 120_000;
+
 export async function fetchDocuments(session: AuthSession, page = 1, pageSize = 10) {
   const res = await fetch(
     apiUrl(`/api/v1/org-admin/documents?page=${page}&page_size=${pageSize}`),
@@ -91,6 +93,7 @@ export async function uploadDocuments(
     method: "POST",
     headers: { Authorization: `Bearer ${session.token}`, "X-Organization-Id": session.organizationId! },
     body: form,
+    signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(await readApiError(res, "Upload failed"));
   return res.json();

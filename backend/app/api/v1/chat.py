@@ -20,7 +20,10 @@ from app.schemas.chat import (
 from app.services.chat.service import ChatAskService
 from app.services.chat.share_service import ChatShareService
 
+from app.api.v1 import chat_attachments
+
 router = APIRouter()
+router.include_router(chat_attachments.router)
 
 
 @router.post("/ask", response_model=ChatAskResponse)
@@ -38,6 +41,7 @@ async def ask_chat(
         project_id=payload.project_id,
         user_id=tenant.user_id,
         access=access,
+        attachment_document_ids=payload.attachment_document_ids,
     )
     return ChatAskResponse(**result)
 

@@ -103,6 +103,46 @@ class Settings(BaseSettings):
         ".pdf,.docx,.xlsx,.csv,.txt,.md,.json,.yaml,.yml,.zip,.tar.gz"
     )
 
+    chat_attachment_max_mb: int = Field(
+        default=5,
+        validation_alias=AliasChoices("chat_attachment_max_mb", "CHAT_ATTACHMENT_MAX_MB"),
+    )
+    chat_attachment_max_files: int = Field(
+        default=3,
+        validation_alias=AliasChoices("chat_attachment_max_files", "CHAT_ATTACHMENT_MAX_FILES"),
+    )
+    chat_attachment_max_total_mb: int = Field(
+        default=10,
+        validation_alias=AliasChoices("chat_attachment_max_total_mb", "CHAT_ATTACHMENT_MAX_TOTAL_MB"),
+    )
+    chat_attachment_max_pdf_pages: int = Field(
+        default=20,
+        validation_alias=AliasChoices("chat_attachment_max_pdf_pages", "CHAT_ATTACHMENT_MAX_PDF_PAGES"),
+    )
+    chat_attachment_max_text_chars: int = Field(
+        default=100_000,
+        validation_alias=AliasChoices("chat_attachment_max_text_chars", "CHAT_ATTACHMENT_MAX_TEXT_CHARS"),
+    )
+    chat_attachment_uploads_per_hour: int = Field(
+        default=10,
+        validation_alias=AliasChoices("chat_attachment_uploads_per_hour", "CHAT_ATTACHMENT_UPLOADS_PER_HOUR"),
+    )
+    chat_attachment_max_concurrent_ingestion: int = Field(
+        default=4,
+        validation_alias=AliasChoices(
+            "chat_attachment_max_concurrent_ingestion",
+            "CHAT_ATTACHMENT_MAX_CONCURRENT_INGESTION",
+        ),
+    )
+    chat_retrieval_max_chunks: int = Field(
+        default=8,
+        validation_alias=AliasChoices("chat_retrieval_max_chunks", "CHAT_RETRIEVAL_MAX_CHUNKS"),
+    )
+    chat_retrieval_max_context_tokens: int = Field(
+        default=6000,
+        validation_alias=AliasChoices("chat_retrieval_max_context_tokens", "CHAT_RETRIEVAL_MAX_CONTEXT_TOKENS"),
+    )
+
     default_ignore_patterns: str = (
         "**/node_modules/**,**/dist/**,**/build/**,**/.git/**,"
         "**/__pycache__/**,**/*.pyc,**/.venv/**,**/venv/**,"
@@ -173,6 +213,18 @@ class Settings(BaseSettings):
     @property
     def allowed_extensions_set(self) -> set[str]:
         return {ext.strip().lower() for ext in self.allowed_upload_extensions.split(",") if ext.strip()}
+
+    @property
+    def chat_allowed_extensions_set(self) -> set[str]:
+        return {".pdf", ".md", ".txt"}
+
+    @property
+    def chat_attachment_max_bytes(self) -> int:
+        return self.chat_attachment_max_mb * 1024 * 1024
+
+    @property
+    def chat_attachment_max_total_bytes(self) -> int:
+        return self.chat_attachment_max_total_mb * 1024 * 1024
 
 
 @lru_cache

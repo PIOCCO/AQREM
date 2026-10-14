@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useToast } from "../components/ui/Toast";
-import ChatComposer, { type PendingAttachment } from "../components/chat/ChatComposer";
+import ChatComposer from "../components/chat/ChatComposer";
+import ChatFileDropOverlay from "../components/chat/ChatFileDropOverlay";
 import ChatComposerDock from "../components/chat/ChatComposerDock";
 import ChatMainColumn from "../components/chat/ChatMainColumn";
 import ChatConversationHeader from "../components/chat/ChatConversationHeader";
@@ -10,8 +11,10 @@ import ChatEmptyState from "../components/chat/ChatEmptyState";
 import ScopePicker from "../components/chat/ScopePicker";
 import MessageList from "../components/chat/MessageList";
 import { IconSidebar } from "../components/icons/Icons";
-import { fetchSources, uploadSourceFiles } from "../lib/api";
+import { fetchSources } from "../lib/api";
 import { useAuth } from "../lib/authContext";
+import { useChatAttachments } from "../hooks/useChatAttachments";
+import { canEditContent } from "../lib/roles";
 import { generateAssistantReply } from "../lib/chatAssistant";
 import { classifyChatIntent } from "../lib/chatIntent";
 import { conversationTitleAfterUserMessage } from "../lib/chatTitle";
@@ -26,21 +29,12 @@ import { newUuid } from "../lib/uuid";
 import { FOCUS_COMPOSER_EVENT } from "../lib/chatHome";
 import { LoadingState } from "../components/ui/States";
 
-const UPLOAD_SOURCE_TYPES = new Set(["folder_archive", "file_upload", "local_files"]);
-
 type ChatOutletContext = {
   openMobileSidebar?: () => void;
   sidebarCollapsed?: boolean;
   expandSidebar?: () => void;
   openCommandPalette?: () => void;
 };
-
-function formatAttachmentMeta(files: PendingAttachment[]) {
-  return files.map((a) => ({
-    name: a.file.name,
-    sizeLabel: a.file.size ? `${Math.max(1, Math.round(a.file.size / 1024))} KB` : undefined,
-  }));
-}
 
 function greetingName(fullName?: string, email?: string) {
   const first = fullName?.trim().split(/\s+/)[0];
@@ -57,7 +51,6 @@ export default function ChatPage() {
 
   const [conversation, setConversation] = useState<ChatConversation | null>(null);
   const [input, setInput] = useState("");
-  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [loading, setLoading] = useState(false);
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [retrievalStatus, setRetrievalStatus] = useState<string | null>(null);
@@ -65,10 +58,21 @@ export default function ChatPage() {
   const lastQueryRef = useRef<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const { push: toast } = useToast();
-  const [uploadSourceId, setUploadSourceId] = useState<string | null>(null);
   const [sourcesCount, setSourcesCount] = useState<number | null>(null);
-  const [uploadSourceLoading, setUploadSourceLoading] = useState(false);
+  const [sourcesLoading, setSourcesLoading] = useState(false);
   const outlet = useOutletContext<ChatOutletContext | null>();
+  const canUpload = Boolean(user?.role && canEditContent(user.role));
+  const {
+    limits,
+    attachments,
+    bannerError,
+    addFiles,
+    removeAttachment,
+    retryAttachment,
+    clearAttachments,
+    documentIds,
+    sendBlocked,
+  } = useChatAttachments(session, canUpload);
 
   useKeyboardShortcuts([
     {
@@ -120,34 +124,24 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!session || !projectId) {
-      setUploadSourceId(null);
       setSourcesCount(null);
       return;
     }
-    setUploadSourceLoading(true);
+    setSourcesLoading(true);
     fetchSources(session, projectId)
       .then((rows) => {
         const list = Array.isArray(rows) ? rows : [];
         setSourcesCount(list.filter((s: { project_id?: string }) => s.project_id === projectId).length);
-        const match = list.find(
-          (s: { project_id?: string; source_type: string; id: string }) =>
-            s.project_id === projectId && UPLOAD_SOURCE_TYPES.has(s.source_type),
-        );
-        setUploadSourceId(match?.id ?? list.find((s: { project_id?: string }) => s.project_id === projectId)?.id ?? null);
       })
-      .catch(() => {
-        setUploadSourceId(null);
-        setSourcesCount(null);
-      })
-      .finally(() => setUploadSourceLoading(false));
+      .catch(() => setSourcesCount(null))
+      .finally(() => setSourcesLoading(false));
   }, [session, projectId]);
 
   const uploadDisabledReason = useMemo(() => {
-    if (uploadSourceLoading) return "Loading sources…";
-    if (!projectId) return "Select a project to attach files";
-    if (!uploadSourceId) return "Add a file source in Projects first";
+    if (sourcesLoading) return "Loading…";
+    if (!canUpload) return "Viewers cannot upload files. Ask an editor or administrator.";
     return null;
-  }, [projectId, uploadSourceId, uploadSourceLoading]);
+  }, [canUpload, sourcesLoading]);
 
   const persist = useCallback(
     (next: ChatConversation) => {
@@ -185,44 +179,7 @@ export default function ChatPage() {
     />
   );
 
-  const onPickFiles = useCallback((files: FileList | null) => {
-    if (!files?.length) return;
-    const added: PendingAttachment[] = Array.from(files).map((file) => ({
-      id: newUuid(),
-      file,
-      status: "pending" as const,
-    }));
-    setAttachments((prev) => [...prev, ...added]);
-  }, []);
-
-  const onRemoveAttachment = useCallback((id: string) => {
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
-  }, []);
-
-  async function uploadAttachments(): Promise<string | undefined> {
-    if (!session || !uploadSourceId || attachments.length === 0) return undefined;
-    const pending = attachments.filter((a) => a.status === "pending");
-    if (pending.length === 0) return undefined;
-
-    setAttachments((prev) => prev.map((a) => (a.status === "pending" ? { ...a, status: "uploading" } : a)));
-    try {
-      await uploadSourceFiles(
-        session,
-        uploadSourceId,
-        pending.map((p) => p.file),
-      );
-      setAttachments((prev) => prev.map((a) => (a.status === "uploading" ? { ...a, status: "done" } : a)));
-      return `Uploaded ${pending.length} file(s). Indexing runs in the background — ask again once sync completes.`;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Upload failed";
-      setAttachments((prev) =>
-        prev.map((a) => (a.status === "uploading" ? { ...a, status: "error", error: msg } : a)),
-      );
-      throw e;
-    }
-  }
-
-  async function streamReply(text: string, conv: ChatConversation) {
+  async function streamReply(text: string, conv: ChatConversation, attachmentDocumentIds?: string[]) {
     if (!session) return;
     abortRef.current?.abort();
     const ac = new AbortController();
@@ -242,6 +199,7 @@ export default function ChatPage() {
       const reply = await generateAssistantReply(session, text, conv.projectId, ac.signal, {
         projectName,
         sourcesCount: sourcesCount ?? 0,
+        attachmentDocumentIds,
       });
       if (ac.signal.aborted) return;
 
@@ -294,25 +252,24 @@ export default function ChatPage() {
       if (!conversationId) navigate(`/c/${conv.id}`, { replace: true });
     }
     const text = input.trim();
-    const hasPendingFiles = attachments.some((a) => a.status === "pending");
-    if (!text && !hasPendingFiles) return;
+    const hasAttachments = attachments.some((a) => a.status === "ready" || a.status === "indexing");
+    if (!text && !hasAttachments) return;
+    if (sendBlocked) return;
 
-    let uploadNote: string | undefined;
-    try {
-      uploadNote = await uploadAttachments();
-    } catch {
-      return;
-    }
-
-    const attachmentMeta = formatAttachmentMeta(attachments.filter((a) => a.status !== "error"));
+    const attachmentMeta = attachments
+      .filter((a) => a.status !== "failed")
+      .map((a) => ({
+        name: a.file.name,
+        sizeLabel: a.file.size ? `${Math.max(1, Math.round(a.file.size / 1024))} KB` : undefined,
+      }));
     const userContent = text || "(Attached files)";
+    const idsForAsk = [...documentIds];
     const userMsg: ChatMessage = {
       id: newUuid(),
       role: "user",
       content: userContent,
       createdAt: new Date().toISOString(),
       meta: {
-        ...(uploadNote ? { uploadNote } : {}),
         ...(attachmentMeta.length ? { attachments: attachmentMeta } : {}),
       },
     };
@@ -324,22 +281,12 @@ export default function ChatPage() {
     };
     conv = persist(conv);
     setInput("");
-    setAttachments([]);
+    clearAttachments();
     const focusComposer = () => composerRef.current?.focus();
     requestAnimationFrame(focusComposer);
     window.setTimeout(focusComposer, 0);
 
-    if (text) await streamReply(text, conv);
-    else if (uploadNote) {
-      const assistantMsg: ChatMessage = {
-        id: newUuid(),
-        role: "assistant",
-        content: uploadNote,
-        createdAt: new Date().toISOString(),
-        meta: { isDraft: true },
-      };
-      persist({ ...conv, messages: [...conv.messages, assistantMsg] });
-    }
+    if (text || idsForAsk.length) await streamReply(text || "Summarize the attached documents.", conv, idsForAsk);
   }
 
   function onStop() {
@@ -373,21 +320,31 @@ export default function ChatPage() {
   const atHome = !conversationId;
 
   const composer = (
-    <ChatComposer
-      ref={composerRef}
-      value={input}
-      onChange={setInput}
-      onSend={onSend}
-      onStop={onStop}
-      streaming={loading && streamingText != null}
-      loading={loading}
-      disabled={false}
-      attachments={attachments}
-      onPickFiles={onPickFiles}
-      onRemoveAttachment={onRemoveAttachment}
-      uploadDisabledReason={uploadDisabledReason}
-      conversationKey={conversationId ?? "home"}
-    />
+    <>
+      {bannerError ? (
+        <div className="text-xs text-[var(--color-danger)] mb-2 px-1" role="alert">
+          {bannerError}
+        </div>
+      ) : null}
+      <ChatComposer
+        ref={composerRef}
+        value={input}
+        onChange={setInput}
+        onSend={onSend}
+        onStop={onStop}
+        streaming={loading && streamingText != null}
+        loading={loading}
+        disabled={false}
+        attachments={attachments}
+        onPickFiles={addFiles}
+        onRemoveAttachment={removeAttachment}
+        onRetryAttachment={retryAttachment}
+        uploadDisabledReason={uploadDisabledReason}
+        helperText={limits?.helper_text}
+        sendBlocked={sendBlocked}
+        conversationKey={conversationId ?? "home"}
+      />
+    </>
   );
 
   if (conversationId && !conversation) {
@@ -400,7 +357,12 @@ export default function ChatPage() {
 
   if (atHome) {
     return (
-      <div className="chat-view bg-chat-main">
+      <ChatFileDropOverlay
+        className="chat-view bg-chat-main flex flex-col min-h-0 flex-1"
+        disabled={Boolean(uploadDisabledReason)}
+        disabledReason={uploadDisabledReason}
+        onFiles={addFiles}
+      >
         <ChatConversationHeader
           conversationTitle="New chat"
           onOpenSidebar={outlet?.openMobileSidebar}
@@ -413,7 +375,7 @@ export default function ChatPage() {
           </ChatMainColumn>
         </div>
         <ChatComposerDock scopePicker={scopePicker}>{composer}</ChatComposerDock>
-      </div>
+      </ChatFileDropOverlay>
     );
   }
 
@@ -426,7 +388,12 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="chat-view bg-chat-main">
+    <ChatFileDropOverlay
+      className="chat-view bg-chat-main flex flex-col min-h-0 flex-1"
+      disabled={Boolean(uploadDisabledReason)}
+      disabledReason={uploadDisabledReason}
+      onFiles={addFiles}
+    >
       <ChatConversationHeader
         conversationTitle={conversation!.title}
         onOpenSidebar={outlet?.openMobileSidebar}
@@ -456,7 +423,7 @@ export default function ChatPage() {
           <ChatComposerDock scopePicker={scopePicker}>{composer}</ChatComposerDock>
         </>
       )}
-    </div>
+    </ChatFileDropOverlay>
   );
 }
 

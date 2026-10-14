@@ -44,7 +44,7 @@ export async function generateAssistantReply(
   query: string,
   projectId: string | null,
   signal?: AbortSignal,
-  scope?: { projectName?: string | null; sourcesCount?: number },
+  scope?: { projectName?: string | null; sourcesCount?: number; attachmentDocumentIds?: string[] },
 ): Promise<AssistantReply> {
   const trimmed = query.trim();
   if (!trimmed) {
@@ -78,7 +78,11 @@ export async function generateAssistantReply(
   }
 
   try {
-    const data = await askChat(session, { query: trimmed, project_id: projectId });
+    const data = await askChat(session, {
+      query: trimmed,
+      project_id: projectId,
+      attachment_document_ids: scope?.attachmentDocumentIds,
+    });
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
     const citations = mapCitations((data.citations ?? []) as CitationPayload[]);

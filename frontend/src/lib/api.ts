@@ -692,13 +692,14 @@ export async function regenerateQuestionAnswer(session: AuthSession, questionId:
 
 export async function askChat(
   session: AuthSession,
-  payload: { query: string; project_id?: string | null },
+  payload: { query: string; project_id?: string | null; attachment_document_ids?: string[] },
 ) {
   const res = await authedFetch(session, `${apiBase()}/api/v1/chat/ask`, {
     method: "POST",
     body: JSON.stringify({
       query: payload.query,
       project_id: payload.project_id ?? null,
+      attachment_document_ids: payload.attachment_document_ids ?? [],
     }),
   });
   if (!res.ok) throw new Error(await readApiError(res, "Chat request failed"));

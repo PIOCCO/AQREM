@@ -118,10 +118,12 @@ async def generate_grounded_answer(
     project_id: UUID | None,
     limit: int | None = None,
     access: UserAccessContext | None = None,
+    attachment_file_names: list[str] | None = None,
 ) -> GroundedAnswer:
     safe_query = clamp_question(question)
     settings = get_settings()
-    top_k = min(limit or 8, settings.llm_max_retrieval_results)
+    cap = settings.chat_retrieval_max_chunks if attachment_file_names else settings.llm_max_retrieval_results
+    top_k = min(limit or cap, cap, settings.llm_max_retrieval_results)
 
     retrieval_error: str | None = None
     items: list = []
@@ -130,6 +132,7 @@ async def generate_grounded_answer(
             organization_id=organization_id,
             query=safe_query,
             project_id=project_id,
+            file_names=attachment_file_names,
             limit=top_k,
             access=access,
         )

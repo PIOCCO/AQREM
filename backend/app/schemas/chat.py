@@ -10,6 +10,24 @@ from app.schemas.evidence import EvidenceItemSummaryResponse
 class ChatAskRequest(BaseModel):
     query: str = Field(min_length=1, max_length=8000)
     project_id: UUID | None = None
+    attachment_document_ids: list[UUID] = Field(default_factory=list, max_length=8)
+
+
+class ChatAttachmentResponse(BaseModel):
+    id: UUID
+    file_name: str
+    size_bytes: int
+    status: str
+    index_progress: int = 0
+
+
+class ChatAttachmentStatusResponse(BaseModel):
+    id: UUID
+    file_name: str
+    size_bytes: int
+    status: str
+    index_progress: int = 0
+    failure_reason: str | None = None
 
 
 class EvidenceConflictResponse(BaseModel):

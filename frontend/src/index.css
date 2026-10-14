@@ -942,6 +942,9 @@
       width: calc(100% - 16px);
     }
   }
+  .chat-drop-overlay--visible {
+    opacity: 1;
+  }
   .chat-composer-block {
     @apply w-full min-w-0;
   }
