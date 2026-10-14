@@ -1,7 +1,13 @@
 import { apiErrorMessage, readApiError, readResponseJson } from "./errors";
 import type { AuthSession } from "./api";
+import { resolveApiBase } from "./apiBase";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+function apiUrl(path: string): string {
+  const base = resolveApiBase();
+  return `${base}${path}`;
+}
+
+
 
 export type AdminApiError = { code: string; message: string; field?: string };
 
@@ -163,42 +169,49 @@ export async function deleteAdminOrganization(
 ): Promise<{ organization_id: string; purge_scheduled_at: string; retention_days: number }> {
   const body = JSON.stringify({ confirmName: confirmName });
   const headers = adminHeaders(session);
-  let res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/delete`, {
-    method: "POST",
-    headers,
-    body,
-  });
-  if (res.status === 404 || res.status === 405) {
-    res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}`, {
-      method: "DELETE",
+  const attempts: { method: string; url: string; body?: string }[] = [
+    { method: "POST", url: apiUrl(`/api/v1/admin/organizations/${orgId}/delete`), body },
+    { method: "POST", url: apiUrl(`/api/v1/admin/organizations/${orgId}/schedule-deletion`), body },
+    { method: "PATCH", url: apiUrl(`/api/v1/admin/organizations/${orgId}`), body },
+  ];
+  let last: Response | null = null;
+  for (const attempt of attempts) {
+    last = await fetch(attempt.url, {
+      method: attempt.method,
       headers,
-      body,
+      body: attempt.body,
     });
+    if (last.ok) return last.json();
+    if (last.status !== 404 && last.status !== 405) {
+      await parseError(last, "Failed to delete organization");
+    }
   }
-  if (!res.ok) await parseError(res, "Failed to delete organization");
-  return res.json();
+  return parseError(
+    last ?? new Response(null, { status: 503 }),
+    "Organization delete is not available on this API server — restart the backend on port 8000 with the latest code.",
+  ) as never;
 }
 
 export async function fetchPlatformStaff(session: AuthSession): Promise<PlatformStaffMember[]> {
-  const res = await fetch(`${API_BASE}/api/v1/admin/platform-staff`, { headers: adminHeaders(session) });
+  const res = await fetch(apiUrl(`/api/v1/admin/platform-staff`), { headers: adminHeaders(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load platform team"));
   return res.json();
 }
 
 export async function fetchPermissionsMatrix(session: AuthSession): Promise<PermissionsMatrix> {
-  const res = await fetch(`${API_BASE}/api/v1/admin/permissions/matrix`, { headers: adminHeaders(session) });
+  const res = await fetch(apiUrl(`/api/v1/admin/permissions/matrix`), { headers: adminHeaders(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load permission matrix"));
   return res.json();
 }
 
 export async function fetchRolesAudit(session: AuthSession): Promise<{ issues: Record<string, unknown>[]; summary: Record<string, number> }> {
-  const res = await fetch(`${API_BASE}/api/v1/admin/roles/audit`, { headers: adminHeaders(session) });
+  const res = await fetch(apiUrl(`/api/v1/admin/roles/audit`), { headers: adminHeaders(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to run roles audit"));
   return res.json();
 }
 
 export async function fetchAdminContext(session: AuthSession): Promise<AdminContext> {
-  const res = await fetch(`${API_BASE}/api/v1/admin/context`, { headers: adminHeaders(session) });
+  const res = await fetch(apiUrl(`/api/v1/admin/context`), { headers: adminHeaders(session) });
   if (res.status === 404) return DEFAULT_CONTEXT;
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load admin context"));
   return res.json();
@@ -211,7 +224,7 @@ export async function fetchAdminOrganizations(
   const qs = new URLSearchParams();
   if (params?.q) qs.set("q", params.q);
   if (params?.status && params.status !== "all") qs.set("status", params.status);
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations?${qs}`, { headers: adminHeaders(session) });
+  const res = await fetch(apiUrl(`/api/v1/admin/organizations?${qs}`), { headers: adminHeaders(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load organizations"));
   const body: unknown = await res.json();
   if (Array.isArray(body)) {
@@ -237,7 +250,7 @@ export async function createAdminOrganization(
     owner_display_name?: string;
   },
 ): Promise<AdminOrganization> {
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations`, {
+  const res = await fetch(apiUrl(`/api/v1/admin/organizations`), {
     method: "POST",
     headers: adminHeaders(session),
     body: JSON.stringify(payload),
@@ -252,7 +265,7 @@ export async function updateAdminOrganization(
   orgId: string,
   payload: { license_limit?: number; license_status?: string; owner_display_name?: string },
 ): Promise<AdminOrganization> {
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}`, {
+  const res = await fetch(apiUrl(`/api/v1/admin/organizations/${orgId}`), {
     method: "PATCH",
     headers: adminHeaders(session),
     body: JSON.stringify(payload),
@@ -270,7 +283,7 @@ export async function fetchOrganizationDirectory(
   orgFallback?: AdminOrganization,
 ) {
   const res = await fetch(
-    `${API_BASE}/api/v1/admin/organizations/${orgId}/directory?page=${page}&page_size=${pageSize}`,
+    apiUrl(`/api/v1/admin/organizations/${orgId}/directory?page=${page}&page_size=${pageSize}`),
     { headers: adminHeaders(session) },
   );
   if (res.ok) {
@@ -285,7 +298,7 @@ export async function fetchOrganizationDirectory(
     }>;
   }
   if (res.status === 404) {
-    const memRes = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/members`, {
+    const memRes = await fetch(apiUrl(`/api/v1/admin/organizations/${orgId}/members`), {
       headers: adminHeaders(session),
     });
     if (!memRes.ok) throw new Error(await readApiError(res, "Failed to load members"));
@@ -338,7 +351,7 @@ export async function inviteOrganizationUser(
   orgId: string,
   payload: { email: string; full_name: string; role: string },
 ) {
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/users`, {
+  const res = await fetch(apiUrl(`/api/v1/admin/organizations/${orgId}/users`), {
     method: "POST",
     headers: adminHeaders(session),
     body: JSON.stringify(payload),
@@ -353,7 +366,7 @@ export async function inviteOrganizationUser(
 
 export async function resendInvitation(session: AuthSession, orgId: string, invitationId: string) {
   const res = await fetch(
-    `${API_BASE}/api/v1/admin/organizations/${orgId}/invitations/${invitationId}/resend`,
+    apiUrl(`/api/v1/admin/organizations/${orgId}/invitations/${invitationId}/resend`),
     { method: "POST", headers: adminHeaders(session) },
   );
   if (!res.ok) await parseError(res, "Failed to resend invitation");
@@ -362,7 +375,7 @@ export async function resendInvitation(session: AuthSession, orgId: string, invi
 
 export async function fetchAdminInvitationLink(session: AuthSession, orgId: string, invitationId: string) {
   const res = await fetch(
-    `${API_BASE}/api/v1/admin/organizations/${orgId}/invitations/admin/${invitationId}/link`,
+    apiUrl(`/api/v1/admin/organizations/${orgId}/invitations/admin/${invitationId}/link`),
     { headers: adminHeaders(session) },
   );
   if (!res.ok) await parseError(res, "Failed to load invitation link");
@@ -375,32 +388,43 @@ export async function fetchAdminInvitationLink(session: AuthSession, orgId: stri
   }>;
 }
 
-async function deleteWithPostFallback(
-  postUrl: string,
-  deleteUrl: string,
+async function deleteWithPostOnly(
+  urls: string[],
   session: AuthSession,
-  fallbackMessage: string,
-) {
+): Promise<Response> {
   const headers = adminHeaders(session);
-  let res = await fetch(postUrl, { method: "POST", headers });
-  if (res.status === 404 || res.status === 405) {
-    res = await fetch(deleteUrl, { method: "DELETE", headers });
+  let last: Response | null = null;
+  for (const url of urls) {
+    last = await fetch(url, { method: "POST", headers });
+    if (last.ok || (last.status !== 404 && last.status !== 405)) {
+      return last;
+    }
   }
-  if (!res.ok) await parseError(res, fallbackMessage);
+  return last ?? new Response(null, { status: 404 });
 }
 
 export async function deleteAdminInvitationRecord(session: AuthSession, orgId: string, invitationId: string) {
-  await deleteWithPostFallback(
-    `${API_BASE}/api/v1/admin/organizations/${orgId}/invitations/admin/${invitationId}/delete`,
-    `${API_BASE}/api/v1/admin/organizations/${orgId}/invitations/admin/${invitationId}`,
+  let res = await deleteWithPostOnly(
+    [
+      apiUrl(`/api/v1/admin/organizations/${orgId}/invitations/admin/${invitationId}/delete`),
+      apiUrl(`/api/v1/admin/organizations/${orgId}/invitation-history/${invitationId}/delete`),
+    ],
     session,
-    "Failed to delete invitation",
   );
+  if (res.status === 404 || res.status === 405) {
+    try {
+      await revokeInvitation(session, orgId, invitationId);
+      return;
+    } catch {
+      /* fall through */
+    }
+  }
+  if (!res.ok) await parseError(res, "Failed to delete invitation");
 }
 
 export async function fetchEmployeeLinkUrl(session: AuthSession, orgId: string, linkId: string) {
   const res = await fetch(
-    `${API_BASE}/api/v1/admin/organizations/${orgId}/employee-link/${linkId}/link`,
+    apiUrl(`/api/v1/admin/organizations/${orgId}/employee-link/${linkId}/link`),
     { headers: adminHeaders(session) },
   );
   if (!res.ok) await parseError(res, "Failed to load employee link");
@@ -408,17 +432,19 @@ export async function fetchEmployeeLinkUrl(session: AuthSession, orgId: string, 
 }
 
 export async function deleteEmployeeLinkRecord(session: AuthSession, orgId: string, linkId: string) {
-  await deleteWithPostFallback(
-    `${API_BASE}/api/v1/admin/organizations/${orgId}/employee-link/${linkId}/delete`,
-    `${API_BASE}/api/v1/admin/organizations/${orgId}/employee-link/${linkId}`,
+  const res = await deleteWithPostOnly(
+    [
+      apiUrl(`/api/v1/admin/organizations/${orgId}/employee-link/${linkId}/delete`),
+      apiUrl(`/api/v1/admin/organizations/${orgId}/invitation-history/${linkId}/delete`),
+    ],
     session,
-    "Failed to delete employee link",
   );
+  if (!res.ok) await parseError(res, "Failed to delete employee link");
 }
 
 export async function revokeInvitation(session: AuthSession, orgId: string, invitationId: string) {
   const res = await fetch(
-    `${API_BASE}/api/v1/admin/organizations/${orgId}/invitations/${invitationId}/revoke`,
+    apiUrl(`/api/v1/admin/organizations/${orgId}/invitations/${invitationId}/revoke`),
     { method: "POST", headers: adminHeaders(session) },
   );
   if (!res.ok) throw new Error(await readApiError(res, "Failed to revoke invitation"));
@@ -430,7 +456,7 @@ export async function updateMemberRole(
   membershipId: string,
   role: string,
 ) {
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/members/${membershipId}`, {
+  const res = await fetch(apiUrl(`/api/v1/admin/organizations/${orgId}/members/${membershipId}`), {
     method: "PATCH",
     headers: adminHeaders(session),
     body: JSON.stringify({ role }),
@@ -445,7 +471,7 @@ export async function deactivateMember(
   reason: string,
 ) {
   const res = await fetch(
-    `${API_BASE}/api/v1/admin/organizations/${orgId}/members/${membershipId}/deactivate`,
+    apiUrl(`/api/v1/admin/organizations/${orgId}/members/${membershipId}/deactivate`),
     {
       method: "POST",
       headers: adminHeaders(session),
@@ -459,7 +485,7 @@ export async function invitePlatformStaff(
   session: AuthSession,
   payload: { email: string; full_name: string; role: string },
 ): Promise<PlatformStaffMember> {
-  const res = await fetch(`${API_BASE}/api/v1/admin/platform-staff/invite`, {
+  const res = await fetch(apiUrl(`/api/v1/admin/platform-staff/invite`), {
     method: "POST",
     headers: adminHeaders(session),
     body: JSON.stringify(payload),
@@ -473,7 +499,7 @@ export async function updatePlatformStaffRole(
   userId: string,
   payload: { role: string; reason: string },
 ): Promise<PlatformStaffMember> {
-  const res = await fetch(`${API_BASE}/api/v1/admin/platform-staff/${userId}`, {
+  const res = await fetch(apiUrl(`/api/v1/admin/platform-staff/${userId}`), {
     method: "PATCH",
     headers: adminHeaders(session),
     body: JSON.stringify(payload),
@@ -532,7 +558,7 @@ export type EmployeeLinkSummary = {
 };
 
 export async function fetchInvitationsSetup(session: AuthSession, orgId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/invitations/setup`, {
+  const res = await fetch(apiUrl(`/api/v1/admin/organizations/${orgId}/invitations/setup`), {
     headers: adminHeaders(session),
   });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load setup status"));
@@ -541,7 +567,7 @@ export async function fetchInvitationsSetup(session: AuthSession, orgId: string)
 
 export async function fetchInvitationHistory(session: AuthSession, orgId: string, status?: string) {
   const q = status ? `?status=${encodeURIComponent(status)}` : "";
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/invitations/history${q}`, {
+  const res = await fetch(apiUrl(`/api/v1/admin/organizations/${orgId}/invitations/history${q}`), {
     headers: adminHeaders(session),
   });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load invitation history"));
@@ -553,7 +579,7 @@ export async function createAdminInvitation(
   orgId: string,
   payload: { email: string; full_name: string; personal_message?: string; expires_days?: number },
 ) {
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/invitations/admin`, {
+  const res = await fetch(apiUrl(`/api/v1/admin/organizations/${orgId}/invitations/admin`), {
     method: "POST",
     headers: adminHeaders(session),
     body: JSON.stringify(payload),
@@ -568,7 +594,7 @@ export async function createAdminInvitation(
 }
 
 export async function fetchEmployeeLinkSummary(session: AuthSession, orgId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/employee-link`, {
+  const res = await fetch(apiUrl(`/api/v1/admin/organizations/${orgId}/employee-link`), {
     headers: adminHeaders(session),
   });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load employee link"));
@@ -585,7 +611,7 @@ export async function createEmployeeLink(
     expires_days?: number | null;
   },
 ) {
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/employee-link`, {
+  const res = await fetch(apiUrl(`/api/v1/admin/organizations/${orgId}/employee-link`), {
     method: "POST",
     headers: adminHeaders(session),
     body: JSON.stringify(payload),
@@ -595,7 +621,7 @@ export async function createEmployeeLink(
 }
 
 export async function rotateEmployeeLink(session: AuthSession, orgId: string, linkId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/employee-link/${linkId}/rotate`, {
+  const res = await fetch(apiUrl(`/api/v1/admin/organizations/${orgId}/employee-link/${linkId}/rotate`), {
     method: "POST",
     headers: adminHeaders(session),
   });
@@ -604,7 +630,7 @@ export async function rotateEmployeeLink(session: AuthSession, orgId: string, li
 }
 
 export async function fetchOrgInvitations(session: AuthSession, orgId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/invitations`, {
+  const res = await fetch(apiUrl(`/api/v1/admin/organizations/${orgId}/invitations`), {
     headers: adminHeaders(session),
   });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load invitations"));
@@ -612,7 +638,7 @@ export async function fetchOrgInvitations(session: AuthSession, orgId: string) {
 }
 
 export async function fetchOrgAudit(session: AuthSession, orgId: string) {
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/audit`, {
+  const res = await fetch(apiUrl(`/api/v1/admin/organizations/${orgId}/audit`), {
     headers: adminHeaders(session),
   });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load audit log"));

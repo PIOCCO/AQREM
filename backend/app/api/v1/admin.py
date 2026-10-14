@@ -65,12 +65,15 @@ from app.services.platform_provisioning import (
     unique_org_slug,
     update_membership_role,
 )
+from app.models.employee_join import EmployeeJoinLink
 from app.services.invitations.admin_invitation import (
+    delete_admin_invitation,
     invitation_setup_path,
     invitation_setup_url,
     provision_admin_invitation,
     resend_admin_invitation,
 )
+from app.services.invitations.employee_join import delete_employee_join_link
 from app.services.platform_provisioning import revoke_invitation
 from app.services.access_control.groups import ensure_default_access_groups
 from app.tenant_store.resolver import open_tenant_session
@@ -197,13 +200,26 @@ def create_organization(
     return org_to_admin_response(db, org)
 
 
-@router.patch("/organizations/{organization_id}", response_model=AdminOrganizationResponse)
+@router.patch(
+    "/organizations/{organization_id}",
+    response_model=AdminOrganizationResponse | DeleteOrganizationResponse,
+)
 def update_organization(
     organization_id: UUID,
     payload: AdminOrganizationUpdate,
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("org:update")),
-) -> AdminOrganizationResponse:
+) -> AdminOrganizationResponse | DeleteOrganizationResponse:
+    if payload.confirm_name is not None:
+        if resolve_platform_role(admin) != PlatformRole.SUPER_ADMIN:
+            raise admin_error(code="FORBIDDEN", message="Super admin required", status_code=403)
+        return _delete_organization_impl(
+            db,
+            organization_id=organization_id,
+            payload=DeleteOrganizationRequest(confirm_name=payload.confirm_name),
+            admin=admin,
+        )
+
     org = _require_admin_visible_org(db, organization_id)
 
     usage = get_seat_usage(db, org)
@@ -292,6 +308,17 @@ def delete_organization_post(
     admin: User = Depends(require_super_admin),
 ) -> DeleteOrganizationResponse:
     """POST alias for environments or proxies that reject HTTP DELETE with a body."""
+    return _delete_organization_impl(db, organization_id=organization_id, payload=payload, admin=admin)
+
+
+@router.post("/organizations/{organization_id}/schedule-deletion", response_model=DeleteOrganizationResponse)
+def schedule_organization_deletion_post(
+    organization_id: UUID,
+    payload: DeleteOrganizationRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+) -> DeleteOrganizationResponse:
+    """Alternate POST path for older proxies or cached route tables."""
     return _delete_organization_impl(db, organization_id=organization_id, payload=payload, admin=admin)
 
 
@@ -531,6 +558,34 @@ def revoke_user_invitation(
         raise admin_error(code="NOT_FOUND", message="Invitation not found", status_code=404)
     revoke_invitation(db, admin_user_id=admin.id, invitation=invitation)
     db.commit()
+
+
+@router.post(
+    "/organizations/{organization_id}/invitation-history/{record_id}/delete",
+    status_code=204,
+)
+def delete_invitation_history_record(
+    organization_id: UUID,
+    record_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:revoke")),
+) -> None:
+    """Remove a history row whether it is an org-admin invite or employee join link."""
+    _require_admin_visible_org(db, organization_id)
+    invitation = db.get(UserInvitation, record_id)
+    if invitation is not None and invitation.organization_id == organization_id:
+        try:
+            delete_admin_invitation(db, admin_user_id=admin.id, invitation=invitation)
+        except ValueError as exc:
+            raise admin_error(code="INVALID_STATE", message=str(exc), status_code=400) from exc
+        db.commit()
+        return
+    link = db.get(EmployeeJoinLink, record_id)
+    if link is not None and link.organization_id == organization_id:
+        delete_employee_join_link(db, admin_user_id=admin.id, link=link)
+        db.commit()
+        return
+    raise admin_error(code="NOT_FOUND", message="Invitation history record not found", status_code=404)
 
 
 @router.get("/organizations/{organization_id}/members", response_model=list[AdminMembershipResponse])

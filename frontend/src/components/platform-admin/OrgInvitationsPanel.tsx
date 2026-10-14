@@ -328,17 +328,33 @@ export function OrgInvitationsPanel({
                         className="text-xs underline"
                         onClick={async () => {
                           try {
+                            const fromHistory = pickInviteUrl(row);
+                            if (fromHistory) {
+                              setSecret({
+                                title:
+                                  invitationHistoryRecordType(row) === "employee_link"
+                                    ? "Employee join link"
+                                    : "Admin invitation link",
+                                url: fromHistory,
+                                expires: row.expires_at ?? undefined,
+                              });
+                              return;
+                            }
                             if (invitationHistoryRecordType(row) === "admin_invitation") {
                               const r = await fetchAdminInvitationLink(session, org.id, row.id);
                               const url = pickInviteUrl(r);
                               if (url) {
                                 setSecret({ title: "Admin invitation link", url, expires: r.expires_at ?? undefined });
+                              } else {
+                                toast.push("Link unavailable for this row — use Regenerate for a new link.", "err");
                               }
                             } else {
                               const r = await fetchEmployeeLinkUrl(session, org.id, row.id);
                               const url = pickInviteUrl(r);
                               if (url) {
                                 setSecret({ title: "Employee join link", url, expires: r.expires_at ?? undefined });
+                              } else {
+                                toast.push("Link unavailable — use Regenerate.", "err");
                               }
                             }
                           } catch (err) {

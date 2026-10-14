@@ -1,7 +1,10 @@
 import { readApiError } from "./errors";
 import { normalizeOrganizationId } from "./uuid";
+import { resolveApiBase } from "./apiBase";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+function apiBase(): string {
+  return resolveApiBase();
+}
 
 export type AuthSession = {
   token: string;
@@ -49,7 +52,7 @@ export function handleUnauthorized(): void {
 
 /** Platform console session validation — never sends tenant org header. */
 export async function fetchAuthMePlatform(session: AuthSession) {
-  const res = await fetch(`${API_BASE}/api/v1/auth/me`, { headers: authOnlyHeaders(session) });
+  const res = await fetch(`${apiBase()}/api/v1/auth/me`, { headers: authOnlyHeaders(session) });
   if (res.status === 401) {
     handleUnauthorized();
     throw new Error("Session expired");
@@ -59,7 +62,7 @@ export async function fetchAuthMePlatform(session: AuthSession) {
 }
 
 export async function fetchAuthMe(session: AuthSession) {
-  const res = await fetch(`${API_BASE}/api/v1/auth/me`, { headers: authHeaders(session) });
+  const res = await fetch(`${apiBase()}/api/v1/auth/me`, { headers: authHeaders(session) });
   if (res.status === 401) {
     handleUnauthorized();
     throw new Error("Session expired");
@@ -73,7 +76,7 @@ export async function fetchAuthMeTenant(session: AuthSession) {
   if (!session.organizationId) {
     throw new Error("No organization selected");
   }
-  const res = await fetch(`${API_BASE}/api/v1/auth/me/tenant`, { headers: authHeaders(session) });
+  const res = await fetch(`${apiBase()}/api/v1/auth/me/tenant`, { headers: authHeaders(session) });
   if (res.status === 401) {
     handleUnauthorized();
     throw new Error("Session expired");
@@ -89,7 +92,7 @@ export async function changePassword(
   session: AuthSession,
   payload: { current_password: string; new_password: string },
 ) {
-  const res = await fetch(`${API_BASE}/api/v1/auth/change-password`, {
+  const res = await fetch(`${apiBase()}/api/v1/auth/change-password`, {
     method: "POST",
     headers: authHeaders(session),
     body: JSON.stringify(payload),
@@ -141,7 +144,7 @@ async function authedFormFetch(session: AuthSession, url: string, form: FormData
 }
 
 export async function loginUser(payload: { email: string; password: string }) {
-  const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
+  const res = await fetch(`${apiBase()}/api/v1/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...payload, email: payload.email.trim() }),
@@ -153,7 +156,7 @@ export async function loginUser(payload: { email: string; password: string }) {
 }
 
 export async function requestPasswordReset(email: string): Promise<{ message: string }> {
-  const res = await fetch(`${API_BASE}/api/v1/auth/forgot-password`, {
+  const res = await fetch(`${apiBase()}/api/v1/auth/forgot-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: email.trim() }),
@@ -163,7 +166,7 @@ export async function requestPasswordReset(email: string): Promise<{ message: st
 }
 
 export async function resetPasswordWithToken(token: string, newPassword: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/v1/auth/reset-password`, {
+  const res = await fetch(`${apiBase()}/api/v1/auth/reset-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token, new_password: newPassword }),
@@ -172,7 +175,7 @@ export async function resetPasswordWithToken(token: string, newPassword: string)
 }
 
 export async function sendAcceptInvitationVerification(payload: { token: string; email: string }) {
-  const res = await fetch(`${API_BASE}/api/v1/auth/accept-invitation/send-verification`, {
+  const res = await fetch(`${apiBase()}/api/v1/auth/accept-invitation/send-verification`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -188,7 +191,7 @@ export async function acceptInvitation(payload: {
   password: string;
   full_name?: string;
 }) {
-  const res = await fetch(`${API_BASE}/api/v1/auth/accept-invitation`, {
+  const res = await fetch(`${apiBase()}/api/v1/auth/accept-invitation`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -224,7 +227,7 @@ export type AdminMember = {
 };
 
 export async function adminListOrganizations(session: AuthSession): Promise<AdminOrganization[]> {
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations`, {
+  const res = await fetch(`${apiBase()}/api/v1/admin/organizations`, {
     headers: platformAdminHeaders(session),
   });
   if (res.status === 401) {
@@ -239,7 +242,7 @@ export async function adminCreateOrganization(
   session: AuthSession,
   payload: { name: string; license_limit?: number; license_status?: string },
 ) {
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations`, {
+  const res = await fetch(`${apiBase()}/api/v1/admin/organizations`, {
     method: "POST",
     headers: platformAdminHeaders(session),
     body: JSON.stringify(payload),
@@ -253,7 +256,7 @@ export async function adminUpdateOrganization(
   organizationId: string,
   payload: { license_limit?: number; license_status?: string },
 ) {
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${organizationId}`, {
+  const res = await fetch(`${apiBase()}/api/v1/admin/organizations/${organizationId}`, {
     method: "PATCH",
     headers: platformAdminHeaders(session),
     body: JSON.stringify(payload),
@@ -263,7 +266,7 @@ export async function adminUpdateOrganization(
 }
 
 export async function adminListMembers(session: AuthSession, organizationId: string): Promise<AdminMember[]> {
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${organizationId}/members`, {
+  const res = await fetch(`${apiBase()}/api/v1/admin/organizations/${organizationId}/members`, {
     headers: platformAdminHeaders(session),
   });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load members"));
@@ -275,7 +278,7 @@ export async function adminProvisionUser(
   organizationId: string,
   payload: { email: string; full_name: string; role: string },
 ) {
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${organizationId}/users`, {
+  const res = await fetch(`${apiBase()}/api/v1/admin/organizations/${organizationId}/users`, {
     method: "POST",
     headers: platformAdminHeaders(session),
     body: JSON.stringify(payload),
@@ -288,14 +291,14 @@ export async function adminProvisionUser(
 }
 
 export async function fetchMetrics(session: AuthSession) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/dashboard/metrics`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/dashboard/metrics`);
   if (!res.ok) throw new Error("Failed to load metrics");
   return res.json();
 }
 
 export async function fetchQuestionnaires(session: AuthSession, projectId?: string | null) {
   const qs = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
-  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires${qs}`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/questionnaires${qs}`);
   if (!res.ok) throw new Error("Failed to load questionnaires");
   return res.json();
 }
@@ -309,19 +312,19 @@ export async function fetchQuestionnaireQuestions(
   if (params?.status) qs.set("status", params.status);
   if (params?.search) qs.set("search", params.search);
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
-  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires/${questionnaireId}/questions${suffix}`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/questionnaires/${questionnaireId}/questions${suffix}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load questions"));
   return res.json();
 }
 
 export async function fetchQuestionDetail(session: AuthSession, questionId: string) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires/questions/${questionId}`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/questionnaires/questions/${questionId}`);
   if (!res.ok) throw new Error("Failed to load question");
   return res.json();
 }
 
 export async function generateQuestionnaireAnswers(session: AuthSession, questionnaireId: string) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires/${questionnaireId}/generate`, {
+  const res = await authedFetch(session, `${apiBase()}/api/v1/questionnaires/${questionnaireId}/generate`, {
     method: "POST",
   });
   if (!res.ok) throw new Error(await readApiError(res, "Unable to generate answers. Please try again."));
@@ -329,7 +332,7 @@ export async function generateQuestionnaireAnswers(session: AuthSession, questio
 }
 
 export async function approveAnswer(session: AuthSession, answerId: string) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires/answers/${answerId}/approve`, {
+  const res = await authedFetch(session, `${apiBase()}/api/v1/questionnaires/answers/${answerId}/approve`, {
     method: "POST",
   });
   if (!res.ok) throw new Error("Failed to approve answer");
@@ -337,7 +340,7 @@ export async function approveAnswer(session: AuthSession, answerId: string) {
 }
 
 export async function rejectAnswer(session: AuthSession, answerId: string) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires/answers/${answerId}/reject`, {
+  const res = await authedFetch(session, `${apiBase()}/api/v1/questionnaires/answers/${answerId}/reject`, {
     method: "POST",
   });
   if (!res.ok) throw new Error("Failed to reject answer");
@@ -345,7 +348,7 @@ export async function rejectAnswer(session: AuthSession, answerId: string) {
 }
 
 export async function editAnswer(session: AuthSession, answerId: string, text: string) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires/answers/${answerId}/edit`, {
+  const res = await authedFetch(session, `${apiBase()}/api/v1/questionnaires/answers/${answerId}/edit`, {
     method: "POST",
     body: JSON.stringify({ text }),
   });
@@ -354,13 +357,13 @@ export async function editAnswer(session: AuthSession, answerId: string, text: s
 }
 
 export async function fetchProjects(session: AuthSession) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/projects`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/projects`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load projects"));
   return res.json();
 }
 
 export async function fetchProjectSummaries(session: AuthSession) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/projects/summaries`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/projects/summaries`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load project summaries"));
   return res.json();
 }
@@ -382,7 +385,7 @@ export async function createProject(
     initial_source?: ProjectInitialSourcePayload;
   },
 ) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/projects`, {
+  const res = await authedFetch(session, `${apiBase()}/api/v1/projects`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -392,7 +395,7 @@ export async function createProject(
 
 export async function fetchSources(session: AuthSession, projectId?: string | null) {
   const qs = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
-  const res = await authedFetch(session, `${API_BASE}/api/v1/sources${qs}`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/sources${qs}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load sources"));
   return res.json();
 }
@@ -407,20 +410,20 @@ export async function fetchEvidence(
   if (params?.search) qs.set("search", params.search);
   if (params?.offset != null) qs.set("offset", String(params.offset));
   if (params?.limit != null) qs.set("limit", String(params.limit));
-  const res = await authedFetch(session, `${API_BASE}/api/v1/evidence?${qs.toString()}`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/evidence?${qs.toString()}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load evidence"));
   return res.json();
 }
 
 export async function fetchEvidenceDetail(session: AuthSession, evidenceId: string) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/evidence/${evidenceId}`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/evidence/${evidenceId}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load evidence detail"));
   return res.json();
 }
 
 export async function fetchDashboardOverview(session: AuthSession, projectId?: string | null) {
   const qs = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
-  const res = await authedFetch(session, `${API_BASE}/api/v1/dashboard/overview${qs}`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/dashboard/overview${qs}`);
   if (!res.ok) throw new Error(await readApiError(res, "Unable to load dashboard"));
   return res.json();
 }
@@ -434,7 +437,7 @@ export async function fetchReviewQueue(
   if (params?.search) qs.set("search", params.search);
   if (params?.offset != null) qs.set("offset", String(params.offset));
   if (params?.limit != null) qs.set("limit", String(params.limit));
-  const res = await authedFetch(session, `${API_BASE}/api/v1/review-queue?${qs.toString()}`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/review-queue?${qs.toString()}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load review queue"));
   return res.json();
 }
@@ -448,13 +451,13 @@ export async function fetchAuditLog(
     limit: String(options?.limit ?? 50),
   });
   if (options?.action) qs.set("action", options.action);
-  const res = await authedFetch(session, `${API_BASE}/api/v1/audit?${qs.toString()}`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/audit?${qs.toString()}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load activity log"));
   return res.json();
 }
 
 export async function fetchQuestionnaire(session: AuthSession, questionnaireId: string) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires/${questionnaireId}`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/questionnaires/${questionnaireId}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load questionnaire"));
   return res.json();
 }
@@ -469,7 +472,7 @@ export async function downloadQuestionnaireExport(
   if (options?.approved_only) qs.set("approved_only", "true");
   const res = await authedFetch(
     session,
-    `${API_BASE}/api/v1/questionnaires/${questionnaireId}/export/${format}?${qs.toString()}`,
+    `${apiBase()}/api/v1/questionnaires/${questionnaireId}/export/${format}?${qs.toString()}`,
   );
   if (!res.ok) throw new Error(await readApiError(res, "Export failed"));
   const blob = await res.blob();
@@ -486,13 +489,13 @@ export async function fetchAnswerLibrary(
   const qs = new URLSearchParams({ limit: String(options?.limit ?? 50) });
   if (options?.query) qs.set("query", options.query);
   if (options?.projectId) qs.set("project_id", options.projectId);
-  const res = await authedFetch(session, `${API_BASE}/api/v1/answer-library?${qs}`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/answer-library?${qs}`);
   if (!res.ok) throw new Error("Failed to load answer library");
   return res.json();
 }
 
 export async function fetchAnswerLibraryEntry(session: AuthSession, entryId: string) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/answer-library/${entryId}`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/answer-library/${entryId}`);
   if (!res.ok) throw new Error("Failed to load library entry");
   return res.json();
 }
@@ -506,19 +509,19 @@ export async function fetchStaleAnswers(
   if (params?.project_id) qs.set("project_id", params.project_id);
   if (params?.offset != null) qs.set("offset", String(params.offset));
   if (params?.limit != null) qs.set("limit", String(params.limit));
-  const res = await authedFetch(session, `${API_BASE}/api/v1/stale-answers?${qs.toString()}`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/stale-answers?${qs.toString()}`);
   if (!res.ok) throw new Error("Failed to load stale answers");
   return res.json();
 }
 
 export async function fetchStaleAnswerDetail(session: AuthSession, answerId: string) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/stale-answers/${answerId}`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/stale-answers/${answerId}`);
   if (!res.ok) throw new Error("Failed to load stale answer detail");
   return res.json();
 }
 
 export async function revalidateStaleAnswer(session: AuthSession, answerId: string) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/stale-answers/${answerId}/revalidate`, {
+  const res = await authedFetch(session, `${apiBase()}/api/v1/stale-answers/${answerId}/revalidate`, {
     method: "POST",
   });
   if (!res.ok) throw new Error("Revalidation failed");
@@ -526,7 +529,7 @@ export async function revalidateStaleAnswer(session: AuthSession, answerId: stri
 }
 
 export async function regenerateStaleAnswer(session: AuthSession, answerId: string) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/stale-answers/${answerId}/regenerate`, {
+  const res = await authedFetch(session, `${apiBase()}/api/v1/stale-answers/${answerId}/regenerate`, {
     method: "POST",
   });
   if (!res.ok) throw new Error("Regeneration failed");
@@ -534,7 +537,7 @@ export async function regenerateStaleAnswer(session: AuthSession, answerId: stri
 }
 
 export async function validateLibraryEntry(session: AuthSession, entryId: string) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/answer-library/${entryId}/validation`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/answer-library/${entryId}/validation`);
   if (!res.ok) throw new Error("Failed to validate library entry");
   return res.json();
 }
@@ -549,7 +552,7 @@ export async function createSource(
     config?: Record<string, unknown>;
   },
 ) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/sources`, {
+  const res = await authedFetch(session, `${apiBase()}/api/v1/sources`, {
     method: "POST",
     body: JSON.stringify({
       scope: "project",
@@ -561,7 +564,7 @@ export async function createSource(
 }
 
 export async function triggerSourceSync(session: AuthSession, sourceId: string) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/sources/${sourceId}/sync`, {
+  const res = await authedFetch(session, `${apiBase()}/api/v1/sources/${sourceId}/sync`, {
     method: "POST",
   });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to start sync"));
@@ -571,19 +574,19 @@ export async function triggerSourceSync(session: AuthSession, sourceId: string) 
 export async function uploadSourceFiles(session: AuthSession, sourceId: string, files: File[]) {
   const form = new FormData();
   for (const file of files) form.append("files", file);
-  const res = await authedFormFetch(session, `${API_BASE}/api/v1/sources/${sourceId}/files`, form);
+  const res = await authedFormFetch(session, `${apiBase()}/api/v1/sources/${sourceId}/files`, form);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to upload files"));
   return res.json();
 }
 
 export async function fetchSourceJobs(session: AuthSession, sourceId: string, limit = 5) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/sources/${sourceId}/jobs?limit=${limit}`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/sources/${sourceId}/jobs?limit=${limit}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load sync history"));
   return res.json();
 }
 
 export async function fetchSyncJob(session: AuthSession, jobId: string) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/sources/jobs/${jobId}`);
+  const res = await authedFetch(session, `${apiBase()}/api/v1/sources/jobs/${jobId}`);
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load sync job"));
   return res.json();
 }
@@ -597,7 +600,7 @@ export async function connectGithubRepo(
     access_token?: string;
   },
 ) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/sources/github/connect-repo`, {
+  const res = await authedFetch(session, `${apiBase()}/api/v1/sources/github/connect-repo`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -614,7 +617,7 @@ export async function createQuestionnaire(
     description?: string;
   },
 ) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/questionnaires`, {
+  const res = await authedFetch(session, `${apiBase()}/api/v1/questionnaires`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -631,7 +634,7 @@ export async function uploadQuestionnaireFile(
   form.append("file", file);
   const res = await authedFormFetch(
     session,
-    `${API_BASE}/api/v1/questionnaires/${questionnaireId}/upload`,
+    `${apiBase()}/api/v1/questionnaires/${questionnaireId}/upload`,
     form,
   );
   if (!res.ok) throw new Error(await readApiError(res, "Failed to upload questionnaire"));
@@ -648,7 +651,7 @@ export function uploadQuestionnaireFileWithProgress(
     const form = new FormData();
     form.append("file", file);
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${API_BASE}/api/v1/questionnaires/${questionnaireId}/upload`);
+    xhr.open("POST", `${apiBase()}/api/v1/questionnaires/${questionnaireId}/upload`);
     const headers = authOnlyHeaders(session) as Record<string, string>;
     Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
     xhr.upload.onprogress = (ev) => {
@@ -680,7 +683,7 @@ export function uploadQuestionnaireFileWithProgress(
 export async function regenerateQuestionAnswer(session: AuthSession, questionId: string) {
   const res = await authedFetch(
     session,
-    `${API_BASE}/api/v1/questionnaires/questions/${questionId}/regenerate`,
+    `${apiBase()}/api/v1/questionnaires/questions/${questionId}/regenerate`,
     { method: "POST" },
   );
   if (!res.ok) throw new Error(await readApiError(res, "Unable to generate answer. Please try again."));
@@ -691,7 +694,7 @@ export async function askChat(
   session: AuthSession,
   payload: { query: string; project_id?: string | null },
 ) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/chat/ask`, {
+  const res = await authedFetch(session, `${apiBase()}/api/v1/chat/ask`, {
     method: "POST",
     body: JSON.stringify({
       query: payload.query,
@@ -706,7 +709,7 @@ export async function previewRetrieval(
   session: AuthSession,
   payload: { query: string; project_id?: string | null; source_id?: string; limit?: number },
 ) {
-  const res = await authedFetch(session, `${API_BASE}/api/v1/retrieval/preview`, {
+  const res = await authedFetch(session, `${apiBase()}/api/v1/retrieval/preview`, {
     method: "POST",
     body: JSON.stringify({
       query: payload.query,

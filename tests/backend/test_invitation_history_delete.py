@@ -54,3 +54,24 @@ def test_delete_admin_invitation_history_post(client: TestClient, db_session):
         headers={"Authorization": f"Bearer {token}"},
     ).json()
     assert not any(row["id"] == str(inv_id) for row in history)
+
+
+def test_delete_invitation_history_unified_post(client: TestClient, db_session):
+    _, token = _super(db_session)
+    org_id = client.post(
+        "/api/v1/admin/organizations",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Unified Del Org", "license_limit": 5, "environment": "production"},
+    ).json()["id"]
+    created = client.post(
+        f"/api/v1/admin/organizations/{org_id}/invitations/admin",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"email": "unified@corp.example", "full_name": "Unified", "expires_days": 7},
+    )
+    inv_id = created.json()["invitation_id"]
+    deleted = client.post(
+        f"/api/v1/admin/organizations/{org_id}/invitation-history/{inv_id}/delete",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert deleted.status_code == 204, deleted.text
+    assert db_session.get(UserInvitation, inv_id) is None

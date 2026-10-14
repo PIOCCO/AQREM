@@ -56,6 +56,18 @@ def _create_org(client: TestClient, token: str, name: str = "Delete Me Org") -> 
     return res.json()["id"]
 
 
+def test_delete_org_via_patch_confirm_name(client: TestClient, db_session):
+    _user, token = _seed_super_admin(db_session)
+    org_id = _create_org(client, token, name="Patch Delete Org")
+    res = client.patch(
+        f"/api/v1/admin/organizations/{org_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmName": "Patch Delete Org"},
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["retention_days"] == 30
+
+
 def test_delete_org_requires_exact_name(client: TestClient, db_session):
     _user, token = _seed_super_admin(db_session)
     org_id = _create_org(client, token, name="Exact Name Org")

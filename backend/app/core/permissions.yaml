@@ -56,6 +56,8 @@ platform_endpoints:
   PATCH /api/v1/admin/organizations/{organization_id}: org:update
   DELETE /api/v1/admin/organizations/{organization_id}: org:delete
   POST /api/v1/admin/organizations/{organization_id}/delete: org:delete
+  POST /api/v1/admin/organizations/{organization_id}/schedule-deletion: org:delete
+  POST /api/v1/admin/organizations/{organization_id}/invitation-history/{record_id}/delete: invitation:revoke
   GET /api/v1/admin/organizations/{organization_id}/directory: org:read
   GET /api/v1/admin/organizations/{organization_id}/invitations: invitation:read
   GET /api/v1/admin/organizations/{organization_id}/invitations/setup: invitation:read

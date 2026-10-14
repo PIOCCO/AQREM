@@ -82,6 +82,13 @@ class AdminOrganizationUpdate(BaseModel):
     license_status: LicenseStatus | None = None
     is_active: bool | None = None
     owner_display_name: str | None = None
+    confirm_name: str | None = Field(
+        default=None,
+        alias="confirmName",
+        description="When set (exact org name), super admin schedules organization deletion.",
+    )
+
+    model_config = {"populate_by_name": True}
 
 
 class AdminOrganizationResponse(BaseModel):
