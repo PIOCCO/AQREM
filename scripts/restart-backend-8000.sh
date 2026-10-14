@@ -13,6 +13,17 @@ if [[ ! -d "${BACKEND}/.venv" ]]; then
   exit 1
 fi
 
+if command -v docker >/dev/null 2>&1; then
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qE 'aqrem-api|api-1'; then
+    echo "Port ${PORT} is used by Docker (aqrem-api). Host uvicorn would conflict." >&2
+    echo "Use instead:" >&2
+    echo "  bash scripts/restart-api-docker.sh" >&2
+    echo "Or rebuild after dependency changes:" >&2
+    echo "  docker compose up -d --build api" >&2
+    exit 1
+  fi
+fi
+
 echo "Stopping listeners on port ${PORT}..."
 if command -v fuser >/dev/null 2>&1; then
   fuser -k "${PORT}/tcp" 2>/dev/null || true

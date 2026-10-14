@@ -42,12 +42,25 @@ On the machine that serves API requests (same host as `100.x.x.x:8000` when usin
 
 ```bash
 git fetch origin
-git checkout cursor/remove-mock-seed-81ca   # or latest merged main / your deploy branch
-bash scripts/restart-backend-8000.sh        # binds 0.0.0.0:8000 — not 127.0.0.1 only
+git checkout cursor/org-delete-api-restart-81ca   # or latest branch with org soft-delete
+```
+
+**If `docker ps` shows `aqrem-api-1` on `0.0.0.0:8000`** (common on Azelos — do **not** run host uvicorn on the same port):
+
+```bash
+bash scripts/restart-api-docker.sh
+# after pyproject / image changes only:
+docker compose up -d --build api
+```
+
+**If you run uvicorn on the host** (no Docker API container):
+
+```bash
+bash scripts/restart-backend-8000.sh
 bash scripts/check-admin-delete-api.sh http://127.0.0.1:8000
 ```
 
-Expect `organization_soft_delete: true` and revision `2026-03-org-soft-delete-v1`. If you use Docker instead of host uvicorn: `docker compose up -d --build api` so the `api` service picks up current `backend/` routes.
+Expect `organization_soft_delete: true` and revision `2026-03-org-soft-delete-v1`.
 
 ## Manual dev seed (optional)
 
