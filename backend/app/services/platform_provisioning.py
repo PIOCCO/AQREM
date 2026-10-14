@@ -357,13 +357,25 @@ def accept_invitation(
     if not allowed:
         raise ValueError(f"ORG_SIGNIN_BLOCKED:{reason}")
 
+    invite_email = invitation.email.strip().lower()
+    if email.strip().lower() != invite_email:
+        raise ValueError("EMAIL_MISMATCH")
+
     assert_admin_accept_verified(invitation, email=email, verification_code=verification_code)
 
-    user = db.query(User).filter(User.email == invitation.email.strip().lower()).first()
+    user = db.query(User).filter(User.email == invite_email).first()
     if user is None:
         user = db.query(User).filter(User.email == invitation.email).first()
     if user is None:
-        raise ValueError("User not found for invitation")
+        user = User(
+            email=invite_email,
+            full_name=(full_name or invitation.invitee_full_name or invite_email)[:255],
+            hashed_password=None,
+            is_active=True,
+            must_change_password=True,
+        )
+        db.add(user)
+        db.flush()
     if user.is_platform_admin or (user.platform_role or "").strip():
         raise ValueError("PLATFORM_ACCOUNT")
 
@@ -383,7 +395,14 @@ def accept_invitation(
         .first()
     )
     if membership is None:
-        raise ValueError("Membership missing for invitation")
+        membership = OrganizationMembership(
+            organization_id=invitation.organization_id,
+            user_id=user.id,
+            role=invitation.role,
+            is_active=False,
+        )
+        db.add(membership)
+        db.flush()
 
     membership.is_active = True
     membership.role = invitation.role

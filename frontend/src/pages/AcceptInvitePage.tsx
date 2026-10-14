@@ -30,6 +30,7 @@ export default function AcceptInvitePage() {
     role: string;
     email: string;
     invitee_full_name: string | null;
+    verification_required?: boolean;
   } | null>(null);
   const [error, setError] = useState<string | null>(token ? null : "This invitation is not valid.");
   const [loading, setLoading] = useState(false);
@@ -85,6 +86,8 @@ export default function AcceptInvitePage() {
     return () => window.clearInterval(t);
   }, [resendCooldownSec]);
 
+  const verificationRequired = preview?.verification_required !== false;
+
   const wrongAccount =
     preview &&
     signedInEmail &&
@@ -108,6 +111,8 @@ export default function AcceptInvitePage() {
       setResendCooldownSec(60);
       if (res.dev_verification_code) {
         setVerificationCode(res.dev_verification_code);
+      } else {
+        setVerificationCode("");
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Could not send a verification code.";
@@ -123,7 +128,7 @@ export default function AcceptInvitePage() {
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!token || wrongAccount || !preview) return;
-    if (!codeSent || !verificationCode.trim()) {
+    if (verificationRequired && (!codeSent || !verificationCode.trim())) {
       setError("Verify your email with the code sent to the invited address.");
       return;
     }
@@ -134,7 +139,7 @@ export default function AcceptInvitePage() {
       const data = await acceptInvitation({
         token,
         email: preview.email,
-        verification_code: verificationCode.trim(),
+        verification_code: verificationRequired ? verificationCode.trim() : "",
         password: String(form.get("password")),
         full_name: String(form.get("full_name") || preview?.invitee_full_name || "") || undefined,
       });
@@ -190,35 +195,37 @@ export default function AcceptInvitePage() {
               required
             />
           </div>
-          <div>
-            <label htmlFor="inv-verify" className="text-xs font-medium">
-              Email verification code
-            </label>
-            <div className="flex gap-2 mt-1">
-              <input
-                id="inv-verify"
-                name="verification_code"
-                className="aq-input flex-1"
-                value={verificationCode}
-                onChange={(e) => setVerificationCode(e.target.value)}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                required
-              />
-              <button
-                type="button"
-                className="aq-btn-secondary shrink-0"
-                disabled={sendingCode || !preview || resendCooldownSec > 0}
-                onClick={() => void sendVerification()}
-              >
-                {resendCooldownSec > 0
-                  ? `Wait ${resendCooldownSec}s`
-                  : codeSent
-                    ? "Resend code"
-                    : "Send code"}
-              </button>
+          {verificationRequired ? (
+            <div>
+              <label htmlFor="inv-verify" className="text-xs font-medium">
+                Email verification code
+              </label>
+              <div className="flex gap-2 mt-1">
+                <input
+                  id="inv-verify"
+                  name="verification_code"
+                  className="aq-input flex-1"
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value)}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  required
+                />
+                <button
+                  type="button"
+                  className="aq-btn-secondary shrink-0"
+                  disabled={sendingCode || !preview || resendCooldownSec > 0}
+                  onClick={() => void sendVerification()}
+                >
+                  {resendCooldownSec > 0
+                    ? `Wait ${resendCooldownSec}s`
+                    : codeSent
+                      ? "Resend code"
+                      : "Send code"}
+                </button>
+              </div>
             </div>
-          </div>
+          ) : null}
           <div>
             <label htmlFor="inv-password" className="text-xs font-medium">
               New password

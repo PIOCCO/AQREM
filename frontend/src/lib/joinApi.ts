@@ -60,6 +60,7 @@ export type AcceptInvitationPreview = {
   role: string;
   email: string;
   invitee_full_name: string | null;
+  verification_required?: boolean;
   status?: "pending" | "expired" | "revoked" | "accepted";
 };
 

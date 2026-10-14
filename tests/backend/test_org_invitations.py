@@ -102,6 +102,20 @@ def test_admin_invitation_single_active_and_accept(client: TestClient, db_sessio
     assert send_code.status_code == 200, send_code.text
     code = send_code.json()["dev_verification_code"]
     assert code
+    assert send_code.json().get("email_delivered") is True
+
+    bad_code = client.post(
+        "/api/v1/auth/accept-invitation",
+        json={
+            "token": raw2,
+            "email": "admin2@corp.example",
+            "verification_code": "000000",
+            "password": "securepass1",
+            "full_name": "Admin Two",
+        },
+    )
+    assert bad_code.status_code == 400
+    assert "incorrect" in bad_code.json()["message"].lower()
 
     accept = client.post(
         "/api/v1/auth/accept-invitation",

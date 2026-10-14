@@ -218,6 +218,7 @@ class AcceptInvitationSendVerificationRequest(BaseModel):
 class AcceptInvitationSendVerificationResponse(BaseModel):
     verification_required: bool = True
     dev_verification_code: str | None = None
+    email_delivered: bool | None = None
 
 
 class ChangePasswordRequest(BaseModel):

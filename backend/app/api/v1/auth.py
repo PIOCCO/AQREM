@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
@@ -30,9 +31,11 @@ from app.schemas.admin import (
 )
 from app.services.invitations.admin_invitation_accept import send_admin_accept_verification
 from app.schemas.invitations import AcceptInvitationPreviewRequest, AcceptInvitationPreviewResponse
-from app.services.invitations.admin_invitation import preview_admin_invitation
+from app.services.invitations.accept_preview import accept_invitation_requires_verification, preview_accept_invitation
 from app.schemas.auth import ForgotPasswordRequest, LoginRequest, ResetPasswordRequest, TokenResponse, UserResponse
 from app.services.licensing import org_allows_sign_in
+
+logger = logging.getLogger("aqrem.auth")
 from app.services.platform_provisioning import accept_invitation
 
 router = APIRouter()
@@ -115,14 +118,23 @@ def accept_invite_preview(
     db: Session = Depends(get_db),
 ) -> AcceptInvitationPreviewResponse:
     try:
-        invitation, org = preview_admin_invitation(db, token=payload.token)
-    except ValueError:
-        raise HTTPException(status_code=404, detail={"message": "This invitation is not valid."}) from None
+        invitation, org = preview_accept_invitation(db, token=payload.token)
+    except ValueError as exc:
+        _preview_messages = {
+            "Invalid invitation": "This invitation link is not valid.",
+            "Invitation already used": "This invitation was already accepted. Try signing in.",
+            "Invitation revoked": "This invitation was revoked. Ask for a new invite.",
+            "Invitation expired": "This invitation has expired. Ask for a new invite.",
+            "Organization unavailable": "This organization is no longer available.",
+        }
+        message = _preview_messages.get(str(exc), "This invitation is not valid.")
+        raise HTTPException(status_code=404, detail={"message": message}) from exc
     return AcceptInvitationPreviewResponse(
         organization_name=org.name,
         role=Role(invitation.role),
         email=invitation.email,
         invitee_full_name=invitation.invitee_full_name,
+        verification_required=accept_invitation_requires_verification(invitation),
     )
 
 
@@ -152,9 +164,27 @@ def accept_invite_send_verification(
                 },
                 headers={"Retry-After": "60"},
             ) from exc
+        if code == "VERIFICATION_NOT_REQUIRED":
+            return AcceptInvitationSendVerificationResponse(verification_required=False, email_delivered=None)
+        if code.startswith("EMAIL_SEND_FAILED:"):
+            err = code.split(":", 1)[1]
+            hint = err
+            if "401" in err or "unrecognised ip" in err.lower() or "unrecognized ip" in err.lower():
+                hint = (
+                    "Email could not be sent (Brevo rejected the server IP). "
+                    "Allow the API server IP in Brevo Authorized IPs, then click Resend code."
+                )
+            raise HTTPException(
+                status_code=502,
+                detail={"message": hint, "email_error": err[:500]},
+            ) from exc
         raise HTTPException(status_code=404, detail={"message": "This invitation is not valid."}) from None
     db.commit()
-    return AcceptInvitationSendVerificationResponse(dev_verification_code=dev)
+    return AcceptInvitationSendVerificationResponse(
+        verification_required=True,
+        dev_verification_code=dev,
+        email_delivered=True,
+    )
 
 
 @router.post("/accept-invitation", response_model=TokenResponse)
@@ -209,7 +239,18 @@ def accept_invite(
                 status_code=403,
                 detail={"message": "This organization is no longer available. Ask your platform team for a new invitation."},
             ) from exc
-        raise HTTPException(status_code=400, detail={"message": "This invitation is not valid."}) from None
+        _accept_messages = {
+            "Invalid invitation": "This invitation link is not valid. Open the latest link from your email or ask for a new invite.",
+            "Invitation already used": "This invitation was already accepted. Try signing in with your password.",
+            "Invitation revoked": "This invitation was revoked. Ask your platform team to send a new one.",
+            "Invitation expired": "This invitation has expired. Ask your platform team to send a new one.",
+            "User not found for invitation": "Account setup is incomplete. Ask your platform team to resend the invitation.",
+            "Membership missing for invitation": "Organization membership is missing. Ask your platform team to resend the invitation.",
+        }
+        if str(exc) in _accept_messages:
+            raise HTTPException(status_code=400, detail={"message": _accept_messages[str(exc)]}) from exc
+        logger.warning("accept_invitation unmapped error: %s", exc)
+        raise HTTPException(status_code=400, detail={"message": "This invitation is not valid."}) from exc
     db.commit()
 
     org = db.get(Organization, membership.organization_id)

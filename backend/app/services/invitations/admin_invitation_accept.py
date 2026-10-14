@@ -53,14 +53,20 @@ def send_admin_accept_verification(
     invitation.accept_verification_expires_at = verification_expires_at()
     invitation.accept_verification_failed_attempts = 0
     invitation.last_verification_code_sent_at = _utcnow()
-    queued = send_admin_accept_verification_email(
+    attempted, delivery_error = send_admin_accept_verification_email(
         db,
         to_email=invitation.email,
         organization_name=org.name,
         organization_id=str(org.id),
         invitation_id=str(invitation.id),
         code=code,
+        wait_for_delivery=True,
     )
+    if attempted and delivery_error:
+        invitation.accept_verification_code_hash = None
+        invitation.accept_verification_expires_at = None
+        invitation.last_verification_code_sent_at = None
+        raise ValueError(f"EMAIL_SEND_FAILED:{delivery_error}")
     record_audit(
         db,
         organization_id=org.id,
@@ -75,7 +81,7 @@ def send_admin_accept_verification(
     settings = get_settings()
     dev = None
     if settings.app_env != "production":
-        if settings.resolved_email_provider == "console" or not queued:
+        if settings.resolved_email_provider == "console" or not attempted:
             dev = code
     return invitation, org, dev
 

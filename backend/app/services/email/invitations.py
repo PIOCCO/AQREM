@@ -8,7 +8,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.services.email import templates
-from app.services.email.service import email_delivery_configured, queue_email
+from app.services.email.service import email_delivery_configured, queue_email, send_email
 from app.services.email.types import OutboundEmail
 
 logger = logging.getLogger("aqrem.email")
@@ -122,24 +122,39 @@ def send_admin_accept_verification_email(
     organization_id: str,
     invitation_id: str,
     code: str,
-) -> bool:
+    wait_for_delivery: bool = False,
+) -> tuple[bool, str | None]:
+    """Queue or synchronously send the admin accept verification email.
+
+    Returns (configured_and_attempted, delivery_error). When wait_for_delivery is True,
+    delivery_error is set when the provider reports failure.
+    """
     subject, html, text = templates.verification_code_email(
         organization_name=organization_name,
         purpose="accept your administrator invitation",
         code=code,
     )
-    return _queue(
-        db,
-        email_type="admin_verification_code",
+    if not email_delivery_configured():
+        logger.info("Email not configured (provider=none); skipped type=admin_verification_code")
+        return False, None
+    outbound = OutboundEmail(
         to_email=to_email,
         to_name=None,
         subject=subject,
         html=html,
         text=text,
+        email_type="admin_verification_code",
+        tags=["verification", "admin_invitation"],
         organization_id=organization_id,
         resource_id=invitation_id,
-        tags=["verification", "admin_invitation"],
     )
+    if wait_for_delivery:
+        log = send_email(db, outbound, wait_for_delivery=True)
+        if log.status == "sent":
+            return True, None
+        return True, (log.error_message or "Email could not be delivered")[:500]
+    queue_email(db, outbound)
+    return True, None
 
 
 def send_join_verification_email(

@@ -48,16 +48,7 @@ def validate_email_config_at_startup(settings: Settings | None = None) -> None:
             raise RuntimeError("EMAIL_FROM_ADDRESS is required when EMAIL_PROVIDER=brevo in production")
 
 
-def _persist_log(
-    db: Session,
-    *,
-    log_id: UUID,
-    result: SendResult,
-    provider_name: str,
-) -> None:
-    row = db.get(EmailDeliveryLog, log_id)
-    if row is None:
-        return
+def _apply_send_result(row: EmailDeliveryLog, result: SendResult, provider_name: str) -> None:
     if result.ok:
         row.status = "sent"
         row.provider_message_id = result.provider_message_id
@@ -66,7 +57,22 @@ def _persist_log(
         row.status = "failed"
         row.error_message = (result.error_message or "send failed")[:2000]
     row.provider = provider_name
-    db.commit()
+
+
+def _persist_log(
+    db: Session,
+    *,
+    log_id: UUID,
+    result: SendResult,
+    provider_name: str,
+    commit: bool = True,
+) -> None:
+    row = db.get(EmailDeliveryLog, log_id)
+    if row is None:
+        return
+    _apply_send_result(row, result, provider_name)
+    if commit:
+        db.commit()
 
 
 def _send_with_retries(provider, message: OutboundEmail, settings: Settings) -> SendResult:
@@ -85,7 +91,12 @@ def _send_with_retries(provider, message: OutboundEmail, settings: Settings) -> 
     return last
 
 
-def queue_email(db: Session, message: OutboundEmail) -> EmailDeliveryLog:
+def send_email(
+    db: Session,
+    message: OutboundEmail,
+    *,
+    wait_for_delivery: bool = False,
+) -> EmailDeliveryLog:
     settings = get_settings()
     provider_name = settings.resolved_email_provider
     log = EmailDeliveryLog(
@@ -100,6 +111,21 @@ def queue_email(db: Session, message: OutboundEmail) -> EmailDeliveryLog:
     )
     db.add(log)
     db.flush()
+
+    if wait_for_delivery:
+        provider = resolve_email_provider(settings)
+        if provider is None:
+            _apply_send_result(
+                log,
+                SendResult(ok=False, error_message="Email provider disabled"),
+                provider_name,
+            )
+        else:
+            result = _send_with_retries(provider, message, settings)
+            _apply_send_result(log, result, provider.name)
+        db.flush()
+        return log
+
     log_id = log.id
 
     def _worker() -> None:
@@ -132,6 +158,10 @@ def queue_email(db: Session, message: OutboundEmail) -> EmailDeliveryLog:
 
     threading.Thread(target=_worker, name=f"email-{message.email_type}", daemon=True).start()
     return log
+
+
+def queue_email(db: Session, message: OutboundEmail) -> EmailDeliveryLog:
+    return send_email(db, message, wait_for_delivery=False)
 
 
 def latest_delivery_status(

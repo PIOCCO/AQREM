@@ -147,3 +147,4 @@ class AcceptInvitationPreviewResponse(BaseModel):
     role: Role
     email: EmailStr
     invitee_full_name: str | None
+    verification_required: bool = True
