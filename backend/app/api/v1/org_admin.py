@@ -43,6 +43,12 @@ from app.schemas.org_admin import (
 from app.services.licensing import LicenseDenied, assert_can_add_seat
 from app.services.org_admin.malware_scan import scan_upload_content
 from app.services.org_admin.policy import PolicyDenied, assert_org_admin_action
+from app.services.org_admin.role_assignment import (
+    OrgAdminRoleAssignmentDenied,
+    assert_org_admin_may_assign_role,
+    assert_org_admin_may_remove_membership,
+    parse_org_admin_invite_role,
+)
 from app.services.platform_provisioning import provision_user_invitation
 from app.services.setup_checklist import build_setup_checklist
 from app.services.seat_usage import get_seat_usage
@@ -510,28 +516,18 @@ def invite_member(
     except LicenseDenied as exc:
         raise org_admin_error(code="SEATS_FULL", message=exc.detail, field="email", status_code=403) from exc
     try:
-        role = Role(payload.role.upper())
+        role = parse_org_admin_invite_role(payload.role)
     except ValueError as exc:
-        raise org_admin_error(code="INVALID_ROLE", message="Choose Organization admin, Editor, or Viewer.", field="role") from exc
-    if payload.role.upper() == "PLATFORM_ADMIN":
-        raise org_admin_error(code="INVALID_ROLE", message="Invalid role.", field="role")
-    if role == Role.ORG_ADMIN:
-        existing_admin = (
-            db.query(OrganizationMembership)
-            .filter(
-                OrganizationMembership.organization_id == tenant.organization_id,
-                OrganizationMembership.role == Role.ORG_ADMIN.value,
-                OrganizationMembership.is_active.is_(True),
-            )
-            .first()
-        )
-        if existing_admin is not None:
-            raise org_admin_error(
-                code="ORG_ADMIN_EXISTS",
-                message="This organization already has an administrator. Use Replace admin from platform support.",
-                field="role",
-                status_code=409,
-            )
+        code = str(exc)
+        if code == "MISSING_ROLE":
+            raise org_admin_error(code="INVALID_ROLE", message="Choose Editor or Viewer.", field="role") from exc
+        raise org_admin_error(code="INVALID_ROLE", message="Choose Editor or Viewer.", field="role") from exc
+    try:
+        assert_org_admin_may_assign_role(db, tenant, role, context="members_invite")
+    except OrgAdminRoleAssignmentDenied as exc:
+        db.commit()
+        status = 403 if exc.code == "ORG_ADMIN_ASSIGN_FORBIDDEN" else 400
+        raise org_admin_error(code=exc.code, message=exc.message, field="role", status_code=status) from exc
     try:
         _user, _membership, invitation, raw_token, expires_at = provision_user_invitation(
             db,
@@ -586,6 +582,16 @@ def deactivate_org_member(
     membership = db.get(OrganizationMembership, membership_id)
     if membership is None or membership.organization_id != tenant.organization_id:
         raise org_admin_error(code="NOT_FOUND", message="Member not found.", status_code=404)
+    try:
+        assert_org_admin_may_remove_membership(
+            db,
+            tenant,
+            target_membership_id=membership.id,
+            target_role=membership.role,
+        )
+    except OrgAdminRoleAssignmentDenied as exc:
+        db.commit()
+        raise org_admin_error(code=exc.code, message=exc.message, status_code=403) from exc
     try:
         remove_organization_membership(
             db,

@@ -86,6 +86,8 @@ def provision_user_invitation(
     role: Role,
     expires_hours: int = 72,
 ) -> tuple[User, OrganizationMembership, UserInvitation, str, datetime]:
+    if role == Role.ORG_ADMIN:
+        raise ValueError("ORG_ADMIN_PLATFORM_ONLY")
     org = db.get(Organization, organization_id)
     if org is None or not org.is_active:
         raise ValueError("Organization not found or inactive")
@@ -360,6 +362,17 @@ def accept_invitation(
     invite_email = invitation.email.strip().lower()
     if email.strip().lower() != invite_email:
         raise ValueError("EMAIL_MISMATCH")
+
+    from app.services.invitations.admin_invitation import INVITATION_KIND_ORG_ADMIN
+
+    if invitation.role == Role.ORG_ADMIN.value and invitation.invitation_kind != INVITATION_KIND_ORG_ADMIN:
+        raise ValueError("INVALID_INVITATION_ROLE")
+    if invitation.invitation_kind != INVITATION_KIND_ORG_ADMIN and invitation.role not in (
+        Role.EDITOR.value,
+        Role.VIEWER.value,
+        Role.REVIEWER.value,
+    ):
+        raise ValueError("INVALID_INVITATION_ROLE")
 
     assert_admin_accept_verified(invitation, email=email, verification_code=verification_code)
 
