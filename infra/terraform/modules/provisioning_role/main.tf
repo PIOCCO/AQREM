@@ -31,6 +31,8 @@ resource "azurerm_role_definition" "provisioner" {
     not_actions = [
       "Microsoft.Authorization/*/Delete",
       "Microsoft.Authorization/elevateAccess/Action",
+      "Microsoft.Authorization/roleDefinitions/write",
+      "Microsoft.Authorization/roleDefinitions/delete",
     ]
   }
 

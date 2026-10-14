@@ -174,3 +174,43 @@ variable "purge_cognitive_account_on_destroy" {
   type    = bool
   default = false
 }
+
+variable "resource_name_prefix" {
+  type    = string
+  default = "aqrem"
+}
+
+variable "allowed_locations" {
+  type    = list(string)
+  default = ["westeurope", "northeurope"]
+}
+
+variable "enable_platform_policy_guardrail" {
+  type    = bool
+  default = true
+}
+
+variable "provisioning_principal_id" {
+  type        = string
+  default     = null
+  nullable    = true
+  description = "GitHub OIDC provisioning SP object id (dev/prod separate assignments)."
+}
+
+variable "provisioning_role_assignment_scope" {
+  type     = string
+  default  = null
+  nullable = true
+}
+
+variable "front_door_wildcard_certificate_id" {
+  type        = string
+  default     = null
+  nullable    = true
+  description = "Key Vault certificate version id for BYO wildcard TLS."
+}
+
+variable "front_door_wildcard_host_name" {
+  type    = string
+  default = "*.aqrem.app"
+}

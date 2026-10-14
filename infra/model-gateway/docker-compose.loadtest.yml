@@ -1,0 +1,31 @@
+services:
+  cp-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: loadtest
+      POSTGRES_DB: aqrem_control
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  gateway:
+    build: .
+    ports:
+      - "8088:8080"
+    environment:
+      GATEWAY_ENV: mock
+      AZURE_OPENAI_ENDPOINT: https://mock.invalid
+      AZURE_OPENAI_USE_MANAGED_IDENTITY: "false"
+      DATABASE_URL: postgresql://postgres:loadtest@cp-postgres:5432/aqrem_control
+      DATABASE_USE_ENTRA: "false"
+      INTERNAL_PROVISIONING_TOKEN: loadtest-token
+      INTERNAL_ALLOWED_CIDRS: "0.0.0.0/0"
+      KEY_VALIDATION_CACHE_SECONDS: "60"
+      LIMIT_DB_STALE_SECONDS: "120"
+    depends_on:
+      cp-postgres:
+        condition: service_healthy

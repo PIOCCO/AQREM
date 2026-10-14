@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from app.auth import verify_api_key
+from app.auth import configure_auth_cache, verify_api_key
 from app.config import get_settings
 from app.db import ensure_schema
 from app.limits import check_and_consume, configure_engine, record_usage
@@ -24,6 +24,7 @@ app.include_router(keys_router)
 def startup() -> None:
     settings = get_settings()
     configure_engine(settings)
+    configure_auth_cache(settings)
     ensure_schema(settings)
     logging.basicConfig(level=logging.INFO)
 

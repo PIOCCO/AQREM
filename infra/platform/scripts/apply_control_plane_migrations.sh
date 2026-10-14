@@ -14,4 +14,8 @@ for f in 001_platform_schema.sql 002_gateway_schema.sql 003_gateway_least_privil
   psql "host=$HOST dbname=$DB user=$USER sslmode=require" -v ON_ERROR_STOP=1 -f "$DIR/$f"
 done
 
-echo "Done. Grant gateway MI: GRANT aqrem_gateway_app TO \"<gw-mi-name>\";"
+if [[ -n "${GATEWAY_MI_NAME:-}" ]]; then
+  python3 "$(dirname "$0")/bootstrap_control_plane_db.py" --gateway-mi-name "$GATEWAY_MI_NAME"
+else
+  echo "Set GATEWAY_MI_NAME to run grant + verification via bootstrap_control_plane_db.py"
+fi

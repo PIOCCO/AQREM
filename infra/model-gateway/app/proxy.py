@@ -36,6 +36,8 @@ def resolve_path(settings: Settings, path: str) -> tuple[str, str]:
 
 
 def _auth_headers(settings: Settings) -> dict[str, str]:
+    if settings.gateway_env == "mock":
+        return {"api-key": "mock"}
     if settings.azure_openai_use_managed_identity:
         token = DefaultAzureCredential().get_token("https://cognitiveservices.azure.com/.default").token
         return {"Authorization": f"Bearer {token}"}
@@ -47,6 +49,11 @@ async def forward_json(
     azure_path: str,
     body: dict[str, Any],
 ) -> tuple[int, dict[str, Any], dict[str, int]]:
+    if settings.gateway_env == "mock":
+        return 200, {"choices": [{"message": {"content": "ok"}}], "usage": {"prompt_tokens": 5, "completion_tokens": 3}}, {
+            "prompt_tokens": 5,
+            "completion_tokens": 3,
+        }
     url = f"{settings.azure_openai_endpoint.rstrip('/')}{azure_path}?api-version={settings.azure_openai_api_version}"
     headers = {"Content-Type": "application/json", **_auth_headers(settings)}
     if body.get("stream"):
@@ -70,6 +77,10 @@ async def forward_stream(
     azure_path: str,
     body: dict[str, Any],
 ) -> AsyncIterator[bytes]:
+    if settings.gateway_env == "mock":
+        yield b'data: {"usage":{"prompt_tokens":5,"completion_tokens":3}}\n\n'
+        yield b"data: [DONE]\n\n"
+        return
     url = f"{settings.azure_openai_endpoint.rstrip('/')}{azure_path}?api-version={settings.azure_openai_api_version}"
     headers = {"Content-Type": "application/json", **_auth_headers(settings)}
     body = {**body, "stream": True, "stream_options": {"include_usage": True}}

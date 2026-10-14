@@ -185,3 +185,31 @@ module "front_door" {
   sku_name            = var.front_door_sku_name
   tags                = local.common_tags
 }
+
+module "front_door_wildcard_cert" {
+  count  = var.deploy_front_door && var.front_door_wildcard_certificate_id != null ? 1 : 0
+  source = "../../modules/front_door_wildcard_cert"
+
+  front_door_profile_id    = module.front_door[0].profile_id
+  key_vault_certificate_id = var.front_door_wildcard_certificate_id
+  wildcard_host_name       = var.front_door_wildcard_host_name
+}
+
+module "platform_guardrail" {
+  count  = var.enable_platform_policy_guardrail ? 1 : 0
+  source = "../../modules/platform_guardrail"
+
+  subscription_id        = coalesce(var.subscription_id, data.azurerm_client_config.current.subscription_id)
+  resource_prefix        = var.resource_name_prefix
+  allowed_locations      = var.allowed_locations
+  assign_to_subscription = true
+}
+
+module "provisioning_role" {
+  count  = var.provisioning_principal_id != null ? 1 : 0
+  source = "../../modules/provisioning_role"
+
+  principal_id     = var.provisioning_principal_id
+  assignment_scope = coalesce(var.provisioning_role_assignment_scope, "/subscriptions/${coalesce(var.subscription_id, data.azurerm_client_config.current.subscription_id)}")
+  role_name        = "${var.resource_name_prefix}-provisioner-${var.environment}"
+}

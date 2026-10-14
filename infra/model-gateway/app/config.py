@@ -27,6 +27,16 @@ class Settings(BaseSettings):
     applicationinsights_connection_string: str | None = None
     internal_provisioning_token: str | None = None
     limit_db_stale_seconds: float = Field(default=120.0, validation_alias="LIMIT_DB_STALE_SECONDS")
+    key_validation_cache_seconds: float = Field(default=60.0, validation_alias="KEY_VALIDATION_CACHE_SECONDS")
+    key_revoke_max_seconds: float = Field(default=60.0, validation_alias="KEY_REVOKE_MAX_SECONDS")
+    outage_conservative_rpm: int = Field(default=10, validation_alias="OUTAGE_CONSERVATIVE_RPM")
+    outage_conservative_tpm: int = Field(default=5000, validation_alias="OUTAGE_CONSERVATIVE_TPM")
+    outage_conservative_monthly_budget: int = Field(default=100_000, validation_alias="OUTAGE_CONSERVATIVE_MONTHLY_BUDGET")
+    internal_allowed_cidrs: str = Field(
+        default="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16",
+        validation_alias="INTERNAL_ALLOWED_CIDRS",
+    )
+    internal_provisioning_audience: str | None = Field(default=None, validation_alias="INTERNAL_PROVISIONING_AUDIENCE")
 
 
 def get_settings() -> Settings:

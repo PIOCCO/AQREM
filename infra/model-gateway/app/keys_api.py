@@ -6,11 +6,12 @@ import secrets
 import uuid
 
 import bcrypt
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.config import Settings, get_settings
 from app.db import connection
+from app.internal_auth import require_internal_caller
 
 router = APIRouter(prefix="/internal/v1/keys", tags=["internal-keys"])
 
@@ -30,16 +31,14 @@ class MintKeyResponse(BaseModel):
     label: str
 
 
-def _require_platform_token(x_platform_token: str | None, settings: Settings) -> None:
-    expected = settings.internal_provisioning_token
-    if not expected or not x_platform_token or x_platform_token != expected:
-        raise HTTPException(status_code=403, detail="Forbidden")
-
-
 @router.post("/mint", response_model=MintKeyResponse)
-def mint_key(body: MintKeyRequest, x_platform_token: str | None = Header(default=None)) -> MintKeyResponse:
+def mint_key(
+    body: MintKeyRequest,
+    request: Request,
+    x_platform_token: str | None = Header(default=None),
+) -> MintKeyResponse:
     settings = get_settings()
-    _require_platform_token(x_platform_token, settings)
+    require_internal_caller(request, settings, x_platform_token)
     raw = f"gw_{secrets.token_urlsafe(32)}"
     prefix = raw[:8]
     hashed = bcrypt.hashpw(raw.encode("utf-8"), bcrypt.gensalt())
@@ -78,10 +77,14 @@ def mint_key(body: MintKeyRequest, x_platform_token: str | None = Header(default
 
 
 @router.post("/rotate", response_model=MintKeyResponse)
-def rotate_key(body: MintKeyRequest, x_platform_token: str | None = Header(default=None)) -> MintKeyResponse:
+def rotate_key(
+    body: MintKeyRequest,
+    request: Request,
+    x_platform_token: str | None = Header(default=None),
+) -> MintKeyResponse:
     """Mint into primary or secondary; at most two active labels per client."""
     settings = get_settings()
-    _require_platform_token(x_platform_token, settings)
+    require_internal_caller(request, settings, x_platform_token)
     with connection(settings) as conn:
         count = conn.execute(
             "SELECT count(*) AS c FROM gateway.api_key WHERE client_id = %s AND active",
@@ -89,13 +92,17 @@ def rotate_key(body: MintKeyRequest, x_platform_token: str | None = Header(defau
         ).fetchone()
         if count and int(count["c"]) >= 2 and body.label not in ("primary", "secondary"):
             raise HTTPException(status_code=400, detail="Invalid label")
-    return mint_key(body, x_platform_token)
+    return mint_key(body, request, x_platform_token)
 
 
 @router.post("/revoke/{client_id}")
-def revoke_client(client_id: str, x_platform_token: str | None = Header(default=None)) -> dict[str, str]:
+def revoke_client(
+    client_id: str,
+    request: Request,
+    x_platform_token: str | None = Header(default=None),
+) -> dict[str, str]:
     settings = get_settings()
-    _require_platform_token(x_platform_token, settings)
+    require_internal_caller(request, settings, x_platform_token)
     with connection(settings) as conn:
         conn.execute("UPDATE gateway.client SET active = FALSE WHERE client_id = %s", (client_id,))
         conn.execute("UPDATE gateway.api_key SET active = FALSE WHERE client_id = %s", (client_id,))

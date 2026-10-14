@@ -41,4 +41,22 @@ Env overrides:
 - If p95 adds **>25ms** vs no-limit baseline **or** PG becomes the bottleneck → keep in-memory primary path (current default) and widen flush interval slightly.
 - If inaccuracy exceeds product tolerance → reduce flush interval or add Redis (deferred v1).
 
-*Agent VM has no Azure gateway endpoint; run in your DEV subscription and paste results for review.*
+## Results (2026-10-14 agent run)
+
+| Scenario | VUs | Duration | p50 (ms) | p95 (ms) | Requests | Notes |
+|----------|-----|----------|----------|----------|----------|-------|
+| Realistic peak | 50 | 30s | *blocked* | *blocked* | — | Agent VM: **no Docker/k6/Azure**; use `docker-compose.loadtest.yml` + `load/k6-gateway.js` in DEV |
+| 5× peak (stream) | 250 | 30s | *blocked* | *blocked* | — | Same |
+
+**Verified in agent:** unit tests for fail-open/degraded limits (`test_failopen.py`); hybrid limit engine under mock upstream.
+
+**You must run in DEV** (compose or deployed gateway) and paste k6 summary before Stage 4. Commands:
+
+```bash
+cd infra/model-gateway
+docker compose -f docker-compose.loadtest.yml up -d --build
+# seed gateway.client + api_key in cp-postgres, then:
+export GATEWAY_URL=http://localhost:8088 GATEWAY_API_KEY=gw_...
+K6_VUS=50 K6_DURATION=5m K6_STREAM=1 k6 run load/k6-gateway.js
+K6_VUS=250 K6_DURATION=5m K6_STREAM=1 k6 run load/k6-gateway.js
+```

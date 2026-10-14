@@ -4,7 +4,8 @@ from datetime import UTC, date, datetime
 
 from app.config import Settings
 from app.db import connection
-from app.limit_cache import LimitEngine
+from app.db_health import mark_db_down, mark_db_up
+from app.limit_cache import LimitEngine, OutageLimits
 
 _engine = LimitEngine(flush_interval_seconds=5.0, db_stale_seconds=120.0)
 
@@ -14,6 +15,11 @@ def configure_engine(settings: Settings) -> None:
     _engine = LimitEngine(
         flush_interval_seconds=5.0,
         db_stale_seconds=settings.limit_db_stale_seconds,
+        outage_limits=OutageLimits(
+            rpm=settings.outage_conservative_rpm,
+            tpm=settings.outage_conservative_tpm,
+            monthly_budget=settings.outage_conservative_monthly_budget,
+        ),
     )
 
 
@@ -54,8 +60,10 @@ def hydrate_client_limits(settings: Settings, client_id: str) -> None:
                 (client_id, today),
             ).fetchone()
             _engine.set_monthly_total(client_id, int(usage["t"]))
+        mark_db_up()
         _engine.mark_db_up()
     except Exception:
+        mark_db_down()
         _engine.mark_db_down()
         raise
 
@@ -78,9 +86,6 @@ def check_and_consume(
     if not ok:
         return False, retry
 
-    if not _engine.db_fail_open_allowed():
-        return False, 30
-
     try:
         window = _minute_window()
         today = date.today()
@@ -95,8 +100,10 @@ def check_and_consume(
                 """,
                 (client_id, window, requests, tokens),
             )
+        mark_db_up()
         _engine.mark_db_up()
     except Exception:
+        mark_db_down()
         _engine.mark_db_down()
         if _engine.db_fail_open_allowed():
             return True, None
@@ -129,6 +136,8 @@ def record_usage(settings: Settings, client_id: str, prompt_tokens: int, complet
                 (client_id, today),
             ).fetchone()
             _engine.set_monthly_total(client_id, int(usage["t"]))
+        mark_db_up()
         _engine.mark_db_up()
     except Exception:
+        mark_db_down()
         _engine.mark_db_down()

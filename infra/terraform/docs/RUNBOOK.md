@@ -48,6 +48,10 @@ State key pattern: `clients/<clientId>.tfstate`.
 4. Roll out via `update-clients` pipeline waves (10% → 50% → 100%) with automatic rollback.
 5. Update runbook retirement tracker — **do not lock production** on models within **12 months** of retirement (see `gpt-4.1-mini` note below).
 
+## Container Apps zone redundancy
+
+azurerm **4.81** `azurerm_container_app_environment` does not expose `zoneRedundant` at create time. **AzAPI** could create the CAE with `properties.zoneRedundant=true`, but the property is **create-only** (replacing the environment is required to change it). Until we migrate CAE creation to AzAPI, run **min 2 gateway replicas** across the CAE (best-effort AZ spread).
+
 ## Gateway alerts
 
 - **Availability:** min **2** gateway replicas, zone-redundant CAE, `/health/live` + `/health/ready`.

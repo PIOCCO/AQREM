@@ -1,0 +1,40 @@
+name: bootstrap-control-plane-db
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [dev, production]
+        default: dev
+      gateway_mi_name:
+        description: "Gateway managed identity name (e.g. aqrem-dev-gw-mi)"
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment == 'production' && 'production' || 'development' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ inputs.environment == 'production' && vars.AZURE_CLIENT_ID_PROD || vars.AZURE_CLIENT_ID_DEV }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ inputs.environment == 'production' && vars.AZURE_SUBSCRIPTION_ID_PROD || vars.AZURE_SUBSCRIPTION_ID_DEV }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install psycopg[binary]
+      - name: Bootstrap control-plane DB (migrations + gateway grant + verify)
+        env:
+          CP_PG_HOST: ${{ vars.CONTROL_PLANE_PG_HOST }}
+          CP_PG_ADMIN_USER: ${{ vars.CONTROL_PLANE_PG_ADMIN_USER }}
+          CP_PG_DATABASE: aqrem_control
+        run: |
+          python3 infra/platform/scripts/bootstrap_control_plane_db.py \
+            --gateway-mi-name "${{ inputs.gateway_mi_name }}"

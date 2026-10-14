@@ -6,29 +6,16 @@ import os
 
 import pytest
 
-ALLOCATE_SQL = """
-WITH picked AS (
-  SELECT id
-  FROM platform.cells
-  WHERE region = %(region)s
-    AND environment = %(environment)s
-    AND status = 'ACTIVE'
-    AND clients_used < max_clients
-  ORDER BY clients_used ASC, id
-  FOR UPDATE SKIP LOCKED
-  LIMIT 1
-)
-UPDATE platform.cells c
-SET clients_used = c.clients_used + 1,
-    updated_at = now()
-FROM picked
-WHERE c.id = picked.id
-RETURNING c.id, c.clients_used, c.max_clients;
-"""
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "worker"))
+from cell_allocation import RESERVE_CELL_SQL  # noqa: E402
 
 
-def test_allocate_sql_uses_row_lock() -> None:
-    assert "FOR UPDATE SKIP LOCKED" in ALLOCATE_SQL
+def test_allocate_sql_is_atomic_without_skip_locked() -> None:
+    assert "FOR UPDATE SKIP LOCKED" not in RESERVE_CELL_SQL
+    assert "clients_used < max_clients" in RESERVE_CELL_SQL
 
 
 @pytest.mark.integration

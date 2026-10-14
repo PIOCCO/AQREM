@@ -17,25 +17,10 @@ from typing import Any
 import psycopg
 from psycopg.rows import dict_row
 
-ALLOCATE_CELL_SQL = """
-WITH picked AS (
-  SELECT id
-  FROM platform.cells
-  WHERE region = %(region)s
-    AND environment = %(environment)s
-    AND status = 'ACTIVE'
-    AND clients_used < max_clients
-  ORDER BY clients_used ASC, id
-  FOR UPDATE SKIP LOCKED
-  LIMIT 1
-)
-UPDATE platform.cells c
-SET clients_used = c.clients_used + 1,
-    updated_at = now()
-FROM picked
-WHERE c.id = picked.id
-RETURNING c.id;
-"""
+try:
+    from cell_allocation import RELEASE_CELL_SQL, RESERVE_CELL_SQL
+except ImportError:
+    from .cell_allocation import RELEASE_CELL_SQL, RESERVE_CELL_SQL  # type: ignore
 
 
 class DeploymentStatus(str, enum.Enum):
@@ -113,10 +98,14 @@ def pick_deployment(conn: psycopg.Connection) -> Deployment | None:
 
 def allocate_cell(conn: psycopg.Connection, *, region: str, environment: str) -> str | None:
     row = conn.execute(
-        ALLOCATE_CELL_SQL,
+        RESERVE_CELL_SQL,
         {"region": region, "environment": environment},
     ).fetchone()
     return row["id"] if row else None
+
+
+def release_cell(conn: psycopg.Connection, cell_id: str) -> None:
+    conn.execute(RELEASE_CELL_SQL, {"cell_id": cell_id})
 
 
 def set_status(

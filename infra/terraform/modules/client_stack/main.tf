@@ -74,12 +74,12 @@ resource "azurerm_postgresql_flexible_server" "tenant" {
   }
 
   administrator_login               = "aqrem_${replace(var.client_id, "-", "_")}"
-  administrator_password_wo         = random_password.tenant_db[0].result
+  administrator_password_wo         = ephemeral.random_password.tenant_db[0].result
   administrator_password_wo_version = 1
   tags                              = local.all_tags
 }
 
-resource "random_password" "tenant_db" {
+ephemeral "random_password" "tenant_db" {
   count = var.db_mode == "managed" ? 1 : 0
 
   length  = 32
@@ -98,10 +98,11 @@ resource "azurerm_postgresql_flexible_server_database" "tenant" {
 resource "azurerm_key_vault_secret" "tenant_db_password" {
   count = var.db_mode == "managed" ? 1 : 0
 
-  name         = "tenant-postgresql-password"
-  value        = random_password.tenant_db[0].result
-  key_vault_id = azurerm_key_vault.client.id
-  content_type = "application/x-postgresql-password"
+  name             = "tenant-postgresql-password"
+  value_wo         = ephemeral.random_password.tenant_db[0].result
+  value_wo_version = 1
+  key_vault_id     = azurerm_key_vault.client.id
+  content_type     = "application/x-postgresql-password"
 }
 
 resource "azurerm_key_vault_secret" "gateway_key_ref" {

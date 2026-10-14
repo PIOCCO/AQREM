@@ -25,6 +25,9 @@ on:
       public_base_url:
         description: "Client PUBLIC_BASE_URL (https://...)"
         required: true
+      custom_domain_host:
+        description: "Front Door custom domain host"
+        required: true
       resume_deployment_id:
         description: "Optional UUID to resume FAILED deployment"
         required: false
@@ -33,29 +36,38 @@ permissions:
   id-token: write
   contents: read
 
+env:
+  TF_IN_AUTOMATION: true
+
 jobs:
   validate-inputs:
     runs-on: ubuntu-latest
     outputs:
-      ok: ${{ steps.check.outputs.ok }}
+      client_id: ${{ inputs.client_id }}
     steps:
-      - uses: actions/checkout@v4
-      - id: check
+      - name: Allow-list client_id, plan, region, db_mode
         run: |
-          python3 -c "import re,sys; cid=sys.argv[1]; sys.exit(0 if re.fullmatch(r'[a-z][a-z0-9-]{2,31}', cid) else 1)" "${{ inputs.client_id }}"
-          echo "ok=true" >> "$GITHUB_OUTPUT"
+          python3 <<'PY'
+          import re, sys
+          cid, plan, region, db_mode, seats = sys.argv[1:6]
+          assert re.fullmatch(r"[a-z][a-z0-9-]{2,31}", cid)
+          assert plan in {"starter", "professional", "business"}
+          assert region in {"westeurope", "northeurope"}
+          assert db_mode in {"managed", "byo"}
+          assert seats.isdigit() and 1 <= int(seats) <= 10000
+          PY "${{ inputs.client_id }}" "${{ inputs.plan }}" "${{ inputs.region }}" "${{ inputs.db_mode }}" "${{ inputs.seats }}"
 
   plan:
     needs: validate-inputs
     runs-on: ubuntu-latest
-    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+    environment: ${{ github.event.inputs.plan == 'business' && 'production' || 'development' }}
     steps:
       - uses: actions/checkout@v4
       - uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ github.event.inputs.plan == 'business' && vars.AZURE_CLIENT_ID_PROD || vars.AZURE_CLIENT_ID_DEV }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ github.event.inputs.plan == 'business' && vars.AZURE_SUBSCRIPTION_ID_PROD || vars.AZURE_SUBSCRIPTION_ID_DEV }}
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.11.4"
@@ -65,17 +77,62 @@ jobs:
           terraform init
           terraform plan -var-file=../../parameters/clients/acme.sample.tfvars.json \
             -var="client_id=${{ inputs.client_id }}" \
+            -var="public_base_url=${{ inputs.public_base_url }}" \
+            -var="custom_domain_host=${{ inputs.custom_domain_host }}" \
             -out=onboard.tfplan
-      - name: Upload plan
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: onboard-tfplan
+          name: onboard-tfplan-${{ inputs.client_id }}
           path: infra/terraform/stacks/client/onboard.tfplan
 
-  apply:
+  apply-and-onboard:
     needs: plan
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - run: echo "Apply gated: download plan artifact and run terraform apply only after manual approval in protected environment."
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID_PROD }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID_PROD }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: onboard-tfplan-${{ inputs.client_id }}
+          path: infra/terraform/stacks/client
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.11.4"
+      - name: Terraform apply
+        working-directory: infra/terraform/stacks/client
+        run: terraform apply -auto-approve onboard.tfplan
+      - name: Tenant schema migrations
+        run: |
+          echo "Apply 004_tenant_embedding_metadata.sql via tenant migration job (Stage 4 app pipeline)."
+      - name: Health checks
+        run: |
+          set -euo pipefail
+          API_URL="${{ inputs.public_base_url }}/ready"
+          curl -fsS "$API_URL" || { echo "API /ready failed"; exit 1; }
+          echo "Storage/queue/DB checks: wire when app exposes diagnostic endpoints (Stage 4)."
+      - name: Mint gateway key (internal only)
+        env:
+          GATEWAY_INTERNAL_URL: ${{ vars.GATEWAY_INTERNAL_URL }}
+          GATEWAY_INTERNAL_TOKEN: ${{ secrets.GATEWAY_INTERNAL_PROVISIONING_TOKEN }}
+        run: |
+          set -euo pipefail
+          RESP=$(curl -fsS -X POST "$GATEWAY_INTERNAL_URL/internal/v1/keys/mint" \
+            -H "X-Platform-Token: $GATEWAY_INTERNAL_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"client_id\":\"${{ inputs.client_id }}\",\"organization_id\":\"00000000-0000-0000-0000-000000000001\",\"label\":\"primary\"}")
+          KEY=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["api_key_plaintext"])' <<<"$RESP")
+          az keyvault secret set --vault-name "${{ inputs.client_id }}-kv" --name model-gateway-key --value "$KEY" --output none
+          echo "Gateway key stored in client Key Vault (plaintext not logged)."
+      - name: Register URL + admin invitation
+        run: |
+          echo "Register public_base_url=${{ inputs.public_base_url }} in control-plane DB (Stage 4 product API)."
+          echo "Admin invite link: ${{ inputs.public_base_url }}/accept-invite?token=<minted-by-api>"
+      - name: Mark deployment ACTIVE or FAILED
+        if: always()
+        run: |
+          echo "Update platform.client_deployments status via control-plane worker callback (resume id: ${{ inputs.resume_deployment_id }})."
