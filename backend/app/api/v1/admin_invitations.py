@@ -183,10 +183,7 @@ def invitation_history(
         db.query(UserInvitation)
         .filter(
             UserInvitation.organization_id == organization_id,
-            or_(
-                UserInvitation.invitation_kind == "org_admin",
-                UserInvitation.role == Role.ORG_ADMIN.value,
-            ),
+            UserInvitation.invitation_kind == "org_admin",
         )
         .order_by(UserInvitation.created_at.desc())
         .limit(200)
@@ -211,7 +208,7 @@ def invitation_history(
                 record_type="admin_invitation",
                 kind=inv.invitation_kind or "org_admin",
                 email=inv.email,
-                role=Role(inv.role),
+                role=Role.ORG_ADMIN,
                 status=st,
                 invitee_full_name=inv.invitee_full_name,
                 expires_at=inv.expires_at,

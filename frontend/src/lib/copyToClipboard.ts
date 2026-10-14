@@ -1,22 +1,23 @@
-/** Copy text with Clipboard API and a textarea fallback for restricted contexts. */
-export async function copyToClipboard(text: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  try {
-    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+export type CopyResult = { ok: true } | { ok: false; error: string };
+
+/** Copy text; works on http:// LAN hosts where navigator.clipboard is blocked. */
+export async function copyToClipboard(text: string): Promise<CopyResult> {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
       await navigator.clipboard.writeText(text);
       return { ok: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Clipboard denied";
+      const fallback = execCommandCopy(text);
+      if (fallback) return { ok: true };
+      return { ok: false, error: msg };
     }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Clipboard unavailable";
-    const fallback = tryExecCommandCopy(text);
-    if (fallback) return { ok: true };
-    return { ok: false, error: msg };
   }
-  const fallback = tryExecCommandCopy(text);
-  if (fallback) return { ok: true };
-  return { ok: false, error: "Clipboard is not available in this browser" };
+  if (execCommandCopy(text)) return { ok: true };
+  return { ok: false, error: "Clipboard unavailable in this browser" };
 }
 
-function tryExecCommandCopy(text: string): boolean {
+function execCommandCopy(text: string): boolean {
   if (typeof document === "undefined") return false;
   const ta = document.createElement("textarea");
   ta.value = text;
@@ -27,8 +28,6 @@ function tryExecCommandCopy(text: string): boolean {
   ta.select();
   try {
     return document.execCommand("copy");
-  } catch {
-    return false;
   } finally {
     document.body.removeChild(ta);
   }

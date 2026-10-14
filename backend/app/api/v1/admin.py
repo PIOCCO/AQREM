@@ -82,6 +82,9 @@ from app.services.seat_usage import get_seat_usage
 from app.services.org_lifecycle import (
     ORG_DELETION_RETENTION_DAYS,
     OrganizationDeleteError,
+    purge_organization_now,
+    restore_organization,
+    run_scheduled_org_purges,
     schedule_organization_deletion,
 )
 
@@ -112,11 +115,16 @@ def admin_context(
 
 
 def _counts(orgs: list[Organization]) -> dict[str, int]:
-    counts = {"all": len(orgs), "active": 0, "suspended": 0, "expired": 0, "test": 0}
+    counts = {"all": 0, "active": 0, "suspended": 0, "expired": 0, "test": 0, "pending_deletion": 0}
     for org in orgs:
         bucket = org_status_bucket(org)
-        if bucket == "deleted":
+        if bucket == "pending_deletion":
+            counts["pending_deletion"] += 1
             continue
+        visible = filter_orgs_for_admin([org])
+        if not visible:
+            continue
+        counts["all"] += 1
         if bucket in counts:
             counts[bucket] += 1
     return counts
@@ -129,21 +137,29 @@ def list_organizations_admin(
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("org:read")),
 ) -> AdminOrganizationListResponse:
-    orgs = (
-        db.query(Organization)
-        .filter(Organization.deleted_at.is_(None))
-        .order_by(Organization.name.asc())
-        .all()
-    )
-    orgs = filter_orgs_for_admin(orgs)
+    if status_filter == "pending_deletion":
+        orgs = (
+            db.query(Organization)
+            .filter(Organization.deleted_at.isnot(None))
+            .order_by(Organization.purge_scheduled_at.asc())
+            .all()
+        )
+    else:
+        orgs = (
+            db.query(Organization)
+            .filter(Organization.deleted_at.is_(None))
+            .order_by(Organization.name.asc())
+            .all()
+        )
+        orgs = filter_orgs_for_admin(orgs)
     if q:
         needle = q.strip().lower()
         orgs = [o for o in orgs if needle in o.name.lower() or needle in o.slug.lower()]
-    if status_filter and status_filter != "all":
+    if status_filter and status_filter not in ("all", "pending_deletion"):
         orgs = [o for o in orgs if org_status_bucket(o) == status_filter]
     items = [org_to_admin_response(db, o) for o in orgs]
-    visible = filter_orgs_for_admin(db.query(Organization).all())
-    return AdminOrganizationListResponse(items=items, counts=_counts(visible))
+    all_for_counts = db.query(Organization).all()
+    return AdminOrganizationListResponse(items=items, counts=_counts(all_for_counts))
 
 
 @router.get("/organizations/{organization_id}", response_model=AdminOrganizationResponse)
@@ -281,6 +297,12 @@ def _delete_organization_impl(
             ) from exc
         if code == "SUPER_ADMIN_REQUIRED":
             raise admin_error(code="FORBIDDEN", message="Super admin required", status_code=403) from exc
+        if code == "ALREADY_PENDING_DELETION":
+            raise admin_error(
+                code="ALREADY_PENDING_DELETION",
+                message="Organization is already scheduled for deletion",
+                status_code=409,
+            ) from exc
         raise admin_error(code=code, message=code.replace("_", " ").capitalize()) from exc
     db.commit()
     return DeleteOrganizationResponse(
@@ -309,6 +331,53 @@ def delete_organization_post(
 ) -> DeleteOrganizationResponse:
     """POST alias for environments or proxies that reject HTTP DELETE with a body."""
     return _delete_organization_impl(db, organization_id=organization_id, payload=payload, admin=admin)
+
+
+@router.post("/organizations/{organization_id}/restore", response_model=AdminOrganizationResponse)
+def restore_organization_admin(
+    organization_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+) -> AdminOrganizationResponse:
+    org = db.get(Organization, organization_id)
+    if org is None:
+        raise admin_error(code="NOT_FOUND", message="Organization not found", status_code=404)
+    try:
+        restore_organization(db, admin=admin, org=org)
+    except OrganizationDeleteError as exc:
+        if str(exc) == "NOT_PENDING_DELETION":
+            raise admin_error(code="INVALID_STATE", message="Organization is not pending deletion", status_code=409) from exc
+        raise admin_error(code="FORBIDDEN", message="Super admin required", status_code=403) from exc
+    db.commit()
+    db.refresh(org)
+    return org_to_admin_response(db, org)
+
+
+@router.post("/organizations/{organization_id}/purge-now", status_code=204)
+def purge_organization_now_admin(
+    organization_id: UUID,
+    payload: DeleteOrganizationRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+) -> None:
+    org = db.get(Organization, organization_id)
+    if org is None:
+        raise admin_error(code="NOT_FOUND", message="Organization not found", status_code=404)
+    try:
+        purge_organization_now(db, admin=admin, org=org, confirm_name=payload.confirm_name)
+    except OrganizationDeleteError as exc:
+        code = str(exc)
+        if code == "CONFIRM_NAME_MISMATCH":
+            raise admin_error(
+                code="CONFIRM_NAME_MISMATCH",
+                message="Typed name does not match the organization name",
+                field="confirmName",
+                status_code=400,
+            ) from exc
+        if code == "NOT_PENDING_DELETION":
+            raise admin_error(code="INVALID_STATE", message="Schedule deletion before purge now", status_code=409) from exc
+        raise admin_error(code="FORBIDDEN", message="Super admin required", status_code=403) from exc
+    db.commit()
 
 
 @router.post("/organizations/{organization_id}/schedule-deletion", response_model=DeleteOrganizationResponse)
@@ -530,7 +599,16 @@ def resend_user_invitation(
     except LicenseDenied:
         raise admin_error(code="SEATS_FULL", message="No seats available", status_code=403) from None
 
-    raw_token, expires_at = resend_admin_invitation(db, admin_user_id=admin.id, invitation=invitation)
+    try:
+        raw_token, expires_at = resend_admin_invitation(db, admin_user_id=admin.id, invitation=invitation)
+    except ValueError as exc:
+        if str(exc) == "RESEND_RATE_LIMIT":
+            raise admin_error(
+                code="RESEND_RATE_LIMIT",
+                message="Wait at least one minute before resending",
+                status_code=429,
+            ) from exc
+        raise admin_error(code="INVALID_STATE", message=str(exc), status_code=400) from exc
     user = db.query(User).filter(User.email == invitation.email).first()
     db.commit()
     return AdminProvisionUserResponse(

@@ -135,7 +135,7 @@ def provision_admin_invitation(
     except LicenseDenied as exc:
         raise LicenseDenied(exc.detail) from exc
 
-    assert_can_create_org_admin_invite(db, organization_id=organization_id)
+    revoke_active_admin_invitations(db, organization_id=organization_id, admin_user_id=admin_user_id)
 
     now = _utcnow()
     pending_same = (
@@ -237,12 +237,20 @@ def resend_admin_invitation(
         raise ValueError("Not an admin invitation")
     if invitation.used_at is not None or invitation.revoked_at is not None:
         raise ValueError("Invitation is not pending")
-    expires_days = max(1, min(14, int(expires_days)))
-    raw_token = generate_opaque_token()
-    expires_at = _utcnow() + timedelta(days=expires_days)
-    invitation.token_hash = hash_token(raw_token)
-    invitation.token_ciphertext = seal_invitation_token(raw_token)
-    invitation.expires_at = expires_at
+    now = _utcnow()
+    last = getattr(invitation, "last_resent_at", None)
+    if last is not None:
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        if (now - last).total_seconds() < 60:
+            raise ValueError("RESEND_RATE_LIMIT")
+    if not invitation.token_ciphertext:
+        raise ValueError("LINK_UNAVAILABLE")
+    raw_token = unseal_invitation_token(invitation.token_ciphertext)
+    expires_at = invitation.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    invitation.last_resent_at = now
     record_audit(
         db,
         organization_id=invitation.organization_id,
@@ -252,6 +260,15 @@ def resend_admin_invitation(
         resource_id=str(invitation.id),
         metadata={"email": invitation.email},
     )
+    org = db.get(Organization, invitation.organization_id)
+    if org is not None:
+        send_admin_invitation_email(
+            to_email=invitation.email,
+            invitee_name=invitation.invitee_full_name or invitation.email,
+            organization_name=org.name,
+            invitation_url=invitation_setup_url(raw_token),
+            personal_message=invitation.personal_message,
+        )
     return raw_token, expires_at
 
 

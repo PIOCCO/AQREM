@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -55,7 +57,26 @@ async def lifespan(_: FastAPI):
     with SessionLocal() as session:
         ensure_platform_admin(session)
         session.commit()
-    yield
+
+    async def _org_purge_worker() -> None:
+        while True:
+            await asyncio.sleep(3600)
+            try:
+                with SessionLocal() as session:
+                    from app.services.org_lifecycle import run_scheduled_org_purges
+
+                    run_scheduled_org_purges(session)
+                    session.commit()
+            except Exception:
+                logger.exception("Scheduled organization purge failed")
+
+    purge_task = asyncio.create_task(_org_purge_worker())
+    try:
+        yield
+    finally:
+        purge_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await purge_task
 
 
 def create_app() -> FastAPI:

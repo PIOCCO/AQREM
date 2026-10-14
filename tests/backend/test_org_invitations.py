@@ -84,12 +84,12 @@ def test_admin_invitation_single_active_and_accept(client: TestClient, db_sessio
         headers={"Authorization": f"Bearer {token}"},
         json={"email": "admin2@corp.example", "full_name": "Admin Two"},
     )
-    assert second.status_code == 409
-
+    assert second.status_code == 201
     preview = client.post("/api/v1/auth/accept-invitation/preview", json={"token": raw1})
-    assert preview.status_code == 200
+    assert preview.status_code == 404
 
-    raw2 = unquote(first.json()["invitation_setup_path"].split("/invite/admin/", 1)[1])
+    path2 = second.json()["invitation_setup_path"]
+    raw2 = unquote(path2.split("/invite/admin/", 1)[1])
     preview2 = client.post("/api/v1/auth/accept-invitation/preview", json={"token": raw2})
     assert preview2.status_code == 200
     assert preview2.json()["organization_name"] == "Invite Org"
@@ -97,7 +97,7 @@ def test_admin_invitation_single_active_and_accept(client: TestClient, db_sessio
 
     send_code = client.post(
         "/api/v1/auth/accept-invitation/send-verification",
-        json={"token": raw2, "email": "admin@corp.example"},
+        json={"token": raw2, "email": "admin2@corp.example"},
     )
     assert send_code.status_code == 200, send_code.text
     code = send_code.json()["dev_verification_code"]
@@ -107,7 +107,7 @@ def test_admin_invitation_single_active_and_accept(client: TestClient, db_sessio
         "/api/v1/auth/accept-invitation",
         json={
             "token": raw2,
-            "email": "admin@corp.example",
+            "email": "admin2@corp.example",
             "verification_code": code,
             "password": "securepass1",
             "full_name": "Admin Two",
@@ -120,7 +120,7 @@ def test_admin_invitation_single_active_and_accept(client: TestClient, db_sessio
         "/api/v1/auth/accept-invitation",
         json={
             "token": raw2,
-            "email": "admin@corp.example",
+            "email": "admin2@corp.example",
             "verification_code": code,
             "password": "securepass1",
         },

@@ -32,6 +32,8 @@ export type AdminOrganization = {
   created_at: string;
   license_renews_at: string | null;
   license_expires_at: string | null;
+  deletion_status?: string;
+  purge_scheduled_at?: string | null;
   seats: SeatUsage;
 };
 
@@ -114,8 +116,13 @@ function statusBucket(status: string): string {
 }
 
 function computeCounts(items: AdminOrganization[]): Record<string, number> {
-  const counts = { all: items.length, active: 0, suspended: 0, expired: 0, test: 0 };
+  const counts = { all: 0, active: 0, suspended: 0, expired: 0, test: 0, pending_deletion: 0 };
   for (const o of items) {
+    if (o.deletion_status === "pending_deletion") {
+      counts.pending_deletion += 1;
+      continue;
+    }
+    counts.all += 1;
     const b = statusBucket(o.license_status);
     if (b in counts) counts[b as keyof typeof counts] += 1;
   }
@@ -158,8 +165,33 @@ export function normalizeOrganization(raw: Record<string, unknown>): AdminOrgani
     created_at: String(raw.created_at ?? new Date().toISOString()),
     license_renews_at: (raw.license_renews_at as string | null) ?? null,
     license_expires_at: (raw.license_expires_at as string | null) ?? null,
+    deletion_status: (raw.deletion_status as string | undefined) ?? "active",
+    purge_scheduled_at: (raw.purge_scheduled_at as string | null) ?? null,
     seats,
   };
+}
+
+export async function restoreAdminOrganization(session: AuthSession, orgId: string): Promise<AdminOrganization> {
+  const res = await fetch(apiUrl(`/api/v1/admin/organizations/${orgId}/restore`), {
+    method: "POST",
+    headers: adminHeaders(session),
+  });
+  if (!res.ok) await parseError(res, "Failed to restore organization");
+  const body = await res.json();
+  return normalizeOrganization(body as Record<string, unknown>);
+}
+
+export async function purgeAdminOrganizationNow(
+  session: AuthSession,
+  orgId: string,
+  confirmName: string,
+): Promise<void> {
+  const res = await fetch(apiUrl(`/api/v1/admin/organizations/${orgId}/purge-now`), {
+    method: "POST",
+    headers: adminHeaders(session),
+    body: JSON.stringify({ confirmName }),
+  });
+  if (!res.ok) await parseError(res, "Failed to purge organization");
 }
 
 export async function deleteAdminOrganization(

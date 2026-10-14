@@ -6,6 +6,7 @@ type Props = {
   open: boolean;
   org: AdminOrganization | null;
   loading: boolean;
+  errorMessage?: string | null;
   onCancel: () => void;
   onConfirm: (confirmName: string) => Promise<void>;
 };
@@ -14,12 +15,12 @@ function shortOrgId(id: string) {
   return id.length >= 8 ? id.slice(0, 8) : id;
 }
 
-export function DeleteOrganizationDialog({ open, org, loading, onCancel, onConfirm }: Props) {
+export function DeleteOrganizationDialog({ open, org, loading, errorMessage, onCancel, onConfirm }: Props) {
   const [typed, setTyped] = useState("");
 
   if (!open || !org) return null;
 
-  const matches = typed === org.name;
+  const matches = typed.trim() === org.name.trim();
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -62,6 +63,7 @@ export function DeleteOrganizationDialog({ open, org, loading, onCancel, onConfi
             spellCheck={false}
           />
         </label>
+        {errorMessage ? <div className="aq-alert-error text-sm">{errorMessage}</div> : null}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="aq-btn-secondary text-sm" onClick={onCancel} disabled={loading}>
             Cancel

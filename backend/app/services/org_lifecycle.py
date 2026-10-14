@@ -50,8 +50,8 @@ def schedule_organization_deletion(
     assert_super_admin(admin)
     admin_user_id = admin.id
     if org.deleted_at is not None:
-        raise OrganizationDeleteError("ALREADY_DELETED")
-    if confirm_name != org.name:
+        raise OrganizationDeleteError("ALREADY_PENDING_DELETION")
+    if confirm_name.strip() != org.name.strip():
         raise OrganizationDeleteError("CONFIRM_NAME_MISMATCH")
 
     now = _utcnow()
@@ -194,3 +194,64 @@ def purge_due_organizations(db: Session) -> int:
 
 def is_org_deleted(org: Organization) -> bool:
     return org.deleted_at is not None
+
+
+def restore_organization(
+    db: Session,
+    *,
+    admin: User,
+    org: Organization,
+) -> None:
+    assert_super_admin(admin)
+    if org.deleted_at is None:
+        raise OrganizationDeleteError("NOT_PENDING_DELETION")
+    org.deleted_at = None
+    org.purge_scheduled_at = None
+    org.is_active = True
+    if org.slug.startswith("deleted-"):
+        parts = org.slug.split("-", 2)
+        if len(parts) >= 3:
+            org.slug = parts[2][:100]
+    record_audit(
+        db,
+        organization_id=None,
+        user_id=admin.id,
+        action="organization_deletion_restored",
+        resource_type="organization",
+        resource_id=str(org.id),
+        metadata={"organization_id": str(org.id), "organization_name": org.name, "source": "platform_control_plane"},
+    )
+
+
+def purge_organization_now(
+    db: Session,
+    *,
+    admin: User,
+    org: Organization,
+    confirm_name: str,
+) -> None:
+    assert_super_admin(admin)
+    if confirm_name.strip() != org.name.strip():
+        raise OrganizationDeleteError("CONFIRM_NAME_MISMATCH")
+    if org.deleted_at is None:
+        raise OrganizationDeleteError("NOT_PENDING_DELETION")
+    org_id = org.id
+    purge_organization_tenant_data(db, org_id)
+    record_audit(
+        db,
+        organization_id=None,
+        user_id=admin.id,
+        action="organization_purged_immediately",
+        resource_type="organization",
+        resource_id=str(org_id),
+        metadata={"organization_id": str(org_id), "organization_name": org.name, "source": "platform_control_plane"},
+    )
+    db.delete(org)
+
+
+def run_scheduled_org_purges(db: Session) -> int:
+    """Idempotent purge of organizations past retention. Returns count purged."""
+    count = purge_due_organizations(db)
+    if count:
+        logger.info("Scheduled org purge completed: %s organization(s) permanently removed", count)
+    return count

@@ -55,6 +55,7 @@ def seat_usage_response(org: Organization, usage: SeatUsage) -> SeatUsageRespons
 
 def org_to_admin_response(db: Session, org: Organization) -> AdminOrganizationResponse:
     usage = get_seat_usage(db, org)
+    pending = getattr(org, "deleted_at", None) is not None
     return AdminOrganizationResponse(
         id=org.id,
         name=org.name,
@@ -67,13 +68,15 @@ def org_to_admin_response(db: Session, org: Organization) -> AdminOrganizationRe
         created_at=org.created_at,
         license_renews_at=license_renews_at(org),
         license_expires_at=license_expires_at(org),
+        deletion_status="pending_deletion" if pending else "active",
+        purge_scheduled_at=getattr(org, "purge_scheduled_at", None) if pending else None,
         seats=seat_usage_response(org, usage),
     )
 
 
 def org_status_bucket(org: Organization) -> str:
     if getattr(org, "deleted_at", None) is not None:
-        return "deleted"
+        return "pending_deletion"
     if org.license_status == LicenseStatus.TEST.value:
         return "test"
     if org.license_status == LicenseStatus.EXPIRED.value:

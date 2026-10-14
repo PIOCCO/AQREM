@@ -16,6 +16,7 @@ import { OrgInvitationsPanel } from "../components/platform-admin/OrgInvitations
 import {
   createAdminOrganization,
   deleteAdminOrganization,
+  restoreAdminOrganization,
   deactivateMember,
   fetchAdminContext,
   fetchAdminOrganizations,
@@ -133,6 +134,7 @@ function PlatformAdminInner({
   const [staffInviteLoading, setStaffInviteLoading] = useState(false);
   const [deleteOrgOpen, setDeleteOrgOpen] = useState(false);
   const [deleteOrgLoading, setDeleteOrgLoading] = useState(false);
+  const [deleteOrgError, setDeleteOrgError] = useState<string | null>(null);
   const [inviteSetup, setInviteSetup] = useState<Awaited<ReturnType<typeof fetchInvitationsSetup>> | null>(null);
 
   const selected = useMemo(
@@ -326,6 +328,7 @@ function PlatformAdminInner({
     { id: "suspended", label: "Suspended", count: counts.suspended ?? 0 },
     { id: "expired", label: "Expired", count: counts.expired ?? 0 },
     { id: "test", label: "Test", count: counts.test ?? 0 },
+    { id: "pending_deletion", label: "Pending deletion", count: counts.pending_deletion ?? 0 },
   ];
 
   const membersTabCount =
@@ -929,17 +932,48 @@ function PlatformAdminInner({
                   </div>
                   <div className="border border-red-200 rounded-lg p-3 space-y-2 mt-4">
                     <p className="text-xs font-medium text-red-700">Danger zone</p>
-                    <p className="text-xs text-chat-muted">
-                      Permanently remove this organization after a 30-day retention period. Requires typing the exact
-                      organization name.
-                    </p>
-                    <button
-                      type="button"
-                      className="aq-btn-danger text-xs"
-                      onClick={() => setDeleteOrgOpen(true)}
-                    >
-                      Delete organization
-                    </button>
+                    {selected.deletion_status === "pending_deletion" ? (
+                      <>
+                        <p className="text-xs text-chat-muted">
+                          Scheduled for permanent purge
+                          {selected.purge_scheduled_at
+                            ? ` on ${formatDate(selected.purge_scheduled_at)}`
+                            : " after the 30-day retention period"}
+                          . Members and invitations are already disabled.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            className="aq-btn-secondary text-xs"
+                            onClick={() =>
+                              void restoreAdminOrganization(auth, selectedId).then(async () => {
+                                toast.push(`${selected.name} restored`, "ok");
+                                await refreshOrgs();
+                              })
+                            }
+                          >
+                            Restore organization
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-chat-muted">
+                          Permanently remove this organization after a 30-day retention period. Requires typing the
+                          exact organization name.
+                        </p>
+                        <button
+                          type="button"
+                          className="aq-btn-danger text-xs"
+                          onClick={() => {
+                            setDeleteOrgError(null);
+                            setDeleteOrgOpen(true);
+                          }}
+                        >
+                          Delete organization
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -953,10 +987,15 @@ function PlatformAdminInner({
         open={deleteOrgOpen && Boolean(selected)}
         org={selected ?? null}
         loading={deleteOrgLoading}
-        onCancel={() => setDeleteOrgOpen(false)}
+        errorMessage={deleteOrgError}
+        onCancel={() => {
+          setDeleteOrgOpen(false);
+          setDeleteOrgError(null);
+        }}
         onConfirm={async (confirmName) => {
           if (!selectedId || !selected) return;
           setDeleteOrgLoading(true);
+          setDeleteOrgError(null);
           try {
             const result = await deleteAdminOrganization(auth, selectedId, confirmName);
             toast.push(
@@ -964,12 +1003,12 @@ function PlatformAdminInner({
               "ok",
             );
             setDeleteOrgOpen(false);
-            const prevItems = orgs;
             await refreshOrgs();
-            const remaining = prevItems.filter((o) => o.id !== selectedId);
-            setSelectedId(remaining[0]?.id ?? "");
+            setSelectedId((id) => (id === selectedId ? "" : id));
           } catch (err) {
-            toast.push(err instanceof Error ? err.message : "Delete failed", "err");
+            const msg = err instanceof Error ? err.message : "Delete failed";
+            setDeleteOrgError(msg);
+            toast.push(msg, "err");
           } finally {
             setDeleteOrgLoading(false);
           }

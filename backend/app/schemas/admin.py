@@ -103,6 +103,8 @@ class AdminOrganizationResponse(BaseModel):
     created_at: datetime
     license_renews_at: datetime | None
     license_expires_at: datetime | None = None
+    deletion_status: str = Field(default="active", description="active or pending_deletion")
+    purge_scheduled_at: datetime | None = None
     seats: SeatUsageResponse
 
 

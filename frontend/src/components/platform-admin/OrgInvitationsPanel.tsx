@@ -20,7 +20,12 @@ import {
   type InvitationHistoryRow,
 } from "../../lib/platformAdminApi";
 import { pickInviteUrl } from "../../lib/inviteLinks";
+import { copyToClipboard } from "../../lib/copyToClipboard";
 import { useToast } from "../ui/Toast";
+
+function truncateUrl(url: string, max = 52): string {
+  return url.length <= max ? url : `${url.slice(0, max - 1)}…`;
+}
 
 function formatDate(iso: string | null) {
   if (!iso) return "—";
@@ -45,6 +50,31 @@ export function OrgInvitationsPanel({
   const [setup, setSetup] = useState<Awaited<ReturnType<typeof fetchInvitationsSetup>> | null>(null);
   const [secret, setSecret] = useState<SecretDialog | null>(null);
   const [loading, setLoading] = useState(true);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  async function runRowAction(key: string, fn: () => Promise<void>) {
+    if (busyKey) return;
+    setBusyKey(key);
+    try {
+      await fn();
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : "Action failed", "err");
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function resolveRowUrl(row: InvitationHistoryRow): Promise<string | null> {
+    const fromHistory = pickInviteUrl(row);
+    if (fromHistory) return fromHistory;
+    if (row.status !== "pending") return null;
+    if (invitationHistoryRecordType(row) === "admin_invitation") {
+      const r = await fetchAdminInvitationLink(session, org.id, row.id);
+      return pickInviteUrl(r);
+    }
+    const r = await fetchEmployeeLinkUrl(session, org.id, row.id);
+    return pickInviteUrl(r);
+  }
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -266,8 +296,8 @@ export function OrgInvitationsPanel({
           </select>
         </div>
         <p className="text-xs text-chat-muted mb-3">
-          Expired invitations stay in this list for audit. Use Copy link to retrieve a pending invite; expired or revoked
-          admin invites get a new token when you copy or regenerate.
+          Pending rows show the live invitation URL. Revoked, expired, and accepted rows show no link (use Regenerate for
+          expired or revoked admin invites). Copy link puts the URL on your clipboard and shows a confirmation toast.
         </p>
         {loading ? (
           <p className="text-sm text-chat-muted">Loading…</p>
@@ -304,16 +334,23 @@ export function OrgInvitationsPanel({
                   </td>
                   <td className="py-2 max-w-[14rem]">
                     {(() => {
-                      const url = pickInviteUrl(row);
-                      if (!url) return <span className="text-xs text-chat-muted">—</span>;
+                      const url = row.status === "pending" ? pickInviteUrl(row) : null;
+                      if (!url) {
+                        return (
+                          <span className="text-xs text-chat-muted" title="Link not valid for this status">
+                            —
+                          </span>
+                        );
+                      }
                       return (
                         <a
                           href={url}
-                          className="text-xs break-all text-chat-accent hover:underline"
+                          className="text-xs text-chat-accent hover:underline"
                           target="_blank"
                           rel="noreferrer"
+                          title={url}
                         >
-                          {url}
+                          {truncateUrl(url)}
                         </a>
                       );
                     })()}
@@ -325,42 +362,31 @@ export function OrgInvitationsPanel({
                     {row.status !== "accepted" ? (
                       <button
                         type="button"
-                        className="text-xs underline"
-                        onClick={async () => {
-                          try {
-                            const fromHistory = pickInviteUrl(row);
-                            if (fromHistory) {
-                              setSecret({
-                                title:
-                                  invitationHistoryRecordType(row) === "employee_link"
-                                    ? "Employee join link"
-                                    : "Admin invitation link",
-                                url: fromHistory,
-                                expires: row.expires_at ?? undefined,
-                              });
+                        className="text-xs underline disabled:opacity-40"
+                        disabled={Boolean(busyKey)}
+                        onClick={() =>
+                          void runRowAction(`copy-${row.id}`, async () => {
+                            if (row.status === "expired" || row.status === "revoked") {
+                              toast.push("Link no longer valid — use Regenerate first.", "err");
                               return;
                             }
-                            if (invitationHistoryRecordType(row) === "admin_invitation") {
-                              const r = await fetchAdminInvitationLink(session, org.id, row.id);
-                              const url = pickInviteUrl(r);
-                              if (url) {
-                                setSecret({ title: "Admin invitation link", url, expires: r.expires_at ?? undefined });
-                              } else {
-                                toast.push("Link unavailable for this row — use Regenerate for a new link.", "err");
-                              }
-                            } else {
-                              const r = await fetchEmployeeLinkUrl(session, org.id, row.id);
-                              const url = pickInviteUrl(r);
-                              if (url) {
-                                setSecret({ title: "Employee join link", url, expires: r.expires_at ?? undefined });
-                              } else {
-                                toast.push("Link unavailable — use Regenerate.", "err");
-                              }
+                            const url = await resolveRowUrl(row);
+                            if (!url) {
+                              toast.push("Link unavailable for this row.", "err");
+                              return;
                             }
-                          } catch (err) {
-                            toast.push(err instanceof Error ? err.message : "Could not load link", "err");
-                          }
-                        }}
+                            const copied = await copyToClipboard(url);
+                            if (copied.ok) toast.push("Link copied", "ok");
+                            else {
+                              setSecret({
+                                title: "Copy invitation link",
+                                url,
+                                expires: row.expires_at ?? undefined,
+                                note: "Select the link below and copy manually if clipboard is blocked.",
+                              });
+                            }
+                          })
+                        }
                       >
                         Copy link
                       </button>
@@ -369,18 +395,14 @@ export function OrgInvitationsPanel({
                       <>
                         <button
                           type="button"
-                          className="text-xs underline"
+                          className="text-xs underline disabled:opacity-40"
+                          disabled={Boolean(busyKey)}
                           onClick={() =>
-                            resendInvitation(session, org.id, row.id).then((r) => {
-                              void reload();
-                              const url = pickInviteUrl(r);
-                              if (url) {
-                                setSecret({
-                                  title: "Admin invitation link",
-                                  url,
-                                  expires: r.invitation_expires_at,
-                                });
-                              }
+                            void runRowAction(`resend-${row.id}`, async () => {
+                              await resendInvitation(session, org.id, row.id);
+                              await reload();
+                              await onRefreshOrgs();
+                              toast.push("Invitation email resent", "ok");
                             })
                           }
                         >
@@ -388,8 +410,16 @@ export function OrgInvitationsPanel({
                         </button>
                         <button
                           type="button"
-                          className="text-xs underline"
-                          onClick={() => revokeInvitation(session, org.id, row.id).then(() => reload())}
+                          className="text-xs underline disabled:opacity-40"
+                          disabled={Boolean(busyKey)}
+                          onClick={() =>
+                            void runRowAction(`revoke-${row.id}`, async () => {
+                              await revokeInvitation(session, org.id, row.id);
+                              await reload();
+                              await onRefreshOrgs();
+                              toast.push("Invitation revoked", "ok");
+                            })
+                          }
                         >
                           Revoke
                         </button>
@@ -399,19 +429,22 @@ export function OrgInvitationsPanel({
                     (row.status === "expired" || row.status === "revoked") ? (
                       <button
                         type="button"
-                        className="text-xs underline"
-                        onClick={async () => {
-                          const r = await fetchAdminInvitationLink(session, org.id, row.id);
-                          void reload();
-                          const url = pickInviteUrl(r);
-                          if (url) {
-                            setSecret({
-                              title: "Regenerated admin invitation link",
-                              url,
-                              expires: r.expires_at ?? undefined,
-                            });
-                          }
-                        }}
+                        className="text-xs underline disabled:opacity-40"
+                        disabled={Boolean(busyKey)}
+                        onClick={() =>
+                          void runRowAction(`regen-${row.id}`, async () => {
+                            const r = await fetchAdminInvitationLink(session, org.id, row.id);
+                            await reload();
+                            await onRefreshOrgs();
+                            const url = pickInviteUrl(r);
+                            if (url) {
+                              const copied = await copyToClipboard(url);
+                              if (copied.ok) toast.push("Link regenerated and copied", "ok");
+                            } else {
+                              toast.push("Regenerated but URL unavailable", "err");
+                            }
+                          })
+                        }
                       >
                         Regenerate
                       </button>
@@ -420,15 +453,17 @@ export function OrgInvitationsPanel({
                     (row.status === "expired" || row.status === "revoked") ? (
                       <button
                         type="button"
-                        className="text-xs underline"
+                        className="text-xs underline disabled:opacity-40"
+                        disabled={Boolean(busyKey)}
                         onClick={() =>
-                          rotateEmployeeLink(session, org.id, row.id).then((r) => {
-                            void reload();
-                            setSecret({
-                              title: "Employee join link",
-                              url: r.join_url ?? pickInviteUrl(r) ?? "",
-                              expires: r.expires_at,
-                            });
+                          void runRowAction(`regen-link-${row.id}`, async () => {
+                            const r = await rotateEmployeeLink(session, org.id, row.id);
+                            await reload();
+                            const url = r.join_url ?? pickInviteUrl(r) ?? "";
+                            if (url) {
+                              const copied = await copyToClipboard(url);
+                              if (copied.ok) toast.push("Employee link regenerated and copied", "ok");
+                            }
                           })
                         }
                       >
@@ -437,23 +472,21 @@ export function OrgInvitationsPanel({
                     ) : null}
                     <button
                       type="button"
-                      className="text-xs underline text-[var(--color-danger)]"
+                      className="text-xs underline text-[var(--color-danger)] disabled:opacity-40"
+                      disabled={Boolean(busyKey)}
                       onClick={() => {
                         if (!window.confirm("Delete this history row? Pending links will stop working.")) return;
-                        const recordType = invitationHistoryRecordType(row);
-                        const run =
-                          recordType === "admin_invitation"
-                            ? deleteAdminInvitationRecord(session, org.id, row.id)
-                            : deleteEmployeeLinkRecord(session, org.id, row.id);
-                        void run
-                          .then(async () => {
-                            await reload();
-                            await onRefreshOrgs();
-                            toast.push("Deleted", "ok");
-                          })
-                          .catch((err: unknown) => {
-                            toast.push(err instanceof Error ? err.message : "Delete failed", "err");
-                          });
+                        void runRowAction(`delete-${row.id}`, async () => {
+                          const recordType = invitationHistoryRecordType(row);
+                          if (recordType === "admin_invitation") {
+                            await deleteAdminInvitationRecord(session, org.id, row.id);
+                          } else {
+                            await deleteEmployeeLinkRecord(session, org.id, row.id);
+                          }
+                          await reload();
+                          await onRefreshOrgs();
+                          toast.push("Deleted", "ok");
+                        });
                       }}
                     >
                       Delete
@@ -488,8 +521,10 @@ export function OrgInvitationsPanel({
                 type="button"
                 className="aq-btn-primary text-sm"
                 onClick={() => {
-                  void navigator.clipboard.writeText(secret.url);
-                  toast.push("Copied", "ok");
+                  void copyToClipboard(secret.url).then((result) => {
+                    if (result.ok) toast.push("Copied", "ok");
+                    else toast.push("Copy failed — select the link manually", "err");
+                  });
                 }}
               >
                 Copy link
