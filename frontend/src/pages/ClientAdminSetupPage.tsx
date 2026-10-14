@@ -84,6 +84,8 @@ export default function ClientAdminSetupPage() {
   const checklist = overview?.setup;
   const orgName = overview?.organization?.name ?? "Organization";
   const linkEnabled = overview?.employee_link.enabled ?? false;
+  const postgresStep = checklist?.steps.find((s) => s.id === "postgres_database");
+  const postgresConfigured = postgresStep?.status === "complete";
 
   return (
     <div className="max-w-6xl mx-auto p-6 lg:p-10 min-w-0">
@@ -134,11 +136,12 @@ export default function ClientAdminSetupPage() {
           </div>
           <div className="admin-card p-4">
             <h3 className="text-sm font-medium">PostgreSQL</h3>
-            <p className="text-sm mt-1 capitalize">
-              {checklist?.postgres_database_status?.replace(/_/g, " ") ?? "Not configured"}
-            </p>
+            <p className="text-sm mt-1">{postgresConfigured ? "Configured" : "Not configured"}</p>
+            {!postgresConfigured ? (
+              <p className="text-xs text-chat-muted mt-1">Use Manage on the checklist to choose and validate a database.</p>
+            ) : null}
             <Link to="/org-admin/data-storage" className="text-xs text-[var(--chat-brand-mark)] mt-2 inline-block">
-              Data storage →
+              {postgresConfigured ? "Manage database →" : "Configure database →"}
             </Link>
           </div>
           <div className="admin-card p-4">

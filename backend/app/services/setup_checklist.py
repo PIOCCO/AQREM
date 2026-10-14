@@ -135,14 +135,15 @@ def tenant_database_setup_complete(cfg: TenantDataStoreConfig | None) -> bool:
 
 
 def _postgres_storage_ready(cfg: TenantDataStoreConfig | None) -> bool:
+    """Complete only after org admin finishes Manage → validate → Save and activate."""
     if cfg is None or cfg.paused or cfg.status != "active":
         return False
     if cfg.setup_validated_at is None:
         return False
-    if cfg.storage_mode == MANAGED_COLOCATED:
-        return cfg.last_health_status == "healthy"
     if cfg.storage_mode == CUSTOMER_POSTGRES:
-        return cfg.last_health_status == "healthy" and bool(cfg.secret_reference and cfg.host and cfg.database_name)
+        return bool(cfg.secret_reference and cfg.host and cfg.database_name)
+    if cfg.storage_mode == MANAGED_COLOCATED:
+        return True
     return False
 
 

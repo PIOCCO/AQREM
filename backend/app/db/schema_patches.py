@@ -82,6 +82,13 @@ _EMAIL_PATCHES = (
     "ALTER TABLE employee_join_verifications ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ",
     "ALTER TABLE tenant_data_store_configs ADD COLUMN IF NOT EXISTS setup_validated_at TIMESTAMPTZ",
+    """
+    UPDATE tenant_data_store_configs
+    SET last_health_status = NULL,
+        last_health_summary = NULL,
+        last_health_check_at = NULL
+    WHERE setup_validated_at IS NULL
+    """,
 )
 
 _ANSWER_PATCHES = (

@@ -41,6 +41,7 @@ def test_postgres_step_unchecked_for_default_managed_row(db_session):
             connection_method="managed",
             status="active",
             last_health_status="healthy",
+            setup_validated_at=None,
         )
     )
     db_session.commit()

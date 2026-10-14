@@ -21,7 +21,7 @@ export default function ClientAdminDataStoragePage() {
   const { session } = useAuth();
   const formId = useId();
   const [status, setStatus] = useState<DataStorageConfig | null>(null);
-  const [location, setLocation] = useState<LocationChoice>("managed");
+  const [location, setLocation] = useState<LocationChoice | null>(null);
   const [connectionMethod, setConnectionMethod] = useState("public_tls");
   const [host, setHost] = useState("");
   const [port, setPort] = useState("5432");
@@ -42,7 +42,9 @@ export default function ClientAdminDataStoragePage() {
     try {
       const cfg = await fetchDataStorage(session);
       setStatus(cfg);
-      setLocation(cfg.storage_mode === "customer_postgres" ? "customer" : "managed");
+      if (cfg.setup_complete) {
+        setLocation(cfg.storage_mode === "customer_postgres" ? "customer" : "managed");
+      }
       setConnectionMethod(cfg.connection_method || "public_tls");
       setHost(cfg.host ?? "");
       setPort(String(cfg.port ?? 5432));
@@ -69,6 +71,10 @@ export default function ClientAdminDataStoragePage() {
     setPreflight(null);
     setBusy(true);
     try {
+      if (location === null) {
+        setError("Select a database option before running validation.");
+        return;
+      }
       const report = await runDataStoragePreflight(session, {
         storage_mode: location === "managed" ? "managed_colocated" : "customer_postgres",
         connection_method: connectionMethod,
@@ -92,6 +98,10 @@ export default function ClientAdminDataStoragePage() {
   async function onSave(e: FormEvent) {
     e.preventDefault();
     if (!session) return;
+    if (location === null) {
+      setError("Select AQREM-managed PostgreSQL or My PostgreSQL database before saving.");
+      return;
+    }
     setError(null);
     setSuccess(null);
     setBusy(true);
