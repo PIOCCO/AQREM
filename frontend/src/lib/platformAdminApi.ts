@@ -161,11 +161,20 @@ export async function deleteAdminOrganization(
   orgId: string,
   confirmName: string,
 ): Promise<{ organization_id: string; purge_scheduled_at: string; retention_days: number }> {
-  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}`, {
-    method: "DELETE",
-    headers: adminHeaders(session),
-    body: JSON.stringify({ confirmName: confirmName }),
+  const body = JSON.stringify({ confirmName: confirmName });
+  const headers = adminHeaders(session);
+  let res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}/delete`, {
+    method: "POST",
+    headers,
+    body,
   });
+  if (res.status === 404 || res.status === 405) {
+    res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}`, {
+      method: "DELETE",
+      headers,
+      body,
+    });
+  }
   if (!res.ok) await parseError(res, "Failed to delete organization");
   return res.json();
 }

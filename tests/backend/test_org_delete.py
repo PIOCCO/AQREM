@@ -66,9 +66,8 @@ def test_delete_org_requires_exact_name(client: TestClient, db_session):
         json={"confirmName": "exact name org"},
     )
     assert bad.status_code == 400
-    good = client.request(
-        "DELETE",
-        f"/api/v1/admin/organizations/{org_id}",
+    good = client.post(
+        f"/api/v1/admin/organizations/{org_id}/delete",
         headers={"Authorization": f"Bearer {token}"},
         json={"confirmName": "Exact Name Org"},
     )

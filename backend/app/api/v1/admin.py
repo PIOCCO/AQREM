@@ -239,12 +239,12 @@ def update_organization(
     return org_to_admin_response(db, org)
 
 
-@router.delete("/organizations/{organization_id}", response_model=DeleteOrganizationResponse)
-def delete_organization(
+def _delete_organization_impl(
+    db: Session,
+    *,
     organization_id: UUID,
     payload: DeleteOrganizationRequest,
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_super_admin),
+    admin: User,
 ) -> DeleteOrganizationResponse:
     org = _require_admin_visible_org(db, organization_id)
     try:
@@ -272,6 +272,27 @@ def delete_organization(
         purge_scheduled_at=purge_at,
         retention_days=ORG_DELETION_RETENTION_DAYS,
     )
+
+
+@router.delete("/organizations/{organization_id}", response_model=DeleteOrganizationResponse)
+def delete_organization(
+    organization_id: UUID,
+    payload: DeleteOrganizationRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+) -> DeleteOrganizationResponse:
+    return _delete_organization_impl(db, organization_id=organization_id, payload=payload, admin=admin)
+
+
+@router.post("/organizations/{organization_id}/delete", response_model=DeleteOrganizationResponse)
+def delete_organization_post(
+    organization_id: UUID,
+    payload: DeleteOrganizationRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+) -> DeleteOrganizationResponse:
+    """POST alias for environments or proxies that reject HTTP DELETE with a body."""
+    return _delete_organization_impl(db, organization_id=organization_id, payload=payload, admin=admin)
 
 
 @router.get("/organizations/{organization_id}/directory", response_model=AdminDirectoryResponse)
