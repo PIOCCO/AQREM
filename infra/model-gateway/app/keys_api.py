@@ -35,10 +35,10 @@ class MintKeyResponse(BaseModel):
 def mint_key(
     body: MintKeyRequest,
     request: Request,
-    x_platform_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ) -> MintKeyResponse:
     settings = get_settings()
-    require_internal_caller(request, settings, x_platform_token)
+    require_internal_caller(request, settings, authorization)
     raw = f"gw_{secrets.token_urlsafe(32)}"
     prefix = raw[:8]
     hashed = bcrypt.hashpw(raw.encode("utf-8"), bcrypt.gensalt())
@@ -80,11 +80,11 @@ def mint_key(
 def rotate_key(
     body: MintKeyRequest,
     request: Request,
-    x_platform_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ) -> MintKeyResponse:
     """Mint into primary or secondary; at most two active labels per client."""
     settings = get_settings()
-    require_internal_caller(request, settings, x_platform_token)
+    require_internal_caller(request, settings, authorization)
     with connection(settings) as conn:
         count = conn.execute(
             "SELECT count(*) AS c FROM gateway.api_key WHERE client_id = %s AND active",
@@ -92,17 +92,17 @@ def rotate_key(
         ).fetchone()
         if count and int(count["c"]) >= 2 and body.label not in ("primary", "secondary"):
             raise HTTPException(status_code=400, detail="Invalid label")
-    return mint_key(body, request, x_platform_token)
+    return mint_key(body, request, authorization)
 
 
 @router.post("/revoke/{client_id}")
 def revoke_client(
     client_id: str,
     request: Request,
-    x_platform_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ) -> dict[str, str]:
     settings = get_settings()
-    require_internal_caller(request, settings, x_platform_token)
+    require_internal_caller(request, settings, authorization)
     with connection(settings) as conn:
         conn.execute("UPDATE gateway.client SET active = FALSE WHERE client_id = %s", (client_id,))
         conn.execute("UPDATE gateway.api_key SET active = FALSE WHERE client_id = %s", (client_id,))

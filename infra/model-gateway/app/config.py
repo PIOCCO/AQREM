@@ -26,6 +26,18 @@ class Settings(BaseSettings):
 
     applicationinsights_connection_string: str | None = None
     internal_provisioning_token: str | None = None
+    azure_tenant_id: str | None = Field(default=None, validation_alias="AZURE_TENANT_ID")
+    internal_provisioning_audience: str | None = Field(
+        default=None, validation_alias="INTERNAL_PROVISIONING_AUDIENCE"
+    )
+    internal_provisioning_allowed_object_ids: str | None = Field(
+        default=None, validation_alias="INTERNAL_PROVISIONING_ALLOWED_OBJECT_IDS"
+    )
+    trusted_proxy_cidrs: str = Field(
+        default="",
+        validation_alias="TRUSTED_PROXY_CIDRS",
+        description="Only these peers may supply X-Forwarded-For (Container Apps ingress).",
+    )
     limit_db_stale_seconds: float = Field(default=120.0, validation_alias="LIMIT_DB_STALE_SECONDS")
     key_validation_cache_seconds: float = Field(default=60.0, validation_alias="KEY_VALIDATION_CACHE_SECONDS")
     key_revoke_max_seconds: float = Field(default=60.0, validation_alias="KEY_REVOKE_MAX_SECONDS")
@@ -36,7 +48,6 @@ class Settings(BaseSettings):
         default="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16",
         validation_alias="INTERNAL_ALLOWED_CIDRS",
     )
-    internal_provisioning_audience: str | None = Field(default=None, validation_alias="INTERNAL_PROVISIONING_AUDIENCE")
 
 
 def get_settings() -> Settings:

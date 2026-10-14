@@ -15,21 +15,22 @@ def test_internal_mint_blocked_from_public_ip(monkeypatch):
     res = client.post(
         "/internal/v1/keys/mint",
         json={"client_id": "acme", "organization_id": str(uuid.uuid4()), "label": "primary"},
-        headers={"X-Platform-Token": "secret"},
+        headers={"Authorization": "Bearer x"},
     )
     assert res.status_code == 403
 
 
+@patch("app.internal_auth.validate_entra_bearer", return_value={"oid": "sp"})
 @patch("app.keys_api.connection")
-def test_internal_mint_allowed_from_private_cidr(mock_conn, monkeypatch):
+def test_internal_mint_allowed_from_private_cidr(mock_conn, _mock_entra, monkeypatch):
     monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com")
-    monkeypatch.setenv("INTERNAL_PROVISIONING_TOKEN", "secret")
-    monkeypatch.setenv("INTERNAL_ALLOWED_CIDRS", "127.0.0.0/8,10.0.0.0/8")
-    cm = mock_conn.return_value.__enter__.return_value
+    mock_conn.return_value.__enter__.return_value = mock_conn.return_value
+    monkeypatch.setenv("INTERNAL_ALLOWED_CIDRS", "10.0.0.0/8")
     client = TestClient(app)
-    res = client.post(
-        "/internal/v1/keys/mint",
-        json={"client_id": "acme", "organization_id": str(uuid.uuid4()), "label": "primary"},
-        headers={"X-Platform-Token": "secret", "X-Forwarded-For": "10.1.2.3"},
-    )
+    with patch("app.internal_auth.trusted_client_ip", return_value="10.1.2.3"):
+        res = client.post(
+            "/internal/v1/keys/mint",
+            json={"client_id": "acme", "organization_id": str(uuid.uuid4()), "label": "primary"},
+            headers={"Authorization": "Bearer t"},
+        )
     assert res.status_code == 200

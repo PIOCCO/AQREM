@@ -16,26 +16,31 @@ def client(monkeypatch):
     return TestClient(app)
 
 
-def test_mint_requires_token(client):
+@patch("app.internal_auth.trusted_client_ip", return_value="10.0.0.1")
+@patch("app.internal_auth.validate_entra_bearer")
+def test_mint_requires_entra(_mock_entra, _mock_ip, client):
+    _mock_entra.side_effect = __import__("fastapi").HTTPException(status_code=401, detail="Missing bearer token")
     res = client.post(
         "/internal/v1/keys/mint",
         json={"client_id": "acme", "organization_id": str(uuid.uuid4()), "label": "primary"},
     )
-    assert res.status_code == 403
+    assert res.status_code == 401
 
 
+@patch("app.internal_auth.validate_entra_bearer", return_value={"oid": "sp"})
 @patch("app.keys_api.connection")
 @patch("app.keys_api.get_settings")
-def test_mint_returns_plaintext_once(mock_settings, mock_conn, client):
-    mock_settings.return_value.internal_provisioning_token = "secret"
-    mock_settings.return_value.internal_allowed_cidrs = "10.0.0.0/8"
+def test_mint_returns_plaintext_once(mock_settings, mock_conn, _mock_entra, client):
+    mock_settings.return_value.internal_allowed_cidrs = "127.0.0.0/8,10.0.0.0/8"
+    mock_settings.return_value.trusted_proxy_cidrs = ""
     cm = MagicMock()
     mock_conn.return_value.__enter__.return_value = cm
-    res = client.post(
-        "/internal/v1/keys/mint",
-        headers={"X-Platform-Token": "secret", "X-Forwarded-For": "10.0.0.1"},
-        json={"client_id": "acme", "organization_id": str(uuid.uuid4()), "label": "primary"},
-    )
+    with patch("app.internal_auth.trusted_client_ip", return_value="10.0.0.1"):
+        res = client.post(
+            "/internal/v1/keys/mint",
+            headers={"Authorization": "Bearer token"},
+            json={"client_id": "acme", "organization_id": str(uuid.uuid4()), "label": "primary"},
+        )
     assert res.status_code == 200
     body = res.json()
     assert body["api_key_plaintext"].startswith("gw_")

@@ -115,19 +115,28 @@ jobs:
           API_URL="${{ inputs.public_base_url }}/ready"
           curl -fsS "$API_URL" || { echo "API /ready failed"; exit 1; }
           echo "Storage/queue/DB checks: wire when app exposes diagnostic endpoints (Stage 4)."
-      - name: Mint gateway key (internal only)
+      - name: Mint gateway key (internal only, Entra bearer)
         env:
           GATEWAY_INTERNAL_URL: ${{ vars.GATEWAY_INTERNAL_URL }}
-          GATEWAY_INTERNAL_TOKEN: ${{ secrets.GATEWAY_INTERNAL_PROVISIONING_TOKEN }}
+          GATEWAY_INTERNAL_AUDIENCE: ${{ vars.GATEWAY_INTERNAL_AUDIENCE }}
+          CLIENT_KV_NAME: ${{ inputs.client_id }}-kv
         run: |
           set -euo pipefail
-          RESP=$(curl -fsS -X POST "$GATEWAY_INTERNAL_URL/internal/v1/keys/mint" \
-            -H "X-Platform-Token: $GATEWAY_INTERNAL_TOKEN" \
+          TMPKEY="$(mktemp)"
+          chmod 600 "$TMPKEY"
+          cleanup() { shred -u "$TMPKEY" 2>/dev/null || rm -f "$TMPKEY"; }
+          trap cleanup EXIT
+          TOKEN="$(az account get-access-token --resource "$GATEWAY_INTERNAL_AUDIENCE" --query accessToken -o tsv)"
+          curl -fsS -X POST "$GATEWAY_INTERNAL_URL/internal/v1/keys/mint" \
+            -H "Authorization: Bearer ${TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "{\"client_id\":\"${{ inputs.client_id }}\",\"organization_id\":\"00000000-0000-0000-0000-000000000001\",\"label\":\"primary\"}")
-          KEY=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["api_key_plaintext"])' <<<"$RESP")
-          az keyvault secret set --vault-name "${{ inputs.client_id }}-kv" --name model-gateway-key --value "$KEY" --output none
+            -d "{\"client_id\":\"${{ inputs.client_id }}\",\"organization_id\":\"00000000-0000-0000-0000-000000000001\",\"label\":\"primary\"}" \
+            | python3 -c 'import json,sys; open(sys.argv[1],"w").write(json.load(sys.stdin)["api_key_plaintext"])' "$TMPKEY"
+          echo "::add-mask::$(cat "$TMPKEY")"
+          az keyvault secret set --vault-name "$CLIENT_KV_NAME" --name model-gateway-key --file "$TMPKEY" --output none
           echo "Gateway key stored in client Key Vault (plaintext not logged)."
+      - name: Verify key handoff dry-run pattern
+        run: bash infra/verification/scripts/dry_run_key_handoff.sh
       - name: Register URL + admin invitation
         run: |
           echo "Register public_base_url=${{ inputs.public_base_url }} in control-plane DB (Stage 4 product API)."
