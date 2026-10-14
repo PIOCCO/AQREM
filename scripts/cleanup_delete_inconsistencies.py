@@ -36,6 +36,8 @@ from app.models.invitation import UserInvitation
 from app.models.organization import Organization, OrganizationMembership, User
 from app.services.membership_lifecycle import normalize_org_admin_singleton, purge_legacy_inactive_memberships
 from app.services.org_lifecycle import schedule_organization_deletion
+from datetime import datetime, timezone
+
 from app.services.platform_provisioning import revoke_invitation
 
 
@@ -146,7 +148,12 @@ def run_cleanup(db: Session, *, apply: bool, schedule_names: list[str]) -> list[
                 stale_invites += 1
                 lines.append(f"  stale invite {inv.email} in org {org.name} ({inv.id})")
                 if apply:
-                    revoke_invitation(db, admin_user_id=inv.created_by_user_id, invitation=inv)
+                    revoke_invitation(
+                        db,
+                        admin_user_id=inv.created_by_user_id,
+                        invitation=inv,
+                        cleanup_provisioned_membership=False,
+                    )
 
     lines.append(f"Stale pending invites (email already member): {stale_invites}")
 

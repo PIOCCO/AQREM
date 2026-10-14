@@ -226,10 +226,14 @@ def revoke_invitation(
     *,
     admin_user_id: UUID,
     invitation: UserInvitation,
+    cleanup_provisioned_membership: bool = True,
 ) -> None:
     if invitation.used_at is not None:
         raise ValueError("Invitation already accepted")
+    if invitation.revoked_at is not None:
+        return
     invitation.revoked_at = datetime.now(timezone.utc)
+    db.flush()
     record_audit(
         db,
         organization_id=invitation.organization_id,
@@ -239,7 +243,7 @@ def revoke_invitation(
         resource_id=str(invitation.id),
         metadata={"email": invitation.email},
     )
-    if invitation.used_at is None:
+    if cleanup_provisioned_membership and invitation.used_at is None:
         user = db.query(User).filter(User.email == invitation.email.strip().lower()).first()
         if user is not None:
             membership = (

@@ -99,7 +99,10 @@ def remove_organization_membership(
     ):
         raise MembershipRemoveError("LAST_ORG_ADMIN")
 
-    if user is not None and user.email:
+    if user is not None and user.email and reason not in (
+        "invitation_revoked",
+        "organization_deleted",
+    ):
         revoke_pending_invitations_for_email(
             db,
             admin_user_id=admin_user_id,

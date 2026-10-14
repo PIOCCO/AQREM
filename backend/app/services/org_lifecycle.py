@@ -118,7 +118,12 @@ def _revoke_org_access(db: Session, *, admin_user_id: UUID, org: Organization) -
         else:
             exp = inv.expires_at
         if exp > now:
-            revoke_invitation(db, admin_user_id=admin_user_id, invitation=inv)
+            revoke_invitation(
+                db,
+                admin_user_id=admin_user_id,
+                invitation=inv,
+                cleanup_provisioned_membership=False,
+            )
 
     for link in db.query(EmployeeJoinLink).filter(EmployeeJoinLink.organization_id == org.id).all():
         if link.status != LINK_DISABLED:
