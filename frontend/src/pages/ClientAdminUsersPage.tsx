@@ -126,8 +126,9 @@ export default function ClientAdminUsersPage() {
                       if (!session) return;
                       if (!window.confirm(`Remove ${m.full_name || m.email} from this organization?`)) return;
                       try {
-                        await removeOrgMember(session, m.membership_id);
-                        reload();
+                        const id = m.membership_id;
+                        await removeOrgMember(session, id);
+                        setMembers((prev) => prev.filter((row) => row.membership_id !== id));
                       } catch (err) {
                         setError(err instanceof Error ? err.message : "Remove failed");
                       }

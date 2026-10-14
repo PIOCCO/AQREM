@@ -333,7 +333,7 @@ export async function fetchOrganizationDirectory(
     const memRes = await fetch(apiUrl(`/api/v1/admin/organizations/${orgId}/members`), {
       headers: adminHeaders(session),
     });
-    if (!memRes.ok) throw new Error(await readApiError(res, "Failed to load members"));
+    if (!memRes.ok) throw new Error(await readApiError(memRes, "Failed to load members"));
     const members = (await memRes.json()) as {
       id: string;
       user_id: string;
@@ -343,7 +343,8 @@ export async function fetchOrganizationDirectory(
       is_active: boolean;
       user_is_active: boolean;
     }[];
-    const rows: DirectoryRow[] = members.map((m) => ({
+    const activeMembers = members.filter((m) => m.is_active && m.user_is_active);
+    const rows: DirectoryRow[] = activeMembers.map((m) => ({
       row_id: `m-${m.id}`,
       kind: "member" as const,
       membership_id: m.id,
@@ -351,16 +352,16 @@ export async function fetchOrganizationDirectory(
       full_name: m.full_name,
       email: m.email,
       role: m.role,
-      status: m.is_active && m.user_is_active ? "Active" : "Inactive",
+      status: "Active" as const,
     }));
     const total = rows.length;
     const start = (page - 1) * pageSize;
     const seats =
       orgFallback?.seats ??
       ({
-        active_members: members.filter((m) => m.is_active).length,
+        active_members: activeMembers.length,
         pending_invitations: 0,
-        seats_used: members.filter((m) => m.is_active).length,
+        seats_used: activeMembers.length,
         seats_limit: orgFallback?.license_limit ?? 0,
         seats_available: 0,
         is_full: false,

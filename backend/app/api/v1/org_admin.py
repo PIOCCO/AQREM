@@ -51,7 +51,12 @@ from app.services.setup_checklist import build_setup_checklist
 from app.services.seat_usage import get_seat_usage
 from app.services.storage.factory import get_blob_storage
 from app.services.storage.path_utils import safe_blob_filename
-from app.services.membership_lifecycle import MembershipRemoveError, normalize_org_admin_singleton, remove_organization_membership
+from app.services.membership_lifecycle import (
+    MembershipRemoveError,
+    normalize_org_admin_singleton,
+    purge_legacy_inactive_memberships,
+    remove_organization_membership,
+)
 from app.services.telemetry_ingest import ingest_org_telemetry
 from app.services.telemetry_schema import TELEMETRY_FIELD_CATALOG
 from app.services.access_control.constants import VISIBILITY_ADMINS_ONLY, VISIBILITY_ALL_STAFF, VISIBILITY_GROUPS, VISIBILITY_USERS
@@ -533,8 +538,10 @@ def list_members(
     db: Session = Depends(get_tenant_db),
 ) -> list[MemberRow]:
     assert_org_admin_action(tenant, action="read", resource_type="member", resource_org_id=tenant.organization_id)
+    purge_legacy_inactive_memberships(db, tenant.organization_id)
     normalize_org_admin_singleton(db, tenant.organization_id)
     db.flush()
+    db.commit()
     rows = (
         db.query(OrganizationMembership, User)
         .join(User, User.id == OrganizationMembership.user_id)

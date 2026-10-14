@@ -58,9 +58,15 @@ from app.services.admin_org import (
 )
 from app.audit.service import record_audit
 from app.services.licensing import LicenseDenied, assert_can_add_seat, licensing_test_mode_effective
-from app.services.membership_lifecycle import MembershipRemoveError, normalize_org_admin_singleton, remove_organization_membership
+from app.services.membership_lifecycle import (
+    MembershipRemoveError,
+    normalize_org_admin_singleton,
+    purge_legacy_inactive_memberships,
+    remove_organization_membership,
+)
 from app.services.platform_provisioning import (
     create_organization_admin,
+    revoke_invitation,
     set_organization_license,
     unique_org_slug,
     update_membership_role,
@@ -400,8 +406,10 @@ def organization_directory(
     admin: User = Depends(require_platform_permission("org:read")),
 ) -> AdminDirectoryResponse:
     org = _require_admin_visible_org(db, organization_id)
+    purge_legacy_inactive_memberships(db, organization_id)
     normalize_org_admin_singleton(db, organization_id)
     db.flush()
+    db.commit()
 
     usage = get_seat_usage(db, org)
     rows: list[AdminDirectoryRow] = []
@@ -417,9 +425,9 @@ def organization_directory(
         .order_by(User.full_name.asc())
         .all()
     )
-    active_member_emails: set[str] = set()
+    member_emails: set[str] = set()
     for membership, user in member_rows:
-        active_member_emails.add(user.email.strip().lower())
+        member_emails.add(user.email.strip().lower())
         rows.append(
             AdminDirectoryRow(
                 row_id=f"m-{membership.id}",
@@ -445,8 +453,22 @@ def organization_directory(
         .order_by(UserInvitation.created_at.desc())
         .all()
     )
+    any_membership_emails = {
+        email.strip().lower()
+        for (email,) in db.query(User.email)
+        .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
+        .filter(OrganizationMembership.organization_id == organization_id)
+        .all()
+        if email
+    }
+    revoked_stale_invites = 0
     for inv in invites:
-        if inv.email.strip().lower() in active_member_emails:
+        inv_email = inv.email.strip().lower()
+        if inv_email in member_emails:
+            revoke_invitation(db, admin_user_id=admin.id, invitation=inv)
+            revoked_stale_invites += 1
+            continue
+        if inv_email in any_membership_emails:
             continue
         rows.append(
             AdminDirectoryRow(
@@ -459,6 +481,8 @@ def organization_directory(
                 status="Pending invite",
             )
         )
+    if revoked_stale_invites:
+        db.commit()
 
     total = len(rows)
     start = (page - 1) * page_size
@@ -673,8 +697,10 @@ def list_members(
     admin: User = Depends(require_platform_permission("org:read")),
 ) -> list[AdminMembershipResponse]:
     _require_admin_visible_org(db, organization_id)
+    purge_legacy_inactive_memberships(db, organization_id)
     normalize_org_admin_singleton(db, organization_id)
     db.flush()
+    db.commit()
     rows = (
         db.query(OrganizationMembership, User)
         .join(User, User.id == OrganizationMembership.user_id)

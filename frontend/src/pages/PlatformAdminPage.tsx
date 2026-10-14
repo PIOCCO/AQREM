@@ -1023,10 +1023,23 @@ function PlatformAdminInner({
         onCancel={() => setRemoveTarget(null)}
         onConfirm={async (reason) => {
           if (!removeTarget || !selectedId) return;
+          const removedId = removeTarget.membershipId;
+          const removedName = removeTarget.name;
           setRemoveLoading(true);
           try {
-            await deactivateMember(auth, selectedId, removeTarget.membershipId, reason);
-            toast.push(`${removeTarget.name} removed from ${selected?.name}`, "ok");
+            await deactivateMember(auth, selectedId, removedId, reason);
+            setDirectory((rows) => rows.filter((r) => r.membership_id !== removedId));
+            setDirTotal((n) => Math.max(0, n - 1));
+            setDirSeats((s) =>
+              s
+                ? {
+                    ...s,
+                    active_members: Math.max(0, s.active_members - 1),
+                    seats_used: Math.max(0, s.seats_used - 1),
+                  }
+                : s,
+            );
+            toast.push(`${removedName} removed from ${selected?.name}`, "ok");
             setRemoveTarget(null);
             await refreshOrgs();
             await refreshDirectory();

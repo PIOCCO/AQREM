@@ -39,6 +39,25 @@ def normalize_org_admin_singleton(db: Session, organization_id: UUID) -> None:
             extra.auth_version = int(extra.auth_version or 1) + 1
 
 
+def purge_legacy_inactive_memberships(db: Session, organization_id: UUID) -> int:
+    """Hard-delete inactive membership rows left by older soft-remove implementations."""
+    stale = (
+        db.query(OrganizationMembership)
+        .filter(
+            OrganizationMembership.organization_id == organization_id,
+            OrganizationMembership.is_active.is_(False),
+        )
+        .all()
+    )
+    removed = 0
+    for membership in stale:
+        db.delete(membership)
+        removed += 1
+    if removed:
+        normalize_org_admin_singleton(db, organization_id)
+    return removed
+
+
 def count_active_org_admins(db: Session, organization_id: UUID) -> int:
     return (
         db.query(OrganizationMembership)
