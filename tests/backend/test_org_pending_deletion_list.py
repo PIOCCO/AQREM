@@ -7,7 +7,9 @@ from fastapi.testclient import TestClient
 from app.core.jwt_audiences import AUD_PLATFORM
 from app.core.platform_roles import PlatformRole
 from app.core.security import create_access_token, hash_password
-from app.models.organization import Organization, User
+from app.core.roles import Role
+from app.models.organization import Organization, OrganizationMembership, User
+from app.core.security import hash_password as hp
 
 
 def _super(db_session) -> str:
@@ -63,6 +65,24 @@ def test_pending_deletion_filter_and_restore(client: TestClient, db_session):
     )
     assert again.status_code == 409, again.text
     assert again.json()["detail"]["code"] == "ALREADY_PENDING_DELETION"
+    member = User(
+        email="pending-purge-member@test.local",
+        full_name="Member",
+        hashed_password=hp("password"),
+        is_active=True,
+    )
+    db_session.add(member)
+    db_session.flush()
+    db_session.add(
+        OrganizationMembership(
+            organization_id=org_id,
+            user_id=member.id,
+            role=Role.ORG_ADMIN.value,
+            is_active=False,
+        )
+    )
+    db_session.commit()
+
     purged = client.post(
         f"/api/v1/admin/organizations/{org_id}/purge-now",
         headers={"Authorization": f"Bearer {token}"},
@@ -70,3 +90,9 @@ def test_pending_deletion_filter_and_restore(client: TestClient, db_session):
     )
     assert purged.status_code == 204, purged.text
     assert db_session.get(Organization, org_id) is None
+    assert (
+        db_session.query(OrganizationMembership)
+        .filter(OrganizationMembership.organization_id == org_id)
+        .count()
+        == 0
+    )

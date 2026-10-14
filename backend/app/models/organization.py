@@ -32,7 +32,11 @@ class Organization(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     purge_scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    memberships: Mapped[list["OrganizationMembership"]] = relationship(back_populates="organization")
+    memberships: Mapped[list["OrganizationMembership"]] = relationship(
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class User(Base):

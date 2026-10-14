@@ -188,6 +188,20 @@ def purge_organization_tenant_data(db: Session, organization_id: UUID) -> None:
     db.flush()
 
 
+def _hard_delete_organization_record(db: Session, org: Organization) -> None:
+    """Remove control-plane FK rows then delete the organization.
+
+    SQLAlchemy otherwise NULLs membership.organization_id on delete, which violates NOT NULL
+    even when the database FK is ON DELETE CASCADE.
+    """
+    org_id = org.id
+    db.execute(delete(OrganizationMembership).where(OrganizationMembership.organization_id == org_id))
+    db.execute(delete(UserInvitation).where(UserInvitation.organization_id == org_id))
+    db.execute(delete(EmployeeJoinLink).where(EmployeeJoinLink.organization_id == org_id))
+    db.execute(delete(EmployeeJoinPending).where(EmployeeJoinPending.organization_id == org_id))
+    db.delete(org)
+
+
 def purge_due_organizations(db: Session) -> int:
     """Hard-delete organizations whose retention window has elapsed."""
     now = _utcnow()
@@ -203,7 +217,7 @@ def purge_due_organizations(db: Session) -> int:
     count = 0
     for org in due:
         purge_organization_tenant_data(db, org.id)
-        db.delete(org)
+        _hard_delete_organization_record(db, org)
         count += 1
     return count
 
@@ -262,7 +276,7 @@ def purge_organization_now(
         resource_id=str(org_id),
         metadata={"organization_id": str(org_id), "organization_name": org.name, "source": "platform_control_plane"},
     )
-    db.delete(org)
+    _hard_delete_organization_record(db, org)
 
 
 def run_scheduled_org_purges(db: Session) -> int:
