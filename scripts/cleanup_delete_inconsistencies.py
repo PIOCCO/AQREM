@@ -101,7 +101,7 @@ def run_cleanup(db: Session, *, apply: bool, schedule_names: list[str]) -> list[
     for org in orgs:
         active_emails = {
             u.email.strip().lower()
-            for (u,) in db.query(User)
+            for u in db.query(User)
             .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
             .filter(
                 OrganizationMembership.organization_id == org.id,
