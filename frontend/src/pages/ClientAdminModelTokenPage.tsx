@@ -29,7 +29,7 @@ export default function ClientAdminModelTokenPage() {
       const next = await saveModelToken(session, tokenInput);
       setInfo(next);
       setTokenInput("");
-      setSuccess("Token saved to your Key Vault. It will not be shown again.");
+      setSuccess("Token saved and connection test succeeded. It will not be shown again.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -56,8 +56,8 @@ export default function ClientAdminModelTokenPage() {
     <div className="max-w-2xl mx-auto p-6 lg:p-10">
       <h1 className="text-2xl font-semibold tracking-tight">Model token</h1>
       <p className="text-sm text-chat-muted mt-2">
-        Enter your Azure OpenAI key once. It is stored in your organization&apos;s Key Vault, not in the platform
-        database.
+        Enter your OpenAI API key once. It is stored in your organization&apos;s Key Vault, not in the platform
+        database. Saving runs a connection test; setup stays incomplete until that test succeeds.
       </p>
 
       {info?.expiry_warning_days != null && info.expiry_warning_days <= 30 ? (

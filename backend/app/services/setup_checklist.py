@@ -13,21 +13,36 @@ from app.models.evidence import EvidenceItem
 from app.models.invitation import UserInvitation
 from app.models.organization import Organization
 from app.models.source import Source, SourceSyncJob
+from app.models.tenant_data_store import TenantDataStoreConfig
 from app.services.seat_usage import get_seat_usage
+from app.tenant_store.resolver import CUSTOMER_POSTGRES, MANAGED_COLOCATED, ensure_managed_config
 
 
 def _step(status: str, *, title: str, detail: str, step_id: str) -> dict:
     return {"id": step_id, "title": title, "status": status, "detail": detail}
 
 
-def build_setup_checklist(db: Session, *, organization_id: UUID) -> dict:
+def build_setup_checklist(
+    db: Session,
+    *,
+    organization_id: UUID,
+    control_db: Session | None = None,
+) -> dict:
     settings = get_settings()
-    org = db.get(Organization, organization_id)
+    ctrl = control_db or db
+    org = ctrl.get(Organization, organization_id)
     storage_ok = bool(settings.azure_storage_connection_string or settings.local_upload_dir)
     env_ready = bool(org and org.is_active and storage_ok)
 
-    cred = db.query(ClientCredentialMetadata).filter(ClientCredentialMetadata.organization_id == organization_id).first()
-    token_connected = cred is not None and cred.status in {"connected", "expiring_soon"}
+    cred = ctrl.query(ClientCredentialMetadata).filter(ClientCredentialMetadata.organization_id == organization_id).first()
+    token_connected = (
+        cred is not None
+        and cred.status in {"connected", "expiring_soon"}
+        and cred.last_test_status == "success"
+    )
+
+    store_cfg = ensure_managed_config(ctrl, organization_id)
+    postgres_ok = _postgres_storage_ready(store_cfg)
 
     doc_total = db.query(ClientDocument).filter(ClientDocument.organization_id == organization_id).count()
     indexed_docs = (
@@ -57,7 +72,7 @@ def build_setup_checklist(db: Session, *, organization_id: UUID) -> dict:
 
     usage = get_seat_usage(db, org) if org else None
     pending_invites = (
-        db.query(UserInvitation)
+        ctrl.query(UserInvitation)
         .filter(UserInvitation.organization_id == organization_id, UserInvitation.used_at.is_(None))
         .count()
         if org
@@ -80,10 +95,16 @@ def build_setup_checklist(db: Session, *, organization_id: UUID) -> dict:
         _step(
             "complete" if token_connected else "pending",
             step_id="model_token",
-            title="Model token connected",
-            detail="Model API token stored in your Key Vault."
+            title="OpenAI API token connected",
+            detail="OpenAI API token saved and connection test succeeded."
             if token_connected
-            else "Add your Azure OpenAI key — it is never stored in the platform database.",
+            else _model_token_detail(cred),
+        ),
+        _step(
+            "complete" if postgres_ok else "pending",
+            step_id="postgres_database",
+            title="PostgreSQL database configured",
+            detail=_postgres_detail(store_cfg, postgres_ok),
         ),
         _step(
             documents_status,
@@ -120,4 +141,44 @@ def build_setup_checklist(db: Session, *, organization_id: UUID) -> dict:
         "employee_link_enabled": access_ok,
         "storage_configured": storage_ok,
         "model_token_status": cred.status if cred else "not_configured",
+        "postgres_database_status": _postgres_status_label(store_cfg, postgres_ok),
     }
+
+
+def _model_token_detail(cred: ClientCredentialMetadata | None) -> str:
+    if cred is None or cred.status == "not_configured":
+        return "Add your OpenAI API key, save it to Key Vault, then run Test connection."
+    if cred.last_test_status == "failed":
+        return "Token is saved but the last connection test failed. Fix the key and test again."
+    if cred.last_test_status != "success":
+        return "Token is saved. Run Test connection to verify before continuing setup."
+    return "Add your OpenAI API key — it is never stored in the platform database."
+
+
+def _postgres_storage_ready(cfg: TenantDataStoreConfig) -> bool:
+    if cfg.paused or cfg.status != "active":
+        return False
+    if cfg.storage_mode == MANAGED_COLOCATED:
+        return True
+    if cfg.storage_mode == CUSTOMER_POSTGRES:
+        return cfg.last_health_status == "healthy" and bool(cfg.secret_reference and cfg.host and cfg.database_name)
+    return False
+
+
+def _postgres_detail(cfg: TenantDataStoreConfig, ok: bool) -> str:
+    if ok and cfg.storage_mode == MANAGED_COLOCATED:
+        return "Using AQREM-managed PostgreSQL for your tenant data."
+    if ok and cfg.storage_mode == CUSTOMER_POSTGRES:
+        host = cfg.host or "your database"
+        return f"Connected to {host} (validated)."
+    if cfg.storage_mode == CUSTOMER_POSTGRES and cfg.last_health_status == "failed":
+        return "Your PostgreSQL connection failed validation. Review Settings and run preflight again."
+    return "Choose AQREM-managed PostgreSQL or connect your own database in Settings."
+
+
+def _postgres_status_label(cfg: TenantDataStoreConfig, ok: bool) -> str:
+    if not ok:
+        return "not_configured"
+    if cfg.storage_mode == MANAGED_COLOCATED:
+        return "managed"
+    return "customer_connected"

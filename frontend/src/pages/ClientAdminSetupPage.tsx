@@ -22,6 +22,7 @@ function StepIcon({ status }: { status: string }) {
 
 const STEP_LINKS: Record<string, { to: string; label: string }> = {
   model_token: { to: "/org-admin/model-token", label: "Connect token" },
+  postgres_database: { to: "/org-admin/data-storage", label: "Configure database" },
   documents: { to: "/org-admin/documents", label: "Upload documents" },
   access: { to: "/org-admin/users", label: "Set up access" },
   employee_link: { to: "/org-admin/users", label: "Configure access first" },
@@ -135,8 +136,17 @@ export default function ClientAdminSetupPage() {
           <div className="admin-card p-4">
             <h3 className="text-sm font-medium">Model token</h3>
             <p className="text-sm mt-1 capitalize">{checklist?.model_token_status?.replace(/_/g, " ")}</p>
-            <Link to="/admin/model-token" className="text-xs text-[var(--chat-brand-mark)] mt-2 inline-block">
+            <Link to="/org-admin/model-token" className="text-xs text-[var(--chat-brand-mark)] mt-2 inline-block">
               Manage token →
+            </Link>
+          </div>
+          <div className="admin-card p-4">
+            <h3 className="text-sm font-medium">PostgreSQL</h3>
+            <p className="text-sm mt-1 capitalize">
+              {checklist?.postgres_database_status?.replace(/_/g, " ") ?? "Not configured"}
+            </p>
+            <Link to="/org-admin/data-storage" className="text-xs text-[var(--chat-brand-mark)] mt-2 inline-block">
+              Data storage →
             </Link>
           </div>
           <div className="admin-card p-4">
