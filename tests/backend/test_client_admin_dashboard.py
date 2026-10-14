@@ -133,6 +133,21 @@ def test_upload_rejects_eicar(client: TestClient, db_session, monkeypatch, tmp_p
 
     get_settings.cache_clear()
     org, _, token = _seed_org_admin(db_session)
+    from datetime import UTC, datetime
+
+    from app.models.tenant_data_store import TenantDataStoreConfig
+    from app.tenant_store.resolver import MANAGED_COLOCATED
+
+    db_session.add(
+        TenantDataStoreConfig(
+            organization_id=org.id,
+            storage_mode=MANAGED_COLOCATED,
+            connection_method="managed",
+            status="active",
+            setup_validated_at=datetime.now(UTC),
+        )
+    )
+    db_session.commit()
     eicar = b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
     res = client.post(
         "/api/v1/org-admin/documents/upload",

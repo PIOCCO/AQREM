@@ -22,6 +22,8 @@ function visibilityLabel(mode: string) {
 
 function statusLabel(status: string) {
   switch (status) {
+    case "queued":
+      return "Queued";
     case "uploading":
       return "Uploading";
     case "indexing":
@@ -59,18 +61,39 @@ export default function ClientAdminDocumentsPage() {
   const [uploading, setUploading] = useState(false);
   const [visibilityMode, setVisibilityMode] = useState("admins_only");
 
-  const load = useCallback(() => {
-    if (!session) return;
-    setLoading(true);
-    fetchDocuments(session, page, 10)
-      .then(setData)
-      .catch((e) => setError(e instanceof Error ? e.message : "Load failed"))
-      .finally(() => setLoading(false));
-  }, [session, page]);
+  const load = useCallback(
+    (opts?: { silent?: boolean }) => {
+      if (!session) return Promise.resolve();
+      if (!opts?.silent) setLoading(true);
+      return fetchDocuments(session, page, 10)
+        .then((next) => {
+          setData(next);
+          setError(null);
+        })
+        .catch((e) => {
+          if (!opts?.silent) {
+            setError(e instanceof Error ? e.message : "Load failed");
+          }
+        })
+        .finally(() => {
+          if (!opts?.silent) setLoading(false);
+        });
+    },
+    [session, page],
+  );
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
+
+  useEffect(() => {
+    const indexing = data?.counts?.indexing ?? 0;
+    if (!session || indexing <= 0) return;
+    const id = window.setInterval(() => {
+      void load({ silent: true });
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, [session, data?.counts?.indexing, load]);
 
   async function onFiles(files: FileList | null) {
     if (!session || !files?.length) return;
@@ -78,9 +101,16 @@ export default function ClientAdminDocumentsPage() {
     setUploading(true);
     try {
       await uploadDocuments(session, files, visibilityMode);
-      load();
+      await load({ silent: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed");
+      const msg = e instanceof Error ? e.message : "Upload failed";
+      if (msg === "Failed to fetch") {
+        setError(
+          "Upload failed (network or CORS). Confirm the API is reachable, set CORS_ALLOWED_ORIGINS to your frontend URL (e.g. http://100.80.43.124:5173), and check file storage (LOCAL_UPLOAD_DIR) is writable.",
+        );
+      } else {
+        setError(msg);
+      }
     } finally {
       setUploading(false);
     }
@@ -202,7 +232,7 @@ export default function ClientAdminDocumentsPage() {
                       <button
                         type="button"
                         className="text-sm text-[var(--chat-brand-mark)]"
-                        onClick={() => session && retryDocument(session, row.id).then(load)}
+                        onClick={() => session && retryDocument(session, row.id).then(() => load())}
                       >
                         Retry
                       </button>
@@ -212,7 +242,9 @@ export default function ClientAdminDocumentsPage() {
                       className="text-sm text-red-700"
                       onClick={() => {
                         if (!session || !window.confirm(`Remove ${row.file_name}?`)) return;
-                        removeDocument(session, row.id).then(load).catch((e) => setError(String(e)));
+                        removeDocument(session, row.id)
+                          .then(() => load())
+                          .catch((e) => setError(String(e)));
                       }}
                     >
                       Remove

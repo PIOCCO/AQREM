@@ -75,6 +75,8 @@ export async function fetchDocuments(session: AuthSession, page = 1, pageSize = 
   return res.json();
 }
 
+const UPLOAD_TIMEOUT_MS = 120_000;
+
 export async function uploadDocuments(
   session: AuthSession,
   files: FileList | File[],
@@ -87,13 +89,25 @@ export async function uploadDocuments(
   if (visibilityGroupIds?.length) {
     form.append("visibility_group_ids", visibilityGroupIds.join(","));
   }
-  const res = await fetch(apiUrl(`/api/v1/org-admin/documents/upload`), {
-    method: "POST",
-    headers: { Authorization: `Bearer ${session.token}`, "X-Organization-Id": session.organizationId! },
-    body: form,
-  });
-  if (!res.ok) throw new Error(await readApiError(res, "Upload failed"));
-  return res.json();
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+  try {
+    const res = await fetch(apiUrl(`/api/v1/org-admin/documents/upload`), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.token}`, "X-Organization-Id": session.organizationId! },
+      body: form,
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(await readApiError(res, "Upload failed"));
+    return res.json();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("Upload timed out after 2 minutes. Try a smaller file or check API and storage health.");
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 export async function removeDocument(session: AuthSession, documentId: string) {

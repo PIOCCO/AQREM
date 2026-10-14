@@ -199,8 +199,6 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> list[str]:
-        if self.app_env == "development":
-            return ["*"]
         origins: list[str] = []
         for part in self.cors_allowed_origins.split(","):
             o = part.strip()
@@ -212,6 +210,10 @@ class Settings(BaseSettings):
                 origin = f"{parsed.scheme}://{parsed.netloc}"
                 if origin not in origins:
                     origins.append(origin)
+        if self.app_env == "development":
+            if not origins:
+                return ["*"]
+            return origins
         return origins
 
     @property

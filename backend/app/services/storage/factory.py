@@ -16,3 +16,7 @@ def get_blob_storage() -> BlobStorage:
             container=settings.azure_storage_container,
         )
     return LocalBlobStorage(settings.local_upload_dir)
+
+
+def clear_blob_storage_cache() -> None:
+    get_blob_storage.cache_clear()

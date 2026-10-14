@@ -87,6 +87,8 @@ def _require_org_admin_surface(request: Request, tenant: TenantContext = Depends
 def _sync_document_from_job(doc: ClientDocument, job: SourceSyncJob | None) -> None:
     if job is None:
         return
+    if job.status == SyncJobStatus.QUEUED.value and doc.status == "queued":
+        return
     if job.status == SyncJobStatus.RUNNING.value:
         doc.status = "indexing"
         doc.index_progress = min(95, doc.index_progress + 10 or 10)
@@ -210,7 +212,7 @@ def list_documents(
     counts = {
         "total": total,
         "indexed": org_docs.filter(ClientDocument.status == "indexed").count(),
-        "indexing": org_docs.filter(ClientDocument.status.in_(("uploading", "indexing"))).count(),
+        "indexing": org_docs.filter(ClientDocument.status.in_(("uploading", "indexing", "queued"))).count(),
         "failed": org_docs.filter(ClientDocument.status == "failed").count(),
         "needs_visibility_review": org_docs.filter(ClientDocument.acl_reviewed.is_(False)).count(),
     }
@@ -244,11 +246,28 @@ async def upload_documents(
     request: Request,
     tenant: TenantContext = Depends(_require_org_admin_surface),
     db: Session = Depends(get_tenant_db),
+    control_db: Session = Depends(get_db),
     files: list[UploadFile] = File(...),
     visibility_mode: str = Form(...),
     visibility_group_ids: str | None = Form(default=None),
 ) -> dict:
     assert_org_admin_action(tenant, action="write", resource_type="document", resource_org_id=tenant.organization_id)
+    from app.services.setup_checklist import tenant_database_setup_complete
+    from app.tenant_store.resolver import get_tenant_store_config
+
+    store_cfg = get_tenant_store_config(control_db, tenant.organization_id)
+    if not tenant_database_setup_complete(store_cfg):
+        raise org_admin_error(
+            code="DATABASE_NOT_CONFIGURED",
+            message="PostgreSQL is not configured yet. Open Data storage, validate your database, and click Save and activate before uploading documents.",
+            status_code=503,
+        )
+    from app.services.storage.health import StorageUnavailable, assert_upload_storage_ready
+
+    try:
+        assert_upload_storage_ready()
+    except StorageUnavailable as exc:
+        raise org_admin_error(code="STORAGE_UNAVAILABLE", message=exc.message, status_code=503) from exc
     ensure_default_access_groups(db, tenant.organization_id)
     if visibility_mode not in {VISIBILITY_ALL_STAFF, VISIBILITY_GROUPS, VISIBILITY_USERS, VISIBILITY_ADMINS_ONLY}:
         raise org_admin_error(code="VISIBILITY_REQUIRED", message="Choose who can see these files.", field="visibility_mode")
@@ -307,7 +326,14 @@ async def upload_documents(
                 field="file",
             )
         blob_path = f"{tenant.organization_id}/{source.id}/{safe_name}"
-        storage.upload_bytes(blob_path, data, upload.content_type or "application/octet-stream")
+        try:
+            storage.upload_bytes(blob_path, data, upload.content_type or "application/octet-stream")
+        except OSError as exc:
+            raise org_admin_error(
+                code="STORAGE_UNAVAILABLE",
+                message=f"Could not save the file to storage. Check LOCAL_UPLOAD_DIR or blob permissions. ({exc.strerror or exc})",
+                status_code=503,
+            ) from exc
         sensitive, _reason = detect_sensitive(file_name=safe_name, content_sample=data)
         effective_mode = visibility_mode
         if sensitive and visibility_mode == VISIBILITY_ALL_STAFF:
@@ -319,8 +345,8 @@ async def upload_documents(
             content_type=upload.content_type or "application/octet-stream",
             size_bytes=len(data),
             blob_path=blob_path,
-            status="uploading",
-            index_progress=5,
+            status="queued",
+            index_progress=0,
             malware_scan_status=scan_status,
             content_hash=content_hash,
             visibility_mode=effective_mode,
@@ -340,7 +366,6 @@ async def upload_documents(
         db.add(job)
         db.flush()
         doc.sync_job_id = job.id
-        doc.status = "indexing"
         created.append(str(doc.id))
         record_audit(
             db,
