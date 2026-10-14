@@ -41,6 +41,16 @@ PUBLIC_APP_URL=https://your-app.example
 
 For Azure Container Apps, store `BREVO_API_KEY` in secrets and map the rest as env vars.
 
+### Brevo “unrecognised IP address” (401)
+
+If `email_delivery_logs.error_message` mentions an **unrecognised IP**, Brevo’s **Authorized IPs** allowlist is blocking your API server (e.g. Tailscale exit, home ISP, or Azure outbound IP).
+
+1. Open [Brevo → Security → Authorized IPs](https://app.brevo.com/security/authorised_ips).
+2. Either **add the public IP** shown in the error (the IP Brevo sees when `aqrem-api` calls their API — often your home/Azelos WAN IP, not `100.x` Tailscale), **or** disable IP restriction for API access if your account policy allows it.
+3. Retry: `python ../scripts/send_test_email.py you@example.com` and check `email_delivery_logs.status` becomes `sent`.
+
+Until this is fixed, verification and invitation emails will stay **`failed`**; the AQREM app cannot override Brevo account security.
+
 4. Test:
 
 ```bash

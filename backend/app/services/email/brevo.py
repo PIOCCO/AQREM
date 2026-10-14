@@ -48,6 +48,22 @@ class BrevoProvider:
             return SendResult(ok=False, error_message=f"Brevo server error ({response.status_code})")
         if response.status_code >= 400:
             detail = response.text[:500] if response.text else response.reason_phrase
+            try:
+                body = response.json()
+                msg = str(body.get("message") or "")
+                if "unrecognised ip" in msg.lower() or "unrecognized ip" in msg.lower():
+                    return SendResult(
+                        ok=False,
+                        error_message=(
+                            "Brevo blocked this server IP. In Brevo → Security → Authorized IPs, "
+                            "add your API host public IP or disable IP restriction for the API key. "
+                            f"({msg[:200]})"
+                        ),
+                    )
+                if msg:
+                    detail = msg
+            except Exception:
+                pass
             return SendResult(ok=False, error_message=f"Brevo rejected send ({response.status_code}): {detail}")
 
         message_id = None
