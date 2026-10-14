@@ -29,23 +29,21 @@ def verification_expires_at() -> datetime:
     return datetime.now(timezone.utc) + VERIFICATION_TTL
 
 
-def assert_can_send_verification_email(db: Session, *, recipient: str, email_type: str) -> None:
+def assert_can_send_verification_email(
+    db: Session,
+    *,
+    recipient: str,
+    email_type: str,
+    last_sent_at: datetime | None = None,
+) -> None:
+    """Rate-limit verification sends. Only successful deliveries count toward hourly cap."""
     normalized = recipient.strip().lower()
     now = datetime.now(timezone.utc)
-    last = (
-        db.query(EmailDeliveryLog)
-        .filter(
-            EmailDeliveryLog.recipient == normalized,
-            EmailDeliveryLog.email_type == email_type,
-        )
-        .order_by(EmailDeliveryLog.created_at.desc())
-        .first()
-    )
-    if last is not None:
-        created = last.created_at
-        if created.tzinfo is None:
-            created = created.replace(tzinfo=timezone.utc)
-        if (now - created).total_seconds() < MIN_SECONDS_BETWEEN_SENDS:
+    if last_sent_at is not None:
+        sent = last_sent_at
+        if sent.tzinfo is None:
+            sent = sent.replace(tzinfo=timezone.utc)
+        if (now - sent).total_seconds() < MIN_SECONDS_BETWEEN_SENDS:
             raise ValueError("RATE_LIMIT_SEND")
     hour_ago = now - timedelta(hours=1)
     count = (
@@ -54,6 +52,7 @@ def assert_can_send_verification_email(db: Session, *, recipient: str, email_typ
         .filter(
             EmailDeliveryLog.recipient == normalized,
             EmailDeliveryLog.email_type == email_type,
+            EmailDeliveryLog.status == "sent",
             EmailDeliveryLog.created_at >= hour_ago,
         )
         .scalar()

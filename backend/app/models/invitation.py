@@ -28,6 +28,7 @@ class UserInvitation(Base):
     accept_verification_code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     accept_verification_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     accept_verification_failed_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_verification_code_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

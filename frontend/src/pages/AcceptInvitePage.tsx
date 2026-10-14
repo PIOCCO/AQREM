@@ -38,6 +38,7 @@ export default function AcceptInvitePage() {
   const [verificationCode, setVerificationCode] = useState("");
   const [codeSent, setCodeSent] = useState(false);
   const [sendingCode, setSendingCode] = useState(false);
+  const [resendCooldownSec, setResendCooldownSec] = useState(0);
 
   useEffect(() => {
     const session = loadSession();
@@ -76,6 +77,14 @@ export default function AcceptInvitePage() {
       });
   }, [token]);
 
+  useEffect(() => {
+    if (resendCooldownSec <= 0) return;
+    const t = window.setInterval(() => {
+      setResendCooldownSec((s) => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => window.clearInterval(t);
+  }, [resendCooldownSec]);
+
   const wrongAccount =
     preview &&
     signedInEmail &&
@@ -96,11 +105,16 @@ export default function AcceptInvitePage() {
     try {
       const res = await sendAcceptInvitationVerification({ token, email: preview.email });
       setCodeSent(true);
+      setResendCooldownSec(60);
       if (res.dev_verification_code) {
         setVerificationCode(res.dev_verification_code);
       }
-    } catch {
-      setError("Could not send a verification code. Check the email on the invitation.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not send a verification code.";
+      setError(msg);
+      if (/wait|429|too many/i.test(msg)) {
+        setResendCooldownSec(60);
+      }
     } finally {
       setSendingCode(false);
     }
@@ -194,10 +208,14 @@ export default function AcceptInvitePage() {
               <button
                 type="button"
                 className="aq-btn-secondary shrink-0"
-                disabled={sendingCode || !preview}
+                disabled={sendingCode || !preview || resendCooldownSec > 0}
                 onClick={() => void sendVerification()}
               >
-                {codeSent ? "Resend" : "Send code"}
+                {resendCooldownSec > 0
+                  ? `Wait ${resendCooldownSec}s`
+                  : codeSent
+                    ? "Resend code"
+                    : "Send code"}
               </button>
             </div>
           </div>

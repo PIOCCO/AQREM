@@ -180,7 +180,7 @@ export async function sendAcceptInvitationVerification(payload: { token: string;
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("Could not send verification code");
+  if (!res.ok) throw new Error(await readApiError(res, "Could not send verification code"));
   return res.json() as Promise<{ verification_required: boolean; dev_verification_code?: string | null }>;
 }
 

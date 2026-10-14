@@ -39,19 +39,14 @@ def test_generate_and_hash_code():
 
 
 def test_send_rate_limit(db_session: Session):
-    db_session.add(
-        EmailDeliveryLog(
-            email_type="admin_verification_code",
-            recipient="a@example.com",
-            subject="x",
-            status="sent",
-            provider="fake",
-            created_at=datetime.now(timezone.utc),
-        )
-    )
-    db_session.commit()
+    recent = datetime.now(timezone.utc) - timedelta(seconds=10)
     with pytest.raises(ValueError, match="RATE_LIMIT_SEND"):
-        assert_can_send_verification_email(db_session, recipient="a@example.com", email_type="admin_verification_code")
+        assert_can_send_verification_email(
+            db_session,
+            recipient="a@example.com",
+            email_type="admin_verification_code",
+            last_sent_at=recent,
+        )
 
 
 def test_brevo_provider_builds(monkeypatch):

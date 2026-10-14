@@ -78,6 +78,7 @@ _EMAIL_PATCHES = (
     "CREATE INDEX IF NOT EXISTS ix_email_delivery_logs_recipient ON email_delivery_logs (recipient)",
     "CREATE INDEX IF NOT EXISTS ix_email_delivery_logs_resource ON email_delivery_logs (resource_id)",
     "ALTER TABLE user_invitations ADD COLUMN IF NOT EXISTS accept_verification_failed_attempts INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE user_invitations ADD COLUMN IF NOT EXISTS last_verification_code_sent_at TIMESTAMPTZ",
     "ALTER TABLE employee_join_verifications ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ",
 )

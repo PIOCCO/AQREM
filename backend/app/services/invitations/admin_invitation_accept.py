@@ -39,7 +39,10 @@ def send_admin_accept_verification(
         raise ValueError("EMAIL_MISMATCH")
     try:
         assert_can_send_verification_email(
-            db, recipient=invitation.email, email_type="admin_verification_code"
+            db,
+            recipient=invitation.email,
+            email_type="admin_verification_code",
+            last_sent_at=getattr(invitation, "last_verification_code_sent_at", None),
         )
     except ValueError as exc:
         if str(exc).startswith("RATE_LIMIT"):
@@ -49,7 +52,8 @@ def send_admin_accept_verification(
     invitation.accept_verification_code_hash = hash_verification_code(code)
     invitation.accept_verification_expires_at = verification_expires_at()
     invitation.accept_verification_failed_attempts = 0
-    send_admin_accept_verification_email(
+    invitation.last_verification_code_sent_at = _utcnow()
+    queued = send_admin_accept_verification_email(
         db,
         to_email=invitation.email,
         organization_name=org.name,
@@ -68,7 +72,11 @@ def send_admin_accept_verification(
     )
     from app.core.config import get_settings
 
-    dev = code if get_settings().app_env != "production" and get_settings().resolved_email_provider == "console" else None
+    settings = get_settings()
+    dev = None
+    if settings.app_env != "production":
+        if settings.resolved_email_provider == "console" or not queued:
+            dev = code
     return invitation, org, dev
 
 

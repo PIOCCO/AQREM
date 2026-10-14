@@ -127,7 +127,7 @@ def accept_invite_preview(
 
 
 @router.post("/accept-invitation/send-verification", response_model=AcceptInvitationSendVerificationResponse)
-@limiter.limit("20/minute")
+@limiter.limit("30/minute")
 def accept_invite_send_verification(
     request: Request,
     payload: AcceptInvitationSendVerificationRequest,
@@ -146,7 +146,11 @@ def accept_invite_send_verification(
         if code == "RATE_LIMIT":
             raise HTTPException(
                 status_code=429,
-                detail={"message": "Please wait before requesting another code."},
+                detail={
+                    "message": "Please wait at least 60 seconds before requesting another code.",
+                    "retry_after_seconds": 60,
+                },
+                headers={"Retry-After": "60"},
             ) from exc
         raise HTTPException(status_code=404, detail={"message": "This invitation is not valid."}) from None
     db.commit()

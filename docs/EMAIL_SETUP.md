@@ -78,7 +78,9 @@ Table **`email_delivery_logs`**: type, recipient, status (`queued` / `sent` / `f
 - 6-digit codes, **SHA-256 hash** stored only
 - **10 minute** expiry, single use
 - **5** failed attempts then code invalidated
-- Send rate limit: **1 / 60s** and **5 / hour** per recipient (by log rows)
+- Send rate limit: **1 / 60s** per invitation (`last_verification_code_sent_at`) and **5 successful sends / hour** per recipient (Brevo `sent` rows only). Failed sends do not count toward the hourly cap.
+
+If you hit **429** while testing, wait 60 seconds or clear `user_invitations.last_verification_code_sent_at` for that invite in Postgres.
 
 ---
 
