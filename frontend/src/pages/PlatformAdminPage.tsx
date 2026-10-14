@@ -17,6 +17,7 @@ import { OrgInvitationsPanel } from "../components/platform-admin/OrgInvitations
 import {
   createAdminOrganization,
   deleteAdminOrganization,
+  purgeAdminOrganizationNow,
   restoreAdminOrganization,
   deactivateMember,
   fetchAdminContext,
@@ -134,6 +135,7 @@ function PlatformAdminInner({
   );
   const [staffInviteLoading, setStaffInviteLoading] = useState(false);
   const [deleteOrgOpen, setDeleteOrgOpen] = useState(false);
+  const [deleteOrgIntent, setDeleteOrgIntent] = useState<"schedule" | "purge">("schedule");
   const [deleteOrgLoading, setDeleteOrgLoading] = useState(false);
   const [deleteOrgError, setDeleteOrgError] = useState<string | null>(null);
   const [inviteSetup, setInviteSetup] = useState<Awaited<ReturnType<typeof fetchInvitationsSetup>> | null>(null);
@@ -577,19 +579,39 @@ function PlatformAdminInner({
                       suspended={o.license_status === "suspended" || o.license_status === "expired"}
                     />
                   </button>
-                    <button
-                      type="button"
-                      title="Delete organization"
-                      aria-label={`Delete ${o.name}`}
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 p-1.5 rounded border border-red-200 text-red-700 bg-chat-surface hover:bg-red-50 text-xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedId(o.id);
-                        setDeleteOrgOpen(true);
-                      }}
-                    >
-                      Delete
-                    </button>
+                    {o.deletion_status === "pending_deletion" ? (
+                      <button
+                        type="button"
+                        title="Purge organization now"
+                        aria-label={`Purge ${o.name} now`}
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 p-1.5 rounded border border-red-200 text-red-700 bg-chat-surface hover:bg-red-50 text-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteOrgError(null);
+                          setSelectedId(o.id);
+                          setDeleteOrgIntent("purge");
+                          setDeleteOrgOpen(true);
+                        }}
+                      >
+                        Purge
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        title="Delete organization"
+                        aria-label={`Delete ${o.name}`}
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 p-1.5 rounded border border-red-200 text-red-700 bg-chat-surface hover:bg-red-50 text-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteOrgError(null);
+                          setSelectedId(o.id);
+                          setDeleteOrgIntent("schedule");
+                          setDeleteOrgOpen(true);
+                        }}
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}
@@ -971,6 +993,17 @@ function PlatformAdminInner({
                           >
                             Restore organization
                           </button>
+                          <button
+                            type="button"
+                            className="aq-btn-danger text-xs"
+                            onClick={() => {
+                              setDeleteOrgError(null);
+                              setDeleteOrgIntent("purge");
+                              setDeleteOrgOpen(true);
+                            }}
+                          >
+                            Purge now
+                          </button>
                         </div>
                       </>
                     ) : (
@@ -984,6 +1017,7 @@ function PlatformAdminInner({
                           className="aq-btn-danger text-xs"
                           onClick={() => {
                             setDeleteOrgError(null);
+                            setDeleteOrgIntent("schedule");
                             setDeleteOrgOpen(true);
                           }}
                         >
@@ -1003,6 +1037,7 @@ function PlatformAdminInner({
       <DeleteOrganizationDialog
         open={deleteOrgOpen && Boolean(selected)}
         org={selected ?? null}
+        intent={deleteOrgIntent}
         loading={deleteOrgLoading}
         errorMessage={deleteOrgError}
         onCancel={() => {
@@ -1015,13 +1050,20 @@ function PlatformAdminInner({
           setDeleteOrgError(null);
           try {
             const deletedId = selectedId;
-            const result = await deleteAdminOrganization(auth, deletedId, confirmName);
-            setOrgs((prev) => prev.filter((o) => o.id !== deletedId));
-            setSelectedId((id) => (id === deletedId ? "" : id));
-            toast.push(
-              `${selected.name} scheduled for deletion (purge in ${result.retention_days} days)`,
-              "ok",
-            );
+            if (deleteOrgIntent === "purge") {
+              await purgeAdminOrganizationNow(auth, deletedId, confirmName);
+              setOrgs((prev) => prev.filter((o) => o.id !== deletedId));
+              setSelectedId((id) => (id === deletedId ? "" : id));
+              toast.push(`${selected.name} permanently purged`, "ok");
+            } else {
+              const result = await deleteAdminOrganization(auth, deletedId, confirmName);
+              setOrgs((prev) => prev.filter((o) => o.id !== deletedId));
+              setSelectedId((id) => (id === deletedId ? "" : id));
+              toast.push(
+                `${selected.name} scheduled for deletion (purge in ${result.retention_days} days)`,
+                "ok",
+              );
+            }
             setDeleteOrgOpen(false);
             await refreshOrgs();
           } catch (err) {

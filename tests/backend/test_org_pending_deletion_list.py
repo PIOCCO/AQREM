@@ -50,6 +50,19 @@ def test_pending_deletion_filter_and_restore(client: TestClient, db_session):
     ).json()
     assert any(o["id"] == org_id for o in pending["items"])
     assert pending["items"][0]["deletion_status"] == "pending_deletion"
+    detail = client.get(
+        f"/api/v1/admin/organizations/{org_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["deletion_status"] == "pending_deletion"
+    again = client.post(
+        f"/api/v1/admin/organizations/{org_id}/delete",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmName": "Pending Filter Org"},
+    )
+    assert again.status_code == 409, again.text
+    assert again.json()["detail"]["code"] == "ALREADY_PENDING_DELETION"
     restored = client.post(
         f"/api/v1/admin/organizations/{org_id}/restore",
         headers={"Authorization": f"Bearer {token}"},

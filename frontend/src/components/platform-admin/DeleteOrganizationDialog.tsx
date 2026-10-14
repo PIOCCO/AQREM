@@ -7,6 +7,8 @@ type Props = {
   org: AdminOrganization | null;
   loading: boolean;
   errorMessage?: string | null;
+  /** schedule = 30-day soft delete; purge = immediate permanent removal (pending-deletion queue). */
+  intent?: "schedule" | "purge";
   onCancel: () => void;
   onConfirm: (confirmName: string) => Promise<void>;
 };
@@ -15,7 +17,15 @@ function shortOrgId(id: string) {
   return id.length >= 8 ? id.slice(0, 8) : id;
 }
 
-export function DeleteOrganizationDialog({ open, org, loading, errorMessage, onCancel, onConfirm }: Props) {
+export function DeleteOrganizationDialog({
+  open,
+  org,
+  loading,
+  errorMessage,
+  intent = "schedule",
+  onCancel,
+  onConfirm,
+}: Props) {
   const [typed, setTyped] = useState("");
 
   if (!open || !org) return null;
@@ -37,21 +47,41 @@ export function DeleteOrganizationDialog({ open, org, loading, errorMessage, onC
           void onSubmit(e);
         }}
       >
-        <h3 className="text-lg font-semibold text-red-700">Delete organization</h3>
+        <h3 className="text-lg font-semibold text-red-700">
+          {intent === "purge" ? "Purge organization now" : "Delete organization"}
+        </h3>
         <p className="text-sm">
-          You are about to schedule deletion of <strong>{org.name}</strong> (
-          <span className="font-mono">{shortOrgId(org.id)}</span>, {org.environment} ·{" "}
-          {licenseStatusLabel(org.license_status)}).
+          {intent === "purge" ? (
+            <>
+              You are about to <strong>permanently purge</strong> <strong>{org.name}</strong> (
+              <span className="font-mono">{shortOrgId(org.id)}</span>, {org.environment} ·{" "}
+              {licenseStatusLabel(org.license_status)}), which is already scheduled for deletion.
+            </>
+          ) : (
+            <>
+              You are about to schedule deletion of <strong>{org.name}</strong> (
+              <span className="font-mono">{shortOrgId(org.id)}</span>, {org.environment} ·{" "}
+              {licenseStatusLabel(org.license_status)}).
+            </>
+          )}
         </p>
         <div className="text-xs text-chat-muted space-y-1 border border-chat-border rounded-lg p-3">
-          <p className="font-medium text-chat-fg">This will remove access and schedule purge of:</p>
+          <p className="font-medium text-chat-fg">
+            {intent === "purge"
+              ? "This immediately and permanently removes:"
+              : "This will remove access and schedule purge of:"}
+          </p>
           <ul className="list-disc pl-4 space-y-0.5">
             <li>Members, invitations, and employee join links</li>
             <li>License and seat assignments</li>
             <li>Documents, questionnaires, and answer library entries</li>
             <li>Vector / search index data and uploaded files</li>
           </ul>
-          <p className="pt-2">Data is soft-deleted first, then permanently purged after 30 days.</p>
+          <p className="pt-2">
+            {intent === "purge"
+              ? "This cannot be undone. Use Restore on the overview tab to cancel scheduled deletion instead."
+              : "Data is soft-deleted first, then permanently purged after 30 days."}
+          </p>
         </div>
         <label className="block text-sm">
           <span className="text-chat-muted">Type the organization name exactly to confirm</span>
@@ -69,7 +99,13 @@ export function DeleteOrganizationDialog({ open, org, loading, errorMessage, onC
             Cancel
           </button>
           <button type="submit" className="aq-btn-danger text-sm" disabled={!matches || loading}>
-            {loading ? "Deleting…" : "Delete organization"}
+            {loading
+              ? intent === "purge"
+                ? "Purging…"
+                : "Deleting…"
+              : intent === "purge"
+                ? "Purge now"
+                : "Delete organization"}
           </button>
         </div>
       </form>

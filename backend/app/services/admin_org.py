@@ -95,7 +95,7 @@ def organizations_base_query(db: Session) -> Query[Organization]:
 
 
 def organizations_excluding_pending_deletion(db: Session) -> Query[Organization]:
-    """Default scope for operational org lists, seat usage, and get-by-id."""
+    """Default scope for operational org lists and seat usage (excludes soft-deleted orgs)."""
     return organizations_base_query(db).filter(Organization.deleted_at.is_(None))
 
 
@@ -111,7 +111,8 @@ def filter_orgs_for_admin(orgs: list[Organization]) -> list[Organization]:
 
 
 def get_admin_visible_org(db: Session, organization_id: UUID) -> Organization | None:
-    org = organizations_excluding_pending_deletion(db).filter(Organization.id == organization_id).first()
+    """Resolve org by id for admin detail routes, including pending-deletion queue."""
+    org = organizations_base_query(db).filter(Organization.id == organization_id).first()
     if org is None:
         return None
     if org.license_status == LicenseStatus.TEST.value and not licensing_test_mode_effective():
