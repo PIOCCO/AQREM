@@ -12,6 +12,8 @@ from app.core.roles import Role
 from app.models.invitation import UserInvitation
 from app.models.organization import Organization, OrganizationMembership, User
 from app.services.email.invitations import send_admin_invitation_email
+from starlette.requests import Request
+
 from app.services.invitations.invite_urls import build_invite_url, invite_path
 from app.services.invitations.token_vault import seal_invitation_token, unseal_invitation_token
 from app.services.invitations.tokens import generate_opaque_token, hash_token
@@ -29,8 +31,8 @@ def invitation_setup_path(raw_token: str) -> str:
     return invite_path("admin", raw_token)
 
 
-def invitation_setup_url(raw_token: str) -> str:
-    return build_invite_url("admin", raw_token)
+def invitation_setup_url(raw_token: str, *, request: Request | None = None) -> str:
+    return build_invite_url("admin", raw_token, request=request)
 
 
 def assert_can_create_org_admin_invite(db: Session, *, organization_id: UUID) -> None:

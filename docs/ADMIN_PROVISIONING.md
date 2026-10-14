@@ -17,13 +17,17 @@ Sign in at `/login` → redirected to **`/super-admin`**.
 
 ## Public app URL (invitation links)
 
-Set the browser-facing base URL (never derived from the HTTP Host header):
+Set the browser-facing base URL (protocol, host, and port — no trailing slash):
 
 ```env
-PUBLIC_APP_URL=http://100.80.43.124:5173
+PUBLIC_BASE_URL=http://100.80.43.124:5173
 ```
 
-Production (Azure Container Apps or custom domain): set the same variable in container app settings / Key Vault reference, e.g. `https://your-app.azurecontainerapps.io`.
+(`PUBLIC_APP_URL` / `APP_PUBLIC_BASE_URL` are aliases.)
+
+Production (Azure Container Apps or custom domain): set the same variable in container app **Configuration → Environment variables** (or Key Vault reference), e.g. `https://your-app.azurecontainerapps.io`. Ensure the ingress forwards `Host`, `X-Forwarded-Host`, and `X-Forwarded-Proto` so invitation APIs can fall back when the env var is missing.
+
+If `PUBLIC_BASE_URL` is unset, the API logs a warning and derives the base URL from those headers on each request (never returns a bare `/invite/...` path in JSON responses).
 
 Optional frontend fallback: `VITE_PUBLIC_APP_URL` (same value) when displaying URLs before an API round-trip.
 

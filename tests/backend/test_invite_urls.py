@@ -1,14 +1,17 @@
-"""Public invitation URL builder (PUBLIC_APP_URL)."""
+"""Public invitation URL builder (PUBLIC_BASE_URL / PUBLIC_APP_URL)."""
 
 from urllib.parse import unquote
 
 import pytest
+from starlette.requests import Request
 
 from app.services.invitations.invite_urls import (
     absolute_from_invite_path,
+    base_url_from_request,
     build_invite_url,
     invite_path,
     public_app_base_url,
+    resolve_public_base_url,
 )
 
 
@@ -39,3 +42,30 @@ def test_token_roundtrip_in_path():
     raw = "73ec282b-f4e1-46ab-bfeb-49ef60265409"
     path = invite_path("admin", raw)
     assert unquote(path.split("/invite/admin/", 1)[1]) == raw
+
+
+def test_request_fallback_when_env_unset(monkeypatch):
+    monkeypatch.delenv("PUBLIC_APP_URL", raising=False)
+    monkeypatch.delenv("PUBLIC_BASE_URL", raising=False)
+    monkeypatch.delenv("APP_PUBLIC_BASE_URL", raising=False)
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    assert public_app_base_url() == ""
+
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/",
+        "headers": [(b"host", b"dev.example.com:5173"), (b"x-forwarded-proto", b"https")],
+        "query_string": b"",
+        "client": ("127.0.0.1", 12345),
+        "server": ("dev.example.com", 5173),
+        "scheme": "http",
+    }
+    request = Request(scope)
+    assert base_url_from_request(request) == "https://dev.example.com:5173"
+    assert resolve_public_base_url(request=request) == "https://dev.example.com:5173"
+    url = build_invite_url("member", "abc", request=request)
+    assert url == "https://dev.example.com:5173/invite/member/abc"
+    get_settings.cache_clear()

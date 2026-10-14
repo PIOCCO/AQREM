@@ -72,7 +72,9 @@ export default function ClientAdminUsersPage() {
       const res = await inviteMember(session, payload);
       const url = pickInviteUrl(res);
       if (!url) {
-        setError("Invitation was created but no full URL was returned. Configure PUBLIC_APP_URL on the API server.");
+        setError(
+          "Invitation was created but no full URL was returned. Set PUBLIC_BASE_URL (PUBLIC_APP_URL) on the API server.",
+        );
         return;
       }
       setSuccessUrl(url);

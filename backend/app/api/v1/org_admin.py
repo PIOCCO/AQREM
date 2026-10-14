@@ -624,11 +624,11 @@ def invite_member(
 
     path = invite_path("member", raw_token)
     try:
-        setup_url = build_invite_url("member", raw_token)
+        setup_url = build_invite_url("member", raw_token, request=request)
     except ValueError as exc:
         raise org_admin_error(
             code="PUBLIC_URL_NOT_CONFIGURED",
-            message="Invitation was created but PUBLIC_APP_URL is not configured on the server. Set PUBLIC_APP_URL (APP_PUBLIC_BASE_URL) and resend the invitation.",
+            message="Invitation was created but the public base URL is not configured. Set PUBLIC_BASE_URL (PUBLIC_APP_URL) on the server or ensure the reverse proxy forwards Host and X-Forwarded-* headers.",
             status_code=503,
         ) from exc
     return {

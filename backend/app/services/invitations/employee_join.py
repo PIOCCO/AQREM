@@ -20,6 +20,8 @@ from app.models.employee_join import (
 from app.models.organization import Organization, OrganizationMembership, User
 from app.services.email.invitations import send_join_verification_email, send_employee_welcome_email
 from app.services.invitations.admin_invitation import assert_email_available_for_org
+from starlette.requests import Request
+
 from app.services.invitations.invite_urls import build_invite_url, invite_path
 from app.services.invitations.token_vault import seal_invitation_token, unseal_invitation_token
 from app.services.invitations.tokens import generate_opaque_token, hash_token, tokens_equal
@@ -48,8 +50,8 @@ def join_setup_path(raw_token: str) -> str:
     return invite_path("employee", raw_token)
 
 
-def join_setup_url(raw_token: str) -> str:
-    return build_invite_url("employee", raw_token)
+def join_setup_url(raw_token: str, *, request: Request | None = None) -> str:
+    return build_invite_url("employee", raw_token, request=request)
 
 
 def _utcnow() -> datetime:
