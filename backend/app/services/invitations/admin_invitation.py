@@ -273,6 +273,8 @@ def preview_admin_invitation(db: Session, *, token: str) -> tuple[UserInvitation
     org = db.get(Organization, invitation.organization_id)
     if org is None or not org.is_active:
         raise ValueError("Invalid invitation")
+    if getattr(org, "deleted_at", None) is not None:
+        raise ValueError("Invalid invitation")
     return invitation, org
 
 

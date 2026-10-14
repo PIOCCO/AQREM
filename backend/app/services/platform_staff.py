@@ -77,6 +77,37 @@ def set_platform_role(
     )
 
 
+def remove_platform_staff(
+    db: Session,
+    *,
+    actor_id: UUID,
+    target: User,
+    reason: str,
+) -> None:
+    actor = db.get(User, actor_id)
+    if actor is None or resolve_platform_role(actor) != PlatformRole.SUPER_ADMIN:
+        raise PlatformStaffError("INSUFFICIENT_AUTHORITY")
+    target_role = resolve_platform_role(target)
+    if target_role is None:
+        raise PlatformStaffError("NOT_PLATFORM_STAFF")
+    if target_role == PlatformRole.SUPER_ADMIN:
+        if count_active_super_admins(db) <= 1:
+            raise PlatformStaffError("LAST_SUPER_ADMIN")
+    target.is_active = False
+    target.platform_role = None
+    target.is_platform_admin = False
+    bump_platform_auth_version(db, target)
+    record_audit(
+        db,
+        organization_id=None,
+        user_id=actor_id,
+        action="platform_staff_removed",
+        resource_type="platform_user",
+        resource_id=str(target.id),
+        metadata={"target_email": target.email, "reason": reason, "source": "platform_control_plane"},
+    )
+
+
 def invite_platform_staff(
     db: Session,
     *,

@@ -102,9 +102,21 @@ def test_delete_accepted_invite_keeps_membership(client: TestClient, db_session)
     from urllib.parse import unquote
 
     raw = unquote(created.json()["invitation_setup_path"].split("/invite/admin/", 1)[1])
+    send_code = client.post(
+        "/api/v1/auth/accept-invitation/send-verification",
+        json={"token": raw, "email": "done@corp.example"},
+    )
+    assert send_code.status_code == 200
+    code = send_code.json()["dev_verification_code"]
     accept = client.post(
         "/api/v1/auth/accept-invitation",
-        json={"token": raw, "password": "securepass1", "full_name": "Done Admin"},
+        json={
+            "token": raw,
+            "email": "done@corp.example",
+            "verification_code": code,
+            "password": "securepass1",
+            "full_name": "Done Admin",
+        },
     )
     assert accept.status_code == 200
     deleted = client.delete(

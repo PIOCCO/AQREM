@@ -37,6 +37,8 @@ def org_allows_sign_in(org: Organization, settings: Settings | None = None) -> t
     settings = settings or get_settings()
     if not org.is_active:
         return False, "Organization is deactivated"
+    if getattr(org, "deleted_at", None) is not None:
+        return False, "Organization has been deleted"
 
     status_value = org.license_status or LicenseStatus.ACTIVE.value
     if status_value in {LicenseStatus.SUSPENDED.value, LicenseStatus.EXPIRED.value}:

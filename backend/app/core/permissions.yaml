@@ -4,6 +4,7 @@ platform_roles:
     - org:read
     - org:create
     - org:update
+    - org:delete
     - license:update
     - seats:update
     - org_admin:invite
@@ -53,6 +54,7 @@ platform_endpoints:
   GET /api/v1/admin/organizations/{organization_id}: org:read
   POST /api/v1/admin/organizations: org:create
   PATCH /api/v1/admin/organizations/{organization_id}: org:update
+  DELETE /api/v1/admin/organizations/{organization_id}: org:delete
   GET /api/v1/admin/organizations/{organization_id}/directory: org:read
   GET /api/v1/admin/organizations/{organization_id}/invitations: invitation:read
   GET /api/v1/admin/organizations/{organization_id}/invitations/setup: invitation:read

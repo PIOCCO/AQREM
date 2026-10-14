@@ -6,13 +6,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.admin_errors import admin_error
-from app.core.platform_access import require_platform_permission, resolve_platform_role
+from app.core.platform_access import require_platform_permission, require_super_admin, resolve_platform_role
 from app.core.platform_roles import PlatformRole
 from app.core.permissions_catalog import platform_permission_matrix, platform_endpoint_permissions
 from app.services.platform_staff import (
     PlatformStaffError,
     count_active_super_admins,
     invite_platform_staff,
+    remove_platform_staff,
     set_platform_role,
 )
 from app.services.roles_audit import run_roles_audit
@@ -35,7 +36,10 @@ from app.schemas.admin import (
     AdminOrganizationListResponse,
     AdminOrganizationResponse,
     AdminOrganizationUpdate,
+    DeleteOrganizationRequest,
+    DeleteOrganizationResponse,
     DeactivateMemberRequest,
+    PlatformStaffRemoveRequest,
     AdminProvisionUserRequest,
     AdminProvisionUserResponse,
     PermissionsMatrixResponse,
@@ -72,6 +76,11 @@ from app.services.access_control.groups import ensure_default_access_groups
 from app.tenant_store.resolver import open_tenant_session
 from app.api.v1 import admin_invitations
 from app.services.seat_usage import get_seat_usage
+from app.services.org_lifecycle import (
+    ORG_DELETION_RETENTION_DAYS,
+    OrganizationDeleteError,
+    schedule_organization_deletion,
+)
 
 router = APIRouter()
 router.include_router(admin_invitations.router)
@@ -100,10 +109,13 @@ def admin_context(
 
 
 def _counts(orgs: list[Organization]) -> dict[str, int]:
-    counts = {"all": len(orgs), "active": 0, "suspended": 0, "test": 0}
+    counts = {"all": len(orgs), "active": 0, "suspended": 0, "expired": 0, "test": 0}
     for org in orgs:
         bucket = org_status_bucket(org)
-        counts[bucket] = counts.get(bucket, 0) + 1
+        if bucket == "deleted":
+            continue
+        if bucket in counts:
+            counts[bucket] += 1
     return counts
 
 
@@ -114,7 +126,12 @@ def list_organizations_admin(
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("org:read")),
 ) -> AdminOrganizationListResponse:
-    orgs = db.query(Organization).order_by(Organization.name.asc()).all()
+    orgs = (
+        db.query(Organization)
+        .filter(Organization.deleted_at.is_(None))
+        .order_by(Organization.name.asc())
+        .all()
+    )
     orgs = filter_orgs_for_admin(orgs)
     if q:
         needle = q.strip().lower()
@@ -220,6 +237,41 @@ def update_organization(
     db.commit()
     db.refresh(org)
     return org_to_admin_response(db, org)
+
+
+@router.delete("/organizations/{organization_id}", response_model=DeleteOrganizationResponse)
+def delete_organization(
+    organization_id: UUID,
+    payload: DeleteOrganizationRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+) -> DeleteOrganizationResponse:
+    org = _require_admin_visible_org(db, organization_id)
+    try:
+        purge_at = schedule_organization_deletion(
+            db,
+            admin=admin,
+            org=org,
+            confirm_name=payload.confirm_name,
+        )
+    except OrganizationDeleteError as exc:
+        code = str(exc)
+        if code == "CONFIRM_NAME_MISMATCH":
+            raise admin_error(
+                code="CONFIRM_NAME_MISMATCH",
+                message="Typed name does not match the organization name",
+                field="confirmName",
+                status_code=400,
+            ) from exc
+        if code == "SUPER_ADMIN_REQUIRED":
+            raise admin_error(code="FORBIDDEN", message="Super admin required", status_code=403) from exc
+        raise admin_error(code=code, message=code.replace("_", " ").capitalize()) from exc
+    db.commit()
+    return DeleteOrganizationResponse(
+        organization_id=org.id,
+        purge_scheduled_at=purge_at,
+        retention_days=ORG_DELETION_RETENTION_DAYS,
+    )
 
 
 @router.get("/organizations/{organization_id}/directory", response_model=AdminDirectoryResponse)
@@ -692,6 +744,29 @@ def update_staff_role(
         status="Active" if target.is_active else "Suspended",
         created_at=target.created_at,
     )
+
+
+@router.delete("/platform-staff/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_platform_staff(
+    user_id: UUID,
+    payload: PlatformStaffRemoveRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+) -> None:
+    target = db.get(User, user_id)
+    if target is None or resolve_platform_role(target) is None:
+        raise admin_error(code="NOT_FOUND", message="Platform staff member not found", status_code=404)
+    try:
+        remove_platform_staff(db, actor_id=admin.id, target=target, reason=payload.reason)
+    except PlatformStaffError as exc:
+        if str(exc) == "LAST_SUPER_ADMIN":
+            raise admin_error(
+                code="LAST_SUPER_ADMIN",
+                message="Cannot remove the last active super admin",
+                status_code=409,
+            ) from exc
+        raise admin_error(code=str(exc), message=str(exc).replace("_", " ").capitalize()) from exc
+    db.commit()
 
 
 @router.post(

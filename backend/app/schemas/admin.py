@@ -38,6 +38,10 @@ class PlatformStaffRoleUpdate(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
 
 
+class PlatformStaffRemoveRequest(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class ReplaceOrgAdminRequest(BaseModel):
     email: EmailStr
     full_name: str = Field(min_length=1, max_length=255)
@@ -91,7 +95,20 @@ class AdminOrganizationResponse(BaseModel):
     owner_display_name: str | None
     created_at: datetime
     license_renews_at: datetime | None
+    license_expires_at: datetime | None = None
     seats: SeatUsageResponse
+
+
+class DeleteOrganizationRequest(BaseModel):
+    confirm_name: str = Field(min_length=1, max_length=255, alias="confirmName")
+
+    model_config = {"populate_by_name": True}
+
+
+class DeleteOrganizationResponse(BaseModel):
+    organization_id: UUID
+    purge_scheduled_at: datetime
+    retention_days: int
 
 
 class AdminOrganizationListResponse(BaseModel):
@@ -174,8 +191,20 @@ class AdminMemberRoleUpdate(BaseModel):
 
 class AcceptInvitationRequest(BaseModel):
     token: str = Field(min_length=16, max_length=256)
+    email: EmailStr
+    verification_code: str = Field(default="", max_length=12)
     password: str = Field(min_length=8, max_length=256)
     full_name: str | None = Field(default=None, max_length=255)
+
+
+class AcceptInvitationSendVerificationRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=256)
+    email: EmailStr
+
+
+class AcceptInvitationSendVerificationResponse(BaseModel):
+    verification_required: bool = True
+    dev_verification_code: str | None = None
 
 
 class ChangePasswordRequest(BaseModel):

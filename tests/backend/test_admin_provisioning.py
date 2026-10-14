@@ -266,11 +266,23 @@ def test_invitation_single_use_and_expiry(db_session):
     )
     db_session.commit()
 
-    accept_invitation(db_session, token=raw_token, password="new-password-123")
+    accept_invitation(
+        db_session,
+        token=raw_token,
+        email="invited@example.com",
+        verification_code="",
+        password="new-password-123",
+    )
     db_session.commit()
 
     with pytest.raises(ValueError, match="already used"):
-        accept_invitation(db_session, token=raw_token, password="another-pass-123")
+        accept_invitation(
+            db_session,
+            token=raw_token,
+            email="invited@example.com",
+            verification_code="",
+            password="another-pass-123",
+        )
 
     from app.models.invitation import UserInvitation
 
@@ -291,7 +303,13 @@ def test_invitation_single_use_and_expiry(db_session):
     inv2.expires_at = datetime.now(timezone.utc) - timedelta(minutes=5)
     db_session.commit()
     with pytest.raises(ValueError, match="expired"):
-        accept_invitation(db_session, token=token2, password="password-12345")
+        accept_invitation(
+            db_session,
+            token=token2,
+            email="invited2@example.com",
+            verification_code="",
+            password="password-12345",
+        )
 
 
 @pytest.mark.skipif(not _postgres_available(), reason="PostgreSQL not available")

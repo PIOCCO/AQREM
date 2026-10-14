@@ -25,6 +25,7 @@ export type AdminOrganization = {
   owner_display_name: string | null;
   created_at: string;
   license_renews_at: string | null;
+  license_expires_at: string | null;
   seats: SeatUsage;
 };
 
@@ -101,15 +102,16 @@ async function parseError(res: Response, fallback: string): Promise<never> {
 
 function statusBucket(status: string): string {
   if (status === "test") return "test";
-  if (status === "suspended" || status === "expired") return "suspended";
+  if (status === "expired") return "expired";
+  if (status === "suspended") return "suspended";
   return "active";
 }
 
 function computeCounts(items: AdminOrganization[]): Record<string, number> {
-  const counts = { all: items.length, active: 0, suspended: 0, test: 0 };
+  const counts = { all: items.length, active: 0, suspended: 0, expired: 0, test: 0 };
   for (const o of items) {
     const b = statusBucket(o.license_status);
-    counts[b as keyof typeof counts] += 1;
+    if (b in counts) counts[b as keyof typeof counts] += 1;
   }
   return counts;
 }
@@ -149,8 +151,23 @@ export function normalizeOrganization(raw: Record<string, unknown>): AdminOrgani
     owner_display_name: (raw.owner_display_name as string | null) ?? null,
     created_at: String(raw.created_at ?? new Date().toISOString()),
     license_renews_at: (raw.license_renews_at as string | null) ?? null,
+    license_expires_at: (raw.license_expires_at as string | null) ?? null,
     seats,
   };
+}
+
+export async function deleteAdminOrganization(
+  session: AuthSession,
+  orgId: string,
+  confirmName: string,
+): Promise<{ organization_id: string; purge_scheduled_at: string; retention_days: number }> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}`, {
+    method: "DELETE",
+    headers: adminHeaders(session),
+    body: JSON.stringify({ confirmName: confirmName }),
+  });
+  if (!res.ok) await parseError(res, "Failed to delete organization");
+  return res.json();
 }
 
 export async function fetchPlatformStaff(session: AuthSession): Promise<PlatformStaffMember[]> {
@@ -462,6 +479,8 @@ export type InvitationsSetupStatus = {
   admin_invitation_status: string;
   admin_invitation_email: string | null;
   admin_accepted: boolean;
+  has_active_org_admin?: boolean;
+  pending_org_admin_invite?: boolean;
   employee_link_status: string | null;
   employee_link_joined_count: number;
   employee_link_pending_count: number;

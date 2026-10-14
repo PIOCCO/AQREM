@@ -85,6 +85,8 @@ class InvitationsSetupStatus(BaseModel):
     admin_invitation_status: str
     admin_invitation_email: str | None
     admin_accepted: bool
+    has_active_org_admin: bool = False
+    pending_org_admin_invite: bool = False
     employee_link_status: str | None
     employee_link_joined_count: int
     employee_link_pending_count: int

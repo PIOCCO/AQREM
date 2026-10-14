@@ -22,7 +22,13 @@ from app.services.auth.password_reset import (
 from app.core.tenant import TenantContext
 from app.db.session import get_db
 from app.models.organization import Organization, OrganizationMembership, User
-from app.schemas.admin import AcceptInvitationRequest, ChangePasswordRequest
+from app.schemas.admin import (
+    AcceptInvitationRequest,
+    AcceptInvitationSendVerificationRequest,
+    AcceptInvitationSendVerificationResponse,
+    ChangePasswordRequest,
+)
+from app.services.invitations.admin_invitation_accept import send_admin_accept_verification
 from app.schemas.invitations import AcceptInvitationPreviewRequest, AcceptInvitationPreviewResponse
 from app.services.invitations.admin_invitation import preview_admin_invitation
 from app.schemas.auth import ForgotPasswordRequest, LoginRequest, ResetPasswordRequest, TokenResponse, UserResponse
@@ -120,6 +126,28 @@ def accept_invite_preview(
     )
 
 
+@router.post("/accept-invitation/send-verification", response_model=AcceptInvitationSendVerificationResponse)
+@limiter.limit("20/minute")
+def accept_invite_send_verification(
+    request: Request,
+    payload: AcceptInvitationSendVerificationRequest,
+    db: Session = Depends(get_db),
+) -> AcceptInvitationSendVerificationResponse:
+    try:
+        _inv, _org, dev = send_admin_accept_verification(
+            db,
+            token=payload.token.strip(),
+            email=str(payload.email),
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code == "EMAIL_MISMATCH":
+            raise HTTPException(status_code=400, detail={"message": "Email does not match this invitation."}) from exc
+        raise HTTPException(status_code=404, detail={"message": "This invitation is not valid."}) from None
+    db.commit()
+    return AcceptInvitationSendVerificationResponse(dev_verification_code=dev)
+
+
 @router.post("/accept-invitation", response_model=TokenResponse)
 @limiter.limit(AUTH_LOGIN_LIMIT)
 def accept_invite(
@@ -131,6 +159,8 @@ def accept_invite(
         user, membership = accept_invitation(
             db,
             token=payload.token.strip(),
+            email=str(payload.email),
+            verification_code=payload.verification_code,
             password=payload.password,
             full_name=payload.full_name,
         )
@@ -140,6 +170,8 @@ def accept_invite(
                 status_code=400,
                 detail={"message": "This email is a platform administrator account and cannot accept an organization invitation."},
             ) from exc
+        if str(exc) in {"EMAIL_MISMATCH", "VERIFICATION_REQUIRED", "VERIFICATION_EXPIRED", "VERIFICATION_INVALID"}:
+            raise HTTPException(status_code=400, detail={"message": "Verification failed for this invitation."}) from exc
         raise HTTPException(status_code=400, detail={"message": "This invitation is not valid."}) from None
     db.commit()
 

@@ -15,6 +15,7 @@ function formatDate(iso: string | null) {
 export function LicenseSummaryCard({ org, onManageLicense }: { org: AdminOrganization; onManageLicense: () => void }) {
   const envLabel = org.environment === "test" ? "Test environment" : "Production environment";
   const renewal = formatDate(org.license_renews_at);
+  const expiredOn = org.license_status === "expired" ? formatDate(org.license_expires_at) : null;
 
   return (
     <div className="admin-card p-4">
@@ -27,12 +28,18 @@ export function LicenseSummaryCard({ org, onManageLicense }: { org: AdminOrganiz
       </div>
       <p className="text-sm text-[var(--color-text-primary)] mt-3">{org.seats.seats_limit} licensed seats</p>
       <p className="text-xs text-[var(--color-text-muted)] mt-1">
-        {renewal ? `Renews ${renewal}` : "No renewal date set"}
-        {!renewal ? (
-          <button type="button" className="ml-2 text-[var(--color-link)] underline" onClick={onManageLicense}>
-            Set on license tab
-          </button>
-        ) : null}
+        {expiredOn ? (
+          <>Expired {expiredOn}</>
+        ) : renewal ? (
+          <>Renews {renewal}</>
+        ) : (
+          <>
+            No renewal date set
+            <button type="button" className="ml-2 text-[var(--color-link)] underline" onClick={onManageLicense}>
+              Set on license tab
+            </button>
+          </>
+        )}
       </p>
     </div>
   );

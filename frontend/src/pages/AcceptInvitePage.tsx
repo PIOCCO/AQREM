@@ -1,7 +1,14 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AuthPageShell } from "../components/auth/AuthPageShell";
-import { acceptInvitation, clearSession, fetchAuthMe, loadSession, saveSession } from "../lib/api";
+import {
+  acceptInvitation,
+  clearSession,
+  fetchAuthMe,
+  loadSession,
+  saveSession,
+  sendAcceptInvitationVerification,
+} from "../lib/api";
 import { isPlatformSessionToken, resolveOrganizationIdForSession, resolvePostAuthPath } from "../lib/authRouting";
 import { previewAcceptInvitation } from "../lib/joinApi";
 import { roleLabel } from "../lib/roleLabels";
@@ -28,6 +35,9 @@ export default function AcceptInvitePage() {
   const [loading, setLoading] = useState(false);
   const [signedInEmail, setSignedInEmail] = useState<string | null>(null);
   const [platformSession, setPlatformSession] = useState(false);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
 
   useEffect(() => {
     const session = loadSession();
@@ -74,15 +84,38 @@ export default function AcceptInvitePage() {
     navigate(`/invite/admin/${encodeURIComponent(token)}`, { replace: true });
   }
 
+  async function sendVerification() {
+    if (!token || !preview) return;
+    setSendingCode(true);
+    setError(null);
+    try {
+      const res = await sendAcceptInvitationVerification({ token, email: preview.email });
+      setCodeSent(true);
+      if (res.dev_verification_code) {
+        setVerificationCode(res.dev_verification_code);
+      }
+    } catch {
+      setError("Could not send a verification code. Check the email on the invitation.");
+    } finally {
+      setSendingCode(false);
+    }
+  }
+
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!token || wrongAccount) return;
+    if (!token || wrongAccount || !preview) return;
+    if (!codeSent || !verificationCode.trim()) {
+      setError("Verify your email with the code sent to the invited address.");
+      return;
+    }
     setError(null);
     setLoading(true);
     const form = new FormData(e.currentTarget);
     try {
       const data = await acceptInvitation({
         token,
+        email: preview.email,
+        verification_code: verificationCode.trim(),
         password: String(form.get("password")),
         full_name: String(form.get("full_name") || preview?.invitee_full_name || "") || undefined,
       });
@@ -119,7 +152,8 @@ export default function AcceptInvitePage() {
 
       {preview && !wrongAccount ? (
         <p className="text-sm text-[var(--color-text-muted)] mb-4">
-          Create a password for <span className="text-[var(--color-text-primary)]">{preview.email}</span>
+          Verify <span className="text-[var(--color-text-primary)]">{preview.email}</span> and create a password. Only
+          the invited inbox can complete this flow.
         </p>
       ) : null}
 
@@ -136,6 +170,31 @@ export default function AcceptInvitePage() {
               defaultValue={preview?.invitee_full_name ?? ""}
               required
             />
+          </div>
+          <div>
+            <label htmlFor="inv-verify" className="text-xs font-medium">
+              Email verification code
+            </label>
+            <div className="flex gap-2 mt-1">
+              <input
+                id="inv-verify"
+                name="verification_code"
+                className="aq-input flex-1"
+                value={verificationCode}
+                onChange={(e) => setVerificationCode(e.target.value)}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                required
+              />
+              <button
+                type="button"
+                className="aq-btn-secondary shrink-0"
+                disabled={sendingCode || !preview}
+                onClick={() => void sendVerification()}
+              >
+                {codeSent ? "Resend" : "Send code"}
+              </button>
+            </div>
           </div>
           <div>
             <label htmlFor="inv-password" className="text-xs font-medium">

@@ -95,16 +95,35 @@ def test_admin_invitation_single_active_and_accept(client: TestClient, db_sessio
     assert preview2.json()["organization_name"] == "Invite Org"
     assert preview2.json()["role"] == "ORG_ADMIN"
 
+    send_code = client.post(
+        "/api/v1/auth/accept-invitation/send-verification",
+        json={"token": raw2, "email": "admin@corp.example"},
+    )
+    assert send_code.status_code == 200, send_code.text
+    code = send_code.json()["dev_verification_code"]
+    assert code
+
     accept = client.post(
         "/api/v1/auth/accept-invitation",
-        json={"token": raw2, "password": "securepass1", "full_name": "Admin Two"},
+        json={
+            "token": raw2,
+            "email": "admin@corp.example",
+            "verification_code": code,
+            "password": "securepass1",
+            "full_name": "Admin Two",
+        },
     )
     assert accept.status_code == 200
     assert "access_token" in accept.json()
 
     reuse = client.post(
         "/api/v1/auth/accept-invitation",
-        json={"token": raw2, "password": "securepass1"},
+        json={
+            "token": raw2,
+            "email": "admin@corp.example",
+            "verification_code": code,
+            "password": "securepass1",
+        },
     )
     assert reuse.status_code == 400
 

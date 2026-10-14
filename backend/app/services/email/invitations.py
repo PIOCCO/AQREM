@@ -33,6 +33,16 @@ def send_admin_invitation_email(
     return True
 
 
+def send_admin_accept_verification_email(*, to_email: str, organization_name: str, code: str) -> bool:
+    settings = get_settings()
+    mode = (settings.email_delivery_mode or "log").lower()
+    if mode in {"log", "none", ""}:
+        logger.info("Admin accept verification email not sent (delivery mode=%s)", mode)
+        return False
+    logger.info("Admin accept verification email queued")
+    return True
+
+
 def send_join_verification_email(*, to_email: str, organization_name: str, code: str) -> bool:
     settings = get_settings()
     mode = (settings.email_delivery_mode or "log").lower()

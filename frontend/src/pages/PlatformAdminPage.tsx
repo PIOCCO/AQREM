@@ -11,15 +11,18 @@ import {
 import { InvitePlatformStaffDialog } from "../components/platform-admin/InvitePlatformStaffDialog";
 import { LicenseSummaryCard } from "../components/platform-admin/LicenseSummaryCard";
 import { RemoveMemberDialog } from "../components/platform-admin/RemoveMemberDialog";
+import { DeleteOrganizationDialog } from "../components/platform-admin/DeleteOrganizationDialog";
 import { OrgInvitationsPanel } from "../components/platform-admin/OrgInvitationsPanel";
 import {
   createAdminOrganization,
+  deleteAdminOrganization,
   deactivateMember,
   fetchAdminContext,
   fetchAdminOrganizations,
   fetchOrgAudit,
   fetchOrgInvitations,
   fetchOrganizationDirectory,
+  fetchInvitationsSetup,
   fetchPermissionsMatrix,
   fetchPlatformStaff,
   inviteOrganizationUser,
@@ -128,6 +131,9 @@ function PlatformAdminInner({
     "PLATFORM_SUPPORT",
   );
   const [staffInviteLoading, setStaffInviteLoading] = useState(false);
+  const [deleteOrgOpen, setDeleteOrgOpen] = useState(false);
+  const [deleteOrgLoading, setDeleteOrgLoading] = useState(false);
+  const [inviteSetup, setInviteSetup] = useState<Awaited<ReturnType<typeof fetchInvitationsSetup>> | null>(null);
 
   const selected = useMemo(
     () => (Array.isArray(orgs) ? orgs : []).find((o) => o.id === selectedId),
@@ -213,6 +219,18 @@ function PlatformAdminInner({
   }, [selectedId]);
 
   useEffect(() => {
+    if (!selectedId || !sessionToken) {
+      setInviteSetup(null);
+      return;
+    }
+    if (tab === "members" || tab === "overview") {
+      fetchInvitationsSetup(loadSession()!, selectedId)
+        .then(setInviteSetup)
+        .catch(() => setInviteSetup(null));
+    }
+  }, [tab, selectedId, sessionToken]);
+
+  useEffect(() => {
     if (tab === "members" || tab === "overview") refreshDirectory().catch(() => undefined);
     if (tab === "invitations" && sessionToken && selectedId) {
       fetchOrgInvitations(loadSession()!, selectedId).then(setInvitations).catch(() => setInvitations([]));
@@ -288,8 +306,17 @@ function PlatformAdminInner({
     { id: "all", label: "All", count: counts.all ?? 0 },
     { id: "active", label: "Active", count: counts.active ?? 0 },
     { id: "suspended", label: "Suspended", count: counts.suspended ?? 0 },
+    { id: "expired", label: "Expired", count: counts.expired ?? 0 },
     { id: "test", label: "Test", count: counts.test ?? 0 },
   ];
+
+  const membersTabCount =
+    tab === "members" && !dirLoading ? dirTotal : (selected?.seats.active_members ?? 0) + (selected?.seats.pending_invitations ?? 0);
+
+  const licenseBlocksInvite =
+    selected?.license_status === "expired" || selected?.license_status === "suspended" || selected?.is_active === false;
+  const showInviteAdminForm =
+    !licenseBlocksInvite && !inviteSetup?.has_active_org_admin && !inviteSetup?.pending_org_admin_invite;
 
   const seatsFull = selected?.seats?.is_full ?? false;
   const dirPages = Math.max(1, Math.ceil(dirTotal / 5));
@@ -481,12 +508,15 @@ function PlatformAdminInner({
             <ul className="space-y-2 max-h-[60vh] overflow-y-auto">
               {orgs.map((o) => (
                 <li key={o.id}>
+                  <div
+                    className={`group relative w-full text-left admin-card p-3 transition-colors ${
+                      selectedId === o.id ? "ring-2 ring-chat-brand-mark/40 bg-chat-surface-subtle" : ""
+                    }`}
+                  >
                   <button
                     type="button"
                     onClick={() => setSelectedId(o.id)}
-                    className={`w-full text-left admin-card p-3 transition-colors ${
-                      selectedId === o.id ? "ring-2 ring-chat-brand-mark/40 bg-chat-surface-subtle" : ""
-                    }`}
+                    className="w-full text-left"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium text-sm truncate text-[var(--color-text-primary)]">
@@ -509,6 +539,20 @@ function PlatformAdminInner({
                       suspended={o.license_status === "suspended" || o.license_status === "expired"}
                     />
                   </button>
+                    <button
+                      type="button"
+                      title="Delete organization"
+                      aria-label={`Delete ${o.name}`}
+                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 p-1.5 rounded border border-red-200 text-red-700 bg-chat-surface hover:bg-red-50 text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedId(o.id);
+                        setDeleteOrgOpen(true);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -544,7 +588,7 @@ function PlatformAdminInner({
                 {(
                   [
                     ["overview", "Overview"],
-                    ["members", `Members ${selected.seats.active_members}`],
+                    ["members", `Members ${membersTabCount}`],
                     ["license", "License"],
                     ["invitations", `Invitations ${selected.seats.pending_invitations}`],
                     ["audit", "Audit log"],
@@ -584,7 +628,35 @@ function PlatformAdminInner({
 
                   <div className="admin-card p-4 space-y-4">
                     <h3 className="font-medium text-sm">Invite organization admin</h3>
-                    <p className="text-xs text-chat-muted">Platform staff can only invite the first or replacement organization administrator.</p>
+                    <p className="text-xs text-chat-muted">
+                      This list shows active members and pending invitations only. Removed members disappear here;
+                      inactive accounts are not counted in the tab total.
+                    </p>
+                    {licenseBlocksInvite ? (
+                      <p className="text-xs text-amber-700 border border-amber-200 rounded-lg px-3 py-2">
+                        Invitations are disabled while the license is {selected.license_status} or the organization is
+                        inactive. Update the license first.
+                      </p>
+                    ) : inviteSetup?.has_active_org_admin ? (
+                      <p className="text-xs text-chat-muted">
+                        An organization admin is already active. Use{" "}
+                        <button type="button" className="underline" onClick={() => setTab("invitations")}>
+                          Replace admin
+                        </button>{" "}
+                        on the Invitations tab.
+                      </p>
+                    ) : inviteSetup?.pending_org_admin_invite ? (
+                      <p className="text-xs text-chat-muted">
+                        A pending admin invitation already exists. Manage it on the{" "}
+                        <button type="button" className="underline" onClick={() => setTab("invitations")}>
+                          Invitations
+                        </button>{" "}
+                        tab.
+                      </p>
+                    ) : null}
+                    {showInviteAdminForm ? (
+                    <>
+                    <p className="text-xs text-chat-muted">Platform staff can only invite the first organization administrator.</p>
                     {inviteError ? (
                       <div className="admin-inline-alert border rounded-lg px-3 py-2 text-sm flex flex-wrap gap-2 justify-between" role="alert">
                         <span>{inviteError}</span>
@@ -625,6 +697,8 @@ function PlatformAdminInner({
                           Copy link
                         </button>
                       </div>
+                    ) : null}
+                    </>
                     ) : null}
                   </div>
 
@@ -835,6 +909,20 @@ function PlatformAdminInner({
                       Edit license
                     </button>
                   </div>
+                  <div className="border border-red-200 rounded-lg p-3 space-y-2 mt-4">
+                    <p className="text-xs font-medium text-red-700">Danger zone</p>
+                    <p className="text-xs text-chat-muted">
+                      Permanently remove this organization after a 30-day retention period. Requires typing the exact
+                      organization name.
+                    </p>
+                    <button
+                      type="button"
+                      className="aq-btn-danger text-xs"
+                      onClick={() => setDeleteOrgOpen(true)}
+                    >
+                      Delete organization
+                    </button>
+                  </div>
                 </div>
               )}
             </>
@@ -842,6 +930,33 @@ function PlatformAdminInner({
         </main>
       </div>
       ) : null}
+
+      <DeleteOrganizationDialog
+        open={deleteOrgOpen && Boolean(selected)}
+        org={selected ?? null}
+        loading={deleteOrgLoading}
+        onCancel={() => setDeleteOrgOpen(false)}
+        onConfirm={async (confirmName) => {
+          if (!selectedId || !selected) return;
+          setDeleteOrgLoading(true);
+          try {
+            const result = await deleteAdminOrganization(auth, selectedId, confirmName);
+            toast.push(
+              `${selected.name} scheduled for deletion (purge in ${result.retention_days} days)`,
+              "ok",
+            );
+            setDeleteOrgOpen(false);
+            const prevItems = orgs;
+            await refreshOrgs();
+            const remaining = prevItems.filter((o) => o.id !== selectedId);
+            setSelectedId(remaining[0]?.id ?? "");
+          } catch (err) {
+            toast.push(err instanceof Error ? err.message : "Delete failed", "err");
+          } finally {
+            setDeleteOrgLoading(false);
+          }
+        }}
+      />
 
       <RemoveMemberDialog
         open={Boolean(removeTarget && selected)}

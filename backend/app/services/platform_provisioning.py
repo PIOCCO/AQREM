@@ -150,6 +150,7 @@ def provision_user_invitation(
         organization_id=organization_id,
         email=email,
         role=role.value,
+        invitation_kind="member" if role != Role.ORG_ADMIN else "org_admin",
         token_hash=hash_invitation_token(raw_token),
         expires_at=expires_at,
         created_by_user_id=admin_user_id,
@@ -293,6 +294,8 @@ def accept_invitation(
     db: Session,
     *,
     token: str,
+    email: str,
+    verification_code: str,
     password: str,
     full_name: str | None = None,
 ) -> tuple[User, OrganizationMembership]:
@@ -300,6 +303,9 @@ def accept_invitation(
     invitation = db.query(UserInvitation).filter(UserInvitation.token_hash == token_hash).first()
     if invitation is None:
         raise ValueError("Invalid invitation")
+    from app.services.invitations.admin_invitation_accept import assert_admin_accept_verified
+
+    assert_admin_accept_verified(invitation, email=email, verification_code=verification_code)
     if invitation.used_at is not None:
         raise ValueError("Invitation already used")
     now = datetime.now(timezone.utc)
@@ -364,6 +370,8 @@ def set_organization_license(
         if license_status == LicenseStatus.TEST and not licensing_test_mode_effective(settings):
             raise ValueError("Test license status is only allowed when licensing test mode is enabled")
         org.license_status = license_status.value
+        if license_status == LicenseStatus.EXPIRED and org.license_expires_at is None:
+            org.license_expires_at = datetime.now(timezone.utc)
     if is_active is not None:
         org.is_active = is_active
 

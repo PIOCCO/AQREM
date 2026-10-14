@@ -29,6 +29,7 @@ export default function SuperAdminShell() {
             <NavLink
               key={item.to}
               to={item.to}
+              end
               className={({ isActive }) =>
                 `rounded-lg px-3 py-2 text-sm whitespace-nowrap ${
                   isActive ? "bg-chat-surface-subtle font-medium text-[var(--color-text-primary)]" : "text-chat-muted hover:bg-chat-hover"

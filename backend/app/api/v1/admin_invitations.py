@@ -12,7 +12,7 @@ from app.core.platform_access import require_platform_permission
 from app.core.roles import Role
 from app.db.session import get_db
 from app.models.invitation import UserInvitation
-from app.models.organization import User
+from app.models.organization import OrganizationMembership, User
 from app.models.employee_join import EmployeeJoinLink
 from app.schemas.invitations import (
     AdminInvitationCreateRequest,
@@ -126,15 +126,28 @@ def invitations_setup_status(
     admin_status = "none"
     admin_email = None
     admin_accepted = False
+    pending_org_admin_invite = False
     if admin_inv:
         admin_status = invitation_public_status(admin_inv, now=now)
         admin_email = admin_inv.email
         admin_accepted = admin_inv.used_at is not None
+        pending_org_admin_invite = admin_status == "pending"
+    active_admin = (
+        db.query(OrganizationMembership)
+        .filter(
+            OrganizationMembership.organization_id == organization_id,
+            OrganizationMembership.role == Role.ORG_ADMIN.value,
+            OrganizationMembership.is_active.is_(True),
+        )
+        .first()
+    )
     link = get_active_link_for_org(db, organization_id)
     return InvitationsSetupStatus(
         admin_invitation_status=admin_status,
         admin_invitation_email=admin_email,
         admin_accepted=admin_accepted,
+        has_active_org_admin=active_admin is not None,
+        pending_org_admin_invite=pending_org_admin_invite,
         employee_link_status=link.status if link else None,
         employee_link_joined_count=link.joined_count if link else 0,
         employee_link_pending_count=link.pending_approval_count if link else 0,

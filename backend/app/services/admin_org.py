@@ -24,6 +24,14 @@ def license_renews_at(org: Organization):
     return org.created_at + timedelta(days=365)
 
 
+def license_expires_at(org: Organization):
+    if org.license_status != LicenseStatus.EXPIRED.value:
+        return None
+    if org.license_expires_at is not None:
+        return org.license_expires_at
+    return org.updated_at or org.created_at
+
+
 def seat_usage_is_full(org: Organization, usage: SeatUsage) -> bool:
     if org.license_status == LicenseStatus.TEST.value and licensing_test_mode_effective():
         return False
@@ -58,27 +66,35 @@ def org_to_admin_response(db: Session, org: Organization) -> AdminOrganizationRe
         owner_display_name=org.owner_display_name,
         created_at=org.created_at,
         license_renews_at=license_renews_at(org),
+        license_expires_at=license_expires_at(org),
         seats=seat_usage_response(org, usage),
     )
 
 
 def org_status_bucket(org: Organization) -> str:
+    if getattr(org, "deleted_at", None) is not None:
+        return "deleted"
     if org.license_status == LicenseStatus.TEST.value:
         return "test"
-    if org.license_status in {LicenseStatus.SUSPENDED.value, LicenseStatus.EXPIRED.value}:
+    if org.license_status == LicenseStatus.EXPIRED.value:
+        return "expired"
+    if org.license_status == LicenseStatus.SUSPENDED.value:
         return "suspended"
     return "active"
 
 
 def filter_orgs_for_admin(orgs: list[Organization]) -> list[Organization]:
+    visible = [o for o in orgs if getattr(o, "deleted_at", None) is None]
     if licensing_test_mode_effective():
-        return orgs
-    return [o for o in orgs if o.license_status != LicenseStatus.TEST.value]
+        return visible
+    return [o for o in visible if o.license_status != LicenseStatus.TEST.value]
 
 
 def get_admin_visible_org(db: Session, organization_id: UUID) -> Organization | None:
     org = db.get(Organization, organization_id)
     if org is None:
+        return None
+    if getattr(org, "deleted_at", None) is not None:
         return None
     if org.license_status == LicenseStatus.TEST.value and not licensing_test_mode_effective():
         return None

@@ -78,5 +78,12 @@ def require_platform_permission(permission: str):
     return _dep
 
 
+def require_super_admin(user: User = Depends(get_platform_user)) -> User:
+    role = resolve_platform_role(user)
+    if role != PlatformRole.SUPER_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin required")
+    return user
+
+
 def bump_platform_auth_version(db: Session, user: User) -> None:
     user.platform_auth_version = int(getattr(user, "platform_auth_version", 1) or 1) + 1
