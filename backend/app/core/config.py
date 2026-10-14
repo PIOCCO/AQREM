@@ -29,7 +29,12 @@ class Settings(BaseSettings):
     password_reset_expire_minutes: int = Field(default=60, validation_alias=AliasChoices("password_reset_expire_minutes", "PASSWORD_RESET_EXPIRE_MINUTES"))
     app_public_base_url: str = Field(
         default="http://127.0.0.1:5173",
-        validation_alias=AliasChoices("app_public_base_url", "APP_PUBLIC_BASE_URL"),
+        validation_alias=AliasChoices(
+            "app_public_base_url",
+            "APP_PUBLIC_BASE_URL",
+            "PUBLIC_APP_URL",
+        ),
+        description="Public browser URL for invitation links (no trailing slash). Not derived from Host header.",
     )
     email_delivery_mode: str = Field(
         default="log",

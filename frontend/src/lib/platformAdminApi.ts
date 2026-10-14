@@ -320,6 +320,7 @@ export async function inviteOrganizationUser(
   if (!res.ok) await parseError(res, "Failed to send invitation");
   return res.json() as Promise<{
     invitation_setup_path: string;
+    invitation_setup_url: string;
     invitation_expires_at: string;
   }>;
 }
@@ -339,7 +340,13 @@ export async function fetchAdminInvitationLink(session: AuthSession, orgId: stri
     { headers: adminHeaders(session) },
   );
   if (!res.ok) await parseError(res, "Failed to load invitation link");
-  return res.json() as Promise<{ invitation_setup_path?: string; join_path?: string; expires_at?: string }>;
+  return res.json() as Promise<{
+    invitation_setup_path?: string;
+    invitation_setup_url?: string;
+    join_path?: string;
+    join_url?: string;
+    expires_at?: string;
+  }>;
 }
 
 export async function deleteAdminInvitationRecord(session: AuthSession, orgId: string, invitationId: string) {
@@ -356,7 +363,7 @@ export async function fetchEmployeeLinkUrl(session: AuthSession, orgId: string, 
     { headers: adminHeaders(session) },
   );
   if (!res.ok) await parseError(res, "Failed to load employee link");
-  return res.json() as Promise<{ join_path?: string; expires_at?: string }>;
+  return res.json() as Promise<{ join_path?: string; join_url?: string; expires_at?: string }>;
 }
 
 export async function deleteEmployeeLinkRecord(session: AuthSession, orgId: string, linkId: string) {
@@ -447,6 +454,8 @@ export type InvitationHistoryRow = {
   revoked_at: string | null;
   joined_count?: number | null;
   pending_approval_count?: number | null;
+  invite_url?: string | null;
+  invite_path?: string | null;
 };
 
 export type InvitationsSetupStatus = {
@@ -500,6 +509,7 @@ export async function createAdminInvitation(
   if (!res.ok) await parseError(res, "Failed to create admin invitation");
   return res.json() as Promise<{
     invitation_setup_path: string;
+    invitation_setup_url: string;
     invitation_expires_at: string;
     email_sent: boolean;
   }>;
@@ -529,7 +539,7 @@ export async function createEmployeeLink(
     body: JSON.stringify(payload),
   });
   if (!res.ok) await parseError(res, "Failed to create employee link");
-  return res.json() as Promise<{ join_path: string; link_id: string; expires_at: string | null }>;
+  return res.json() as Promise<{ join_path: string; join_url: string; link_id: string; expires_at: string | null }>;
 }
 
 export async function rotateEmployeeLink(session: AuthSession, orgId: string, linkId: string) {
@@ -538,7 +548,7 @@ export async function rotateEmployeeLink(session: AuthSession, orgId: string, li
     headers: adminHeaders(session),
   });
   if (!res.ok) await parseError(res, "Failed to rotate link");
-  return res.json() as Promise<{ join_path: string; expires_at?: string }>;
+  return res.json() as Promise<{ join_path: string; join_url: string; expires_at?: string }>;
 }
 
 export async function fetchOrgInvitations(session: AuthSession, orgId: string) {

@@ -82,8 +82,10 @@ def test_fetch_admin_invitation_link_for_pending(client: TestClient, db_session)
     )
     assert link.status_code == 200
     path = link.json()["invitation_setup_path"]
-    assert path.startswith("/accept-invite?token=")
-    raw = path.split("token=", 1)[1]
+    assert path.startswith("/invite/admin/")
+    from urllib.parse import unquote
+
+    raw = unquote(path.split("/invite/admin/", 1)[1])
     preview = client.post("/api/v1/auth/accept-invitation/preview", json={"token": raw})
     assert preview.status_code == 200
 
@@ -97,7 +99,9 @@ def test_delete_accepted_invite_keeps_membership(client: TestClient, db_session)
         json={"email": "done@corp.example", "full_name": "Done Admin"},
     )
     inv_id = created.json()["invitation_id"]
-    raw = created.json()["invitation_setup_path"].split("token=", 1)[1]
+    from urllib.parse import unquote
+
+    raw = unquote(created.json()["invitation_setup_path"].split("/invite/admin/", 1)[1])
     accept = client.post(
         "/api/v1/auth/accept-invitation",
         json={"token": raw, "password": "securepass1", "full_name": "Done Admin"},

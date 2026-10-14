@@ -114,7 +114,7 @@ function PlatformAdminInner({
   const [audit, setAudit] = useState<
     { id: string; created_at: string; actor_email: string; action: string; target: string }[]
   >([]);
-  const [lastInvite, setLastInvite] = useState<{ path: string; expires: string } | null>(null);
+  const [lastInvite, setLastInvite] = useState<{ url: string; expires: string } | null>(null);
   const [consoleSection, setConsoleSection] = useState<ConsoleSection>(
     surface === "settings" ? "team" : "organizations",
   );
@@ -263,7 +263,10 @@ function PlatformAdminInner({
         email: String(form.get("email")),
         role: String(form.get("role")),
       });
-      setLastInvite({ path: result.invitation_setup_path, expires: result.invitation_expires_at });
+      setLastInvite({
+        url: result.invitation_setup_url,
+        expires: result.invitation_expires_at,
+      });
       toast.push("Invitation sent", "ok");
       (e.target as HTMLFormElement).reset();
       await refreshOrgs();
@@ -613,11 +616,11 @@ function PlatformAdminInner({
                     {lastInvite ? (
                       <div className="text-sm border border-chat-border rounded-lg p-3 space-y-2">
                         <p className="font-medium">Invitation link (expires {formatDate(lastInvite.expires)})</p>
-                        <code className="block text-xs break-all">{lastInvite.path}</code>
+                        <code className="block text-xs break-all">{lastInvite.url}</code>
                         <button
                           type="button"
                           className="text-xs aq-btn-primary"
-                          onClick={() => navigator.clipboard.writeText(window.location.origin + lastInvite.path)}
+                          onClick={() => navigator.clipboard.writeText(lastInvite.url)}
                         >
                           Copy link
                         </button>

@@ -113,6 +113,7 @@ class AdminProvisionUserResponse(BaseModel):
     invitation_id: UUID
     invitation_expires_at: datetime
     invitation_setup_path: str
+    invitation_setup_url: str
 
 
 class AdminMembershipResponse(BaseModel):

@@ -61,7 +61,12 @@ from app.services.platform_provisioning import (
     unique_org_slug,
     update_membership_role,
 )
-from app.services.invitations.admin_invitation import provision_admin_invitation, resend_admin_invitation
+from app.services.invitations.admin_invitation import (
+    invitation_setup_path,
+    invitation_setup_url,
+    provision_admin_invitation,
+    resend_admin_invitation,
+)
 from app.services.platform_provisioning import revoke_invitation
 from app.services.access_control.groups import ensure_default_access_groups
 from app.tenant_store.resolver import open_tenant_session
@@ -395,7 +400,8 @@ def provision_user(
         role=Role.ORG_ADMIN,
         invitation_id=invitation.id,
         invitation_expires_at=expires_at,
-        invitation_setup_path=f"/accept-invite?token={raw_token}",
+        invitation_setup_path=invitation_setup_path(raw_token),
+        invitation_setup_url=invitation_setup_url(raw_token),
     )
 
 
@@ -425,7 +431,8 @@ def resend_user_invitation(
         role=Role(invitation.role),
         invitation_id=invitation.id,
         invitation_expires_at=expires_at,
-        invitation_setup_path=f"/accept-invite?token={raw_token}",
+        invitation_setup_path=invitation_setup_path(raw_token),
+        invitation_setup_url=invitation_setup_url(raw_token),
     )
 
 
@@ -747,5 +754,6 @@ def replace_org_admin(
         role=Role.ORG_ADMIN,
         invitation_id=invitation.id,
         invitation_expires_at=expires_at,
-        invitation_setup_path=f"/accept-invite?token={raw_token}",
+        invitation_setup_path=invitation_setup_path(raw_token),
+        invitation_setup_url=invitation_setup_url(raw_token),
     )

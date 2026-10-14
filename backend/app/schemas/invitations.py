@@ -15,7 +15,9 @@ class AdminInvitationCreateRequest(BaseModel):
 
 class InvitationLinkResponse(BaseModel):
     invitation_setup_path: str | None = None
+    invitation_setup_url: str | None = None
     join_path: str | None = None
+    join_url: str | None = None
     expires_at: datetime | None = None
 
 
@@ -27,6 +29,7 @@ class AdminInvitationCreateResponse(BaseModel):
     invitation_id: UUID
     invitation_expires_at: datetime
     invitation_setup_path: str
+    invitation_setup_url: str
     email_sent: bool
 
 
@@ -45,6 +48,8 @@ class AdminInvitationHistoryRow(BaseModel):
     created_by_user_id: UUID | None = None
     joined_count: int | None = None
     pending_approval_count: int | None = None
+    invite_url: str | None = None
+    invite_path: str | None = None
 
 
 class EmployeeLinkCreateRequest(BaseModel):
@@ -57,6 +62,7 @@ class EmployeeLinkCreateRequest(BaseModel):
 class EmployeeLinkCreateResponse(BaseModel):
     link_id: UUID
     join_path: str
+    join_url: str
     expires_at: datetime | None
     require_admin_approval: bool
     allowed_domains: list[str]

@@ -155,7 +155,31 @@ export default function App() {
         }
       />
       <Route
+        path="/invite/admin/:token"
+        element={
+          <PublicTheme>
+            <AcceptInvitePage />
+          </PublicTheme>
+        }
+      />
+      <Route
+        path="/invite/member/:token"
+        element={
+          <PublicTheme>
+            <AcceptInvitePage />
+          </PublicTheme>
+        }
+      />
+      <Route
         path="/join"
+        element={
+          <PublicTheme>
+            <JoinOrgPage />
+          </PublicTheme>
+        }
+      />
+      <Route
+        path="/join/:token"
         element={
           <PublicTheme>
             <JoinOrgPage />

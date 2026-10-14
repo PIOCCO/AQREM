@@ -608,7 +608,14 @@ def invite_member(
         payload={"seats_used": seats.seats_used, "seats_limit": seats.seats_limit},
     )
     db.commit()
-    return {"invitation_setup_path": f"/accept-invite?token={raw_token}", "expires_at": expires_at.isoformat()}
+    from app.services.invitations.invite_urls import absolute_from_invite_path, invite_path
+
+    path = invite_path("member", raw_token)
+    return {
+        "invitation_setup_path": path,
+        "invitation_setup_url": absolute_from_invite_path(path),
+        "expires_at": expires_at.isoformat(),
+    }
 
 
 @router.post("/members/{membership_id}/deactivate", status_code=204)

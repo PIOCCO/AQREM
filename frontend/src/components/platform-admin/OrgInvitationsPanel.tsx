@@ -18,6 +18,7 @@ import {
   type EmployeeLinkSummary,
   type InvitationHistoryRow,
 } from "../../lib/platformAdminApi";
+import { pickInviteUrl } from "../../lib/inviteLinks";
 import { useToast } from "../ui/Toast";
 
 function formatDate(iso: string | null) {
@@ -25,7 +26,7 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
-type SecretDialog = { title: string; path: string; expires?: string; note?: string };
+type SecretDialog = { title: string; url: string; expires?: string; note?: string };
 
 export function OrgInvitationsPanel({
   session,
@@ -78,7 +79,7 @@ export function OrgInvitationsPanel({
       });
       setSecret({
         title: "Admin invitation link",
-        path: result.invitation_setup_path,
+        url: result.invitation_setup_url,
         expires: result.invitation_expires_at,
         note: result.email_sent ? "We sent this link by email as well." : "Email is not configured — copy this link now.",
       });
@@ -108,7 +109,7 @@ export function OrgInvitationsPanel({
       });
       setSecret({
         title: "Employee join link",
-        path: result.join_path,
+        url: result.join_url,
         expires: result.expires_at ?? undefined,
         note: "Share with employees. Rotating invalidates the previous link immediately.",
       });
@@ -232,7 +233,11 @@ export function OrgInvitationsPanel({
                 onClick={() => {
                   if (!window.confirm("Generate a new link? The old link stops working immediately.")) return;
                   void rotateEmployeeLink(session, org.id, linkSummary.link_id!).then((r) => {
-                    setSecret({ title: "New employee link", path: r.join_path, note: "Shown once — copy now." });
+                    setSecret({
+                      title: "New employee link",
+                      url: r.join_url ?? pickInviteUrl(r) ?? "",
+                      note: "Copy the full URL below.",
+                    });
                   });
                 }}
               >
@@ -273,6 +278,7 @@ export function OrgInvitationsPanel({
               <tr>
                 <th className="pb-2">Type</th>
                 <th className="pb-2">Details</th>
+                <th className="pb-2">Invitation link</th>
                 <th className="pb-2">Status</th>
                 <th className="pb-2">Expires</th>
                 <th className="pb-2">Created</th>
@@ -295,6 +301,22 @@ export function OrgInvitationsPanel({
                       <div className="text-xs text-chat-muted">{roleLabel(row.role as string)}</div>
                     ) : null}
                   </td>
+                  <td className="py-2 max-w-[14rem]">
+                    {(() => {
+                      const url = pickInviteUrl(row);
+                      if (!url) return <span className="text-xs text-chat-muted">—</span>;
+                      return (
+                        <a
+                          href={url}
+                          className="text-xs break-all text-chat-accent hover:underline"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {url}
+                        </a>
+                      );
+                    })()}
+                  </td>
                   <td className="py-2 capitalize">{row.status}</td>
                   <td className="py-2">{formatDate(row.expires_at)}</td>
                   <td className="py-2">{formatDate(row.created_at)}</td>
@@ -307,21 +329,15 @@ export function OrgInvitationsPanel({
                           try {
                             if (row.record_type === "admin_invitation") {
                               const r = await fetchAdminInvitationLink(session, org.id, row.id);
-                              if (r.invitation_setup_path) {
-                                setSecret({
-                                  title: "Admin invitation link",
-                                  path: r.invitation_setup_path,
-                                  expires: r.expires_at,
-                                });
+                              const url = pickInviteUrl(r);
+                              if (url) {
+                                setSecret({ title: "Admin invitation link", url, expires: r.expires_at ?? undefined });
                               }
                             } else {
                               const r = await fetchEmployeeLinkUrl(session, org.id, row.id);
-                              if (r.join_path) {
-                                setSecret({
-                                  title: "Employee join link",
-                                  path: r.join_path,
-                                  expires: r.expires_at ?? undefined,
-                                });
+                              const url = pickInviteUrl(r);
+                              if (url) {
+                                setSecret({ title: "Employee join link", url, expires: r.expires_at ?? undefined });
                               }
                             }
                           } catch (err) {
@@ -340,11 +356,14 @@ export function OrgInvitationsPanel({
                           onClick={() =>
                             resendInvitation(session, org.id, row.id).then((r) => {
                               void reload();
-                              setSecret({
-                                title: "Admin invitation link",
-                                path: r.invitation_setup_path,
-                                expires: r.invitation_expires_at,
-                              });
+                              const url = pickInviteUrl(r);
+                              if (url) {
+                                setSecret({
+                                  title: "Admin invitation link",
+                                  url,
+                                  expires: r.invitation_expires_at,
+                                });
+                              }
                             })
                           }
                         >
@@ -367,11 +386,12 @@ export function OrgInvitationsPanel({
                         onClick={async () => {
                           const r = await fetchAdminInvitationLink(session, org.id, row.id);
                           void reload();
-                          if (r.invitation_setup_path) {
+                          const url = pickInviteUrl(r);
+                          if (url) {
                             setSecret({
                               title: "Regenerated admin invitation link",
-                              path: r.invitation_setup_path,
-                              expires: r.expires_at,
+                              url,
+                              expires: r.expires_at ?? undefined,
                             });
                           }
                         }}
@@ -387,7 +407,11 @@ export function OrgInvitationsPanel({
                         onClick={() =>
                           rotateEmployeeLink(session, org.id, row.id).then((r) => {
                             void reload();
-                            setSecret({ title: "Employee join link", path: r.join_path, expires: r.expires_at });
+                            setSecret({
+                              title: "Employee join link",
+                              url: r.join_url ?? pickInviteUrl(r) ?? "",
+                              expires: r.expires_at,
+                            });
                           })
                         }
                       >
@@ -426,10 +450,14 @@ export function OrgInvitationsPanel({
             <h2 className="text-lg font-semibold">{secret.title}</h2>
             {secret.expires ? <p className="text-xs text-chat-muted">Expires {formatDate(secret.expires)}</p> : null}
             {secret.note ? <p className="text-sm">{secret.note}</p> : null}
-            <p className="text-xs break-all font-mono bg-chat-surface-subtle p-2 rounded">
-              {window.location.origin}
-              {secret.path}
-            </p>
+            <a
+              href={secret.url}
+              className="text-xs break-all font-mono bg-chat-surface-subtle p-2 rounded block hover:underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {secret.url}
+            </a>
             <div className="flex gap-2 justify-end">
               <button type="button" className="text-sm px-3 py-2" onClick={() => setSecret(null)}>
                 Close
@@ -438,7 +466,7 @@ export function OrgInvitationsPanel({
                 type="button"
                 className="aq-btn-primary text-sm"
                 onClick={() => {
-                  void navigator.clipboard.writeText(`${window.location.origin}${secret.path}`);
+                  void navigator.clipboard.writeText(secret.url);
                   toast.push("Copied", "ok");
                 }}
               >

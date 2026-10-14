@@ -1,23 +1,21 @@
 import { FormEvent, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AuthPageShell } from "../components/auth/AuthPageShell";
 import { completeJoin, previewJoin, startJoin, verifyJoinEmail } from "../lib/joinApi";
 import { saveSession } from "../lib/api";
 
 type Step = "details" | "verify" | "password" | "done";
 
-function readInitialToken(): string {
-  const params = new URLSearchParams(window.location.search);
-  const t = params.get("token") ?? "";
-  if (t) {
-    window.history.replaceState({}, "", "/join");
-  }
-  return t;
-}
-
 export default function JoinOrgPage() {
   const navigate = useNavigate();
-  const [token] = useState(readInitialToken);
+  const [searchParams] = useSearchParams();
+  const { token: routeToken } = useParams<{ token?: string }>();
+  const [token] = useState(() => {
+    const q = searchParams.get("token")?.trim();
+    if (q) return q;
+    if (routeToken) return decodeURIComponent(routeToken);
+    return "";
+  });
   const [orgName, setOrgName] = useState<string | null>(null);
   const [step, setStep] = useState<Step>("details");
   const [pendingId, setPendingId] = useState("");

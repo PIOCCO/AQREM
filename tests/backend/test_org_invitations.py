@@ -1,5 +1,7 @@
 """Admin invitations and employee join link security."""
 
+from urllib.parse import unquote
+
 from fastapi.testclient import TestClient
 
 from app.core.jwt_audiences import AUD_PLATFORM
@@ -74,7 +76,8 @@ def test_admin_invitation_single_active_and_accept(client: TestClient, db_sessio
     )
     assert first.status_code == 201
     path1 = first.json()["invitation_setup_path"]
-    raw1 = path1.split("token=")[1]
+    assert first.json()["invitation_setup_url"].endswith(path1.replace(" ", ""))
+    raw1 = unquote(path1.split("/invite/admin/", 1)[1])
 
     second = client.post(
         f"/api/v1/admin/organizations/{org_id}/invitations/admin",
@@ -86,7 +89,7 @@ def test_admin_invitation_single_active_and_accept(client: TestClient, db_sessio
     preview = client.post("/api/v1/auth/accept-invitation/preview", json={"token": raw1})
     assert preview.status_code == 200
 
-    raw2 = raw1
+    raw2 = unquote(first.json()["invitation_setup_path"].split("/invite/admin/", 1)[1])
     preview2 = client.post("/api/v1/auth/accept-invitation/preview", json={"token": raw2})
     assert preview2.status_code == 200
     assert preview2.json()["organization_name"] == "Invite Org"
@@ -117,7 +120,7 @@ def test_employee_join_domain_and_rotation(client: TestClient, db_session):
     )
     assert link_res.status_code == 201
     join_path = link_res.json()["join_path"]
-    join_token = join_path.split("token=")[1]
+    join_token = unquote(join_path.split("/join/", 1)[1])
     link_id = link_res.json()["link_id"]
 
     bad = client.post("/api/v1/public/join/start", json={"token": join_token, "email": "x@other.example", "full_name": "X"})
@@ -150,7 +153,7 @@ def test_employee_join_domain_and_rotation(client: TestClient, db_session):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert rotate.status_code == 200
-    new_token = rotate.json()["join_path"].split("token=")[1]
+    new_token = unquote(rotate.json()["join_path"].split("/join/", 1)[1])
 
     stale = client.post(
         "/api/v1/public/join/preview",
@@ -191,7 +194,7 @@ def test_token_hashes_never_equal_raw_in_db(client: TestClient, db_session):
         headers={"Authorization": f"Bearer {token}"},
         json={"email": "h@corp.example", "full_name": "H"},
     ).json()
-    raw = inv["invitation_setup_path"].split("token=")[1]
+    raw = unquote(inv["invitation_setup_path"].split("/invite/admin/", 1)[1])
     row = db_session.query(UserInvitation).filter(UserInvitation.organization_id == org_id).first()
     assert row.token_hash == hash_token(raw)
     assert row.token_hash != raw
@@ -201,6 +204,6 @@ def test_token_hashes_never_equal_raw_in_db(client: TestClient, db_session):
         headers={"Authorization": f"Bearer {token}"},
         json={"allowed_domains": ["corp.example"]},
     ).json()
-    raw_link = link["join_path"].split("token=")[1]
+    raw_link = unquote(link["join_path"].split("/join/", 1)[1])
     link_row = db_session.get(EmployeeJoinLink, link["link_id"])
     assert link_row.token_hash == hash_token(raw_link)

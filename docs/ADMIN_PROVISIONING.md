@@ -13,13 +13,30 @@ PLATFORM_ADMIN_PASSWORD=your-strong-password
 
 On API startup, if no user exists with that email, AQREM creates a platform administrator account (password is hashed; never logged).
 
-Sign in at `/login` → redirected to **`/platform-admin`**.
+Sign in at `/login` → redirected to **`/super-admin`**.
+
+## Public app URL (invitation links)
+
+Set the browser-facing base URL (never derived from the HTTP Host header):
+
+```env
+PUBLIC_APP_URL=http://100.80.43.124:5173
+```
+
+Production (Azure Container Apps or custom domain): set the same variable in container app settings / Key Vault reference, e.g. `https://your-app.azurecontainerapps.io`.
+
+Optional frontend fallback: `VITE_PUBLIC_APP_URL` (same value) when displaying URLs before an API round-trip.
+
+Invitation URLs are built server-side:
+
+- Organization admin: `{PUBLIC_APP_URL}/invite/admin/{token}`
+- Employee join link: `{PUBLIC_APP_URL}/join/{token}`
 
 ## Provision a client
 
 1. **Create organization** — default test setup uses `license_limit=0` and `license_status=test`.
-2. **Provision user** — enter email, name, role; copy the **one-time** `/accept-invite?token=…` link.
-3. Client opens the link, sets a password, and is signed in to their organization.
+2. **Provision user** — enter email, name, role; copy the full **`invitation_setup_url`** from the API/UI.
+3. Client opens the link, sets a password, and is signed in to their organization admin console (`/admin`) when invited as org admin.
 
 ## License semantics
 

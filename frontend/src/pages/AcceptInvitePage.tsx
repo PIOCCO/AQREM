@@ -1,14 +1,22 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AuthPageShell } from "../components/auth/AuthPageShell";
 import { acceptInvitation, clearSession, fetchAuthMe, loadSession, saveSession } from "../lib/api";
 import { isPlatformSessionToken, resolveOrganizationIdForSession, resolvePostAuthPath } from "../lib/authRouting";
 import { previewAcceptInvitation } from "../lib/joinApi";
 import { roleLabel } from "../lib/roleLabels";
 
+function readToken(searchParams: URLSearchParams, routeToken?: string): string {
+  const fromQuery = searchParams.get("token")?.trim();
+  if (fromQuery) return fromQuery;
+  if (routeToken) return decodeURIComponent(routeToken);
+  return "";
+}
+
 export default function AcceptInvitePage() {
   const [searchParams] = useSearchParams();
-  const token = useMemo(() => searchParams.get("token")?.trim() ?? "", [searchParams]);
+  const { token: routeToken } = useParams<{ token?: string }>();
+  const token = useMemo(() => readToken(searchParams, routeToken), [searchParams, routeToken]);
   const navigate = useNavigate();
   const [preview, setPreview] = useState<{
     organization_name: string;
@@ -63,7 +71,7 @@ export default function AcceptInvitePage() {
     clearSession();
     setSignedInEmail(null);
     setPlatformSession(false);
-    navigate(`/accept-invite?token=${encodeURIComponent(token)}`, { replace: true });
+    navigate(`/invite/admin/${encodeURIComponent(token)}`, { replace: true });
   }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {

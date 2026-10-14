@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from urllib.parse import quote
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -13,6 +12,7 @@ from app.core.roles import Role
 from app.models.invitation import UserInvitation
 from app.models.organization import Organization, OrganizationMembership, User
 from app.services.email.invitations import send_admin_invitation_email
+from app.services.invitations.invite_urls import build_invite_url, invite_path
 from app.services.invitations.token_vault import seal_invitation_token, unseal_invitation_token
 from app.services.invitations.tokens import generate_opaque_token, hash_token
 from app.services.licensing import LicenseDenied, assert_can_add_seat
@@ -26,7 +26,11 @@ def _utcnow() -> datetime:
 
 
 def invitation_setup_path(raw_token: str) -> str:
-    return f"/accept-invite?token={quote(raw_token, safe='')}"
+    return invite_path("admin", raw_token)
+
+
+def invitation_setup_url(raw_token: str) -> str:
+    return build_invite_url("admin", raw_token)
 
 
 def assert_can_create_org_admin_invite(db: Session, *, organization_id: UUID) -> None:
@@ -211,7 +215,7 @@ def provision_admin_invitation(
         metadata={"email": normalized_email, "expires_days": expires_days},
     )
 
-    invitation_url = invitation_setup_path(raw_token) if invitation_base_path == "/accept-invite" else f"{invitation_base_path}?token={quote(raw_token, safe='')}"
+    invitation_url = invitation_setup_url(raw_token)
     email_sent = send_admin_invitation_email(
         to_email=normalized_email,
         invitee_name=full_name,

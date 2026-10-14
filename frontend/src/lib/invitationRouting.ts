@@ -41,9 +41,9 @@ export function extractRootPastedToken(pathname: string): string | null {
 }
 
 export function acceptInviteUrlForToken(token: string): string {
-  return `/accept-invite?token=${encodeURIComponent(token)}`;
+  return `/invite/admin/${encodeURIComponent(token)}`;
 }
 
 export function joinUrlForToken(token: string): string {
-  return `/join?token=${encodeURIComponent(token)}`;
+  return `/join/${encodeURIComponent(token)}`;
 }

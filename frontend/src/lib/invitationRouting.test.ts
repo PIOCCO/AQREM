@@ -5,7 +5,7 @@ describe("extractRootPastedToken", () => {
   it("detects pasted opaque token paths", () => {
     const token = "DWIJ78687dewadawd@@qqjyggjqqqbhj667qqeada";
     expect(extractRootPastedToken(`/${token}`)).toBe(token);
-    expect(acceptInviteUrlForToken(token)).toContain(encodeURIComponent("@@"));
+    expect(acceptInviteUrlForToken(token)).toBe(`/invite/admin/${encodeURIComponent(token)}`);
   });
 
   it("ignores known app routes", () => {

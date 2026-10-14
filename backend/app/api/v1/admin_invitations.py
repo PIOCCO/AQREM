@@ -30,6 +30,7 @@ from app.services.invitations.admin_invitation import (
     delete_admin_invitation,
     invitation_public_status,
     invitation_setup_path,
+    invitation_setup_url,
     provision_admin_invitation,
     reissue_admin_invitation,
     resend_admin_invitation,
@@ -40,17 +41,58 @@ from app.services.invitations.employee_join import (
     delete_employee_join_link,
     get_active_link_for_org,
     join_setup_path,
+    join_setup_url,
     resolve_employee_join_link,
     rotate_employee_link,
     set_link_status,
     LINK_DISABLED,
     LINK_PAUSED,
 )
+from app.services.invitations.invite_urls import absolute_from_invite_path
+from app.services.invitations.token_vault import unseal_invitation_token
 from app.services.licensing import LicenseDenied
 from app.services.platform_provisioning import revoke_invitation
 from app.services.seat_usage import get_seat_usage
 
 router = APIRouter()
+
+
+def _admin_link_response(*, path: str, expires_at: datetime | None) -> InvitationLinkResponse:
+    return InvitationLinkResponse(
+        invitation_setup_path=path,
+        invitation_setup_url=absolute_from_invite_path(path),
+        expires_at=expires_at,
+    )
+
+
+def _employee_link_response(*, path: str, expires_at: datetime | None) -> InvitationLinkResponse:
+    return InvitationLinkResponse(
+        join_path=path,
+        join_url=absolute_from_invite_path(path),
+        expires_at=expires_at,
+    )
+
+
+def _history_invite_urls_admin(inv: UserInvitation) -> tuple[str | None, str | None]:
+    if inv.used_at is not None or not inv.token_ciphertext:
+        return None, None
+    try:
+        raw = unseal_invitation_token(inv.token_ciphertext)
+        path = invitation_setup_path(raw)
+        return path, absolute_from_invite_path(path)
+    except ValueError:
+        return None, None
+
+
+def _history_invite_urls_employee(link: EmployeeJoinLink) -> tuple[str | None, str | None]:
+    if not link.token_ciphertext:
+        return None, None
+    try:
+        raw = unseal_invitation_token(link.token_ciphertext)
+        path = join_setup_path(raw)
+        return path, absolute_from_invite_path(path)
+    except ValueError:
+        return None, None
 
 
 def _visible_org(db: Session, organization_id: UUID):
@@ -149,6 +191,7 @@ def invitation_history(
         st = invitation_public_status(inv, now=now)
         if status_filter and status_filter != "all" and st != status_filter:
             continue
+        inv_path, inv_url = _history_invite_urls_admin(inv)
         rows.append(
             AdminInvitationHistoryRow(
                 id=inv.id,
@@ -163,6 +206,8 @@ def invitation_history(
                 accepted_at=inv.used_at,
                 revoked_at=inv.revoked_at,
                 created_by_user_id=inv.created_by_user_id,
+                invite_path=inv_path,
+                invite_url=inv_url,
             )
         )
     for link in links:
@@ -171,6 +216,7 @@ def invitation_history(
         if status_filter and status_filter != "all" and filter_status != status_filter:
             continue
         domain_hint = ", ".join(link.allowed_domains or []) or "Any email (approval required)"
+        link_path, link_url = _history_invite_urls_employee(link)
         rows.append(
             AdminInvitationHistoryRow(
                 id=link.id,
@@ -187,6 +233,8 @@ def invitation_history(
                 created_by_user_id=link.created_by_user_id,
                 joined_count=link.joined_count,
                 pending_approval_count=link.pending_approval_count,
+                invite_path=link_path,
+                invite_url=link_url,
             )
         )
     rows.sort(key=lambda r: r.created_at, reverse=True)
@@ -249,6 +297,7 @@ def create_admin_invitation(
         invitation_id=invitation.id,
         invitation_expires_at=expires_at,
         invitation_setup_path=invitation_setup_path(raw_token),
+        invitation_setup_url=invitation_setup_url(raw_token),
         email_sent=email_sent,
     )
 
@@ -275,7 +324,7 @@ def get_admin_invitation_link(
             raw, expires_at = reissue_admin_invitation(db, admin_user_id=admin.id, invitation=invitation)
             db.commit()
             path = invitation_setup_path(raw)
-            return InvitationLinkResponse(invitation_setup_path=path, expires_at=expires_at)
+            return _admin_link_response(path=path, expires_at=expires_at)
         else:
             raise admin_error(code="INVALID_STATE", message="Accepted invitations cannot expose a link.", status_code=400)
     except ValueError as exc:
@@ -283,10 +332,10 @@ def get_admin_invitation_link(
             raw, expires_at = reissue_admin_invitation(db, admin_user_id=admin.id, invitation=invitation)
             db.commit()
             path = invitation_setup_path(raw)
-            return InvitationLinkResponse(invitation_setup_path=path, expires_at=expires_at)
+            return _admin_link_response(path=path, expires_at=expires_at)
         raise admin_error(code="INVALID_STATE", message=str(exc), status_code=400) from exc
     db.commit()
-    return InvitationLinkResponse(invitation_setup_path=path, expires_at=invitation.expires_at)
+    return _admin_link_response(path=path, expires_at=invitation.expires_at)
 
 
 @router.delete("/organizations/{organization_id}/invitations/admin/{invitation_id}", status_code=204)
@@ -324,9 +373,9 @@ def get_employee_link_url(
         raw = rotate_employee_link(db, admin_user_id=admin.id, link=link)
         db.commit()
         path = join_setup_path(raw)
-        return InvitationLinkResponse(join_path=path, expires_at=link.expires_at)
+        return _employee_link_response(path=path, expires_at=link.expires_at)
     db.commit()
-    return InvitationLinkResponse(join_path=path, expires_at=link.expires_at)
+    return _employee_link_response(path=path, expires_at=link.expires_at)
 
 
 @router.delete("/organizations/{organization_id}/employee-link/{link_id}", status_code=204)
@@ -411,6 +460,7 @@ def create_employee_link(
     return EmployeeLinkCreateResponse(
         link_id=link.id,
         join_path=join_setup_path(raw),
+        join_url=join_setup_url(raw),
         expires_at=link.expires_at,
         require_admin_approval=link.require_admin_approval,
         allowed_domains=list(link.allowed_domains or []),
@@ -435,6 +485,7 @@ def rotate_link(
     return EmployeeLinkCreateResponse(
         link_id=link.id,
         join_path=join_setup_path(raw),
+        join_url=join_setup_url(raw),
         expires_at=link.expires_at,
         require_admin_approval=link.require_admin_approval,
         allowed_domains=list(link.allowed_domains or []),
