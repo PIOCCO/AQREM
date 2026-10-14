@@ -1,8 +1,10 @@
 import { FormEvent, useEffect, useState } from "react";
+import { InviteUrlSuccess } from "../components/admin/InviteUrlSuccess";
 import { Combobox } from "../components/ui/dialog/Combobox";
 import { Dialog } from "../components/ui/dialog/Dialog";
 import { Field } from "../components/ui/dialog/Field";
 import { useAuth } from "../lib/authContext";
+import { pickInviteUrl } from "../lib/inviteLinks";
 import { fetchMembers, fetchOrgOverview, inviteMember, removeOrgMember } from "../lib/orgAdminApi";
 
 const INVITE_ROLE_OPTIONS = [
@@ -14,26 +16,39 @@ function isOrgAdminRole(role: string) {
   return role.toUpperCase() === "ORG_ADMIN";
 }
 
+type MemberRow = {
+  membership_id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  is_active: boolean;
+  membership_status?: string;
+};
+
 export default function ClientAdminUsersPage() {
   const { session } = useAuth();
-  const [members, setMembers] = useState<
-    Array<{ membership_id: string; email: string; full_name: string; role: string; is_active: boolean }>
-  >([]);
+  const [members, setMembers] = useState<MemberRow[]>([]);
   const [seatsFull, setSeatsFull] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [successUrl, setSuccessUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
   const [role, setRole] = useState("EDITOR");
-  const [removeTarget, setRemoveTarget] = useState<(typeof members)[number] | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<MemberRow | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
+
+  async function refreshMembersAndSeats() {
+    if (!session) return;
+    const [m, overview] = await Promise.all([fetchMembers(session), fetchOrgOverview(session)]);
+    setMembers(m);
+    setSeatsFull(overview.seats.is_full);
+  }
 
   function reload() {
     if (!session) return;
-    Promise.all([fetchMembers(session), fetchOrgOverview(session)])
-      .then(([m, overview]) => {
-        setMembers(m);
-        setSeatsFull(overview.seats.is_full);
-      })
+    refreshMembersAndSeats()
       .catch((e) => setError(e instanceof Error ? e.message : "Load failed"))
       .finally(() => setLoading(false));
   }
@@ -46,20 +61,33 @@ export default function ClientAdminUsersPage() {
     e.preventDefault();
     if (!session) return;
     setError(null);
-    setSuccess(null);
-    const form = new FormData(e.currentTarget);
+    setSuccessUrl(null);
+    setInviteBusy(true);
+    const payload = {
+      email: email.trim(),
+      full_name: fullName.trim(),
+      role,
+    };
     try {
-      const res = await inviteMember(session, {
-        email: String(form.get("email")),
-        full_name: String(form.get("full_name")),
-        role: String(form.get("role")),
-      });
-      setSuccess(`Invitation created. Share this link securely: ${res.invitation_setup_path}`);
-      reload();
-      e.currentTarget.reset();
+      const res = await inviteMember(session, payload);
+      const url = pickInviteUrl(res);
+      if (!url) {
+        setError("Invitation was created but no full URL was returned. Configure PUBLIC_APP_URL on the API server.");
+        return;
+      }
+      setSuccessUrl(url);
+      setFullName("");
+      setEmail("");
       setRole("EDITOR");
+      try {
+        await refreshMembersAndSeats();
+      } catch {
+        /* keep success visible even if table refresh fails */
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invite failed");
+    } finally {
+      setInviteBusy(false);
     }
   }
 
@@ -67,12 +95,13 @@ export default function ClientAdminUsersPage() {
     if (!session || !removeTarget) return;
     setRemoveBusy(true);
     setError(null);
+    setSuccessUrl(null);
     try {
       const id = removeTarget.membership_id;
       await removeOrgMember(session, id);
       setMembers((prev) => prev.filter((row) => row.membership_id !== id));
       setRemoveTarget(null);
-      reload();
+      await refreshMembersAndSeats();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Remove failed");
     } finally {
@@ -102,13 +131,30 @@ export default function ClientAdminUsersPage() {
           <label htmlFor="inv-full-name" className="block text-sm font-medium mb-1">
             Full name
           </label>
-          <input id="inv-full-name" name="full_name" required className="admin-input w-full" />
+          <input
+            id="inv-full-name"
+            name="full_name"
+            required
+            className="admin-input w-full"
+            value={fullName}
+            onChange={(ev) => setFullName(ev.target.value)}
+            autoComplete="name"
+          />
         </div>
         <div>
           <label htmlFor="inv-email" className="block text-sm font-medium mb-1">
             Work email
           </label>
-          <input id="inv-email" name="email" type="email" required className="admin-input w-full" />
+          <input
+            id="inv-email"
+            name="email"
+            type="email"
+            required
+            className="admin-input w-full"
+            value={email}
+            onChange={(ev) => setEmail(ev.target.value)}
+            autoComplete="off"
+          />
         </div>
         <Field id="inv-role" label="Role">
           <input type="hidden" name="role" value={role} />
@@ -119,16 +165,9 @@ export default function ClientAdminUsersPage() {
             {error}
           </div>
         ) : null}
-        {success ? (
-          <div
-            className="text-sm text-[var(--admin-status-active-text)] bg-[var(--admin-status-active-bg)] rounded px-3 py-2"
-            role="status"
-          >
-            {success}
-          </div>
-        ) : null}
-        <button type="submit" className="admin-btn-primary" disabled={seatsFull}>
-          Send invitation
+        {successUrl && !error ? <InviteUrlSuccess url={successUrl} /> : null}
+        <button type="submit" className="admin-btn-primary" disabled={seatsFull || inviteBusy}>
+          {inviteBusy ? "Sending…" : "Send invitation"}
         </button>
       </form>
 
@@ -139,6 +178,7 @@ export default function ClientAdminUsersPage() {
               <th className="p-3">Name</th>
               <th className="p-3">Email</th>
               <th className="p-3">Role</th>
+              <th className="p-3">Status</th>
               <th className="p-3">Actions</th>
             </tr>
           </thead>
@@ -148,6 +188,13 @@ export default function ClientAdminUsersPage() {
                 <td className="p-3">{m.full_name}</td>
                 <td className="p-3">{m.email}</td>
                 <td className="p-3">{m.role.replace("_", " ")}</td>
+                <td className="p-3">
+                  {m.membership_status === "pending" ? (
+                    <span className="text-xs font-medium text-amber-400/90">Pending invite</span>
+                  ) : (
+                    <span className="text-xs text-chat-muted">Active</span>
+                  )}
+                </td>
                 <td className="p-3">
                   {isOrgAdminRole(m.role) ? (
                     <span className="text-xs text-chat-muted">Managed by platform</span>

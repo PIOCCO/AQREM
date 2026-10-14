@@ -1,9 +1,17 @@
 /** Display invitation URLs returned by the API (prefer invitation_setup_url / join_url). */
 
+let warnedMissingPublicUrl = false;
+
 export function publicAppBaseUrl(): string {
   const fromEnv = (import.meta.env.VITE_PUBLIC_APP_URL as string | undefined)?.trim();
   if (fromEnv) return fromEnv.replace(/\/+$/, "");
-  return window.location.origin.replace(/\/+$/, "");
+  if (typeof window !== "undefined" && !warnedMissingPublicUrl) {
+    console.warn(
+      "VITE_PUBLIC_APP_URL is not set; falling back to window.location.origin for invite link display. Set VITE_PUBLIC_APP_URL to match PUBLIC_APP_URL on the API.",
+    );
+    warnedMissingPublicUrl = true;
+  }
+  return typeof window !== "undefined" ? window.location.origin.replace(/\/+$/, "") : "";
 }
 
 export function absoluteInviteUrl(pathOrUrl: string | null | undefined): string | null {

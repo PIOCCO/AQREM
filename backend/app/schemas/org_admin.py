@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ModelTokenSaveRequest(BaseModel):
@@ -45,6 +45,18 @@ class MemberInviteRequest(BaseModel):
     full_name: str = Field(min_length=1, max_length=255)
     role: str = Field(default="EDITOR")
 
+    @field_validator("email", "full_name", mode="before")
+    @classmethod
+    def strip_fields(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.strip()
+        return v
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.lower()
+
 
 class MemberRow(BaseModel):
     membership_id: UUID
@@ -53,6 +65,7 @@ class MemberRow(BaseModel):
     full_name: str
     role: str
     is_active: bool
+    membership_status: str = "active"
 
 
 class UsageSummaryResponse(BaseModel):

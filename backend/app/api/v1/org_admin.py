@@ -486,17 +486,40 @@ def list_members(
         )
         .all()
     )
-    return [
-        MemberRow(
-            membership_id=m.id,
-            user_id=u.id,
-            email=u.email,
-            full_name=u.full_name,
-            role=m.role,
-            is_active=True,
+    now = datetime.now(UTC)
+    out: list[MemberRow] = []
+    for m, u in rows:
+        pending_inv = (
+            db.query(UserInvitation)
+            .filter(
+                UserInvitation.organization_id == tenant.organization_id,
+                UserInvitation.email == u.email.strip().lower(),
+                UserInvitation.invitation_kind == "member",
+                UserInvitation.used_at.is_(None),
+                UserInvitation.revoked_at.is_(None),
+                UserInvitation.expires_at > now,
+            )
+            .order_by(UserInvitation.created_at.desc())
+            .first()
         )
-        for m, u in rows
-    ]
+        invite_pending = pending_inv is not None and u.hashed_password is None
+        display_name = (
+            (pending_inv.invitee_full_name or u.full_name).strip()
+            if invite_pending and pending_inv
+            else u.full_name
+        )
+        out.append(
+            MemberRow(
+                membership_id=m.id,
+                user_id=u.id,
+                email=u.email,
+                full_name=display_name,
+                role=m.role,
+                is_active=True,
+                membership_status="pending" if invite_pending else "active",
+            )
+        )
+    return out
 
 
 @router.post("/members/invite", status_code=201)
@@ -508,6 +531,14 @@ def invite_member(
     db: Session = Depends(get_tenant_db),
 ) -> dict:
     assert_org_admin_action(tenant, action="write", resource_type="member", resource_org_id=tenant.organization_id)
+    from app.services.invitations.invite_urls import public_app_base_url
+
+    if not public_app_base_url():
+        raise org_admin_error(
+            code="PUBLIC_URL_NOT_CONFIGURED",
+            message="PUBLIC_APP_URL (APP_PUBLIC_BASE_URL) must be set on the server before sending invitations.",
+            status_code=503,
+        )
     org = db.get(Organization, tenant.organization_id)
     if org is None:
         raise org_admin_error(code="NOT_FOUND", message="Organization not found.", status_code=404)
@@ -562,12 +593,21 @@ def invite_member(
         payload={"seats_used": seats.seats_used, "seats_limit": seats.seats_limit},
     )
     db.commit()
-    from app.services.invitations.invite_urls import absolute_from_invite_path, invite_path
+    from app.services.invitations.invite_urls import build_invite_url, invite_path
 
     path = invite_path("member", raw_token)
+    try:
+        setup_url = build_invite_url("member", raw_token)
+    except ValueError as exc:
+        raise org_admin_error(
+            code="PUBLIC_URL_NOT_CONFIGURED",
+            message="Invitation was created but PUBLIC_APP_URL is not configured on the server. Set PUBLIC_APP_URL (APP_PUBLIC_BASE_URL) and resend the invitation.",
+            status_code=503,
+        ) from exc
     return {
         "invitation_setup_path": path,
-        "invitation_setup_url": absolute_from_invite_path(path),
+        "invitation_setup_url": setup_url,
+        "invite_url": setup_url,
         "expires_at": expires_at.isoformat(),
     }
 

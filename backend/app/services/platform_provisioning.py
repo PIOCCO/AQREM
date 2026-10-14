@@ -112,11 +112,13 @@ def provision_user_invitation(
     if pending_same:
         raise ValueError("DUPLICATE_EMAIL")
 
-    user = db.query(User).filter(User.email == email).first()
+    clean_email = email.strip().lower()
+    clean_name = full_name.strip()
+    user = db.query(User).filter(User.email == clean_email).first()
     if user is None:
         user = User(
-            email=email,
-            full_name=full_name,
+            email=clean_email,
+            full_name=clean_name,
             hashed_password=None,
             is_active=True,
             must_change_password=True,
@@ -125,6 +127,8 @@ def provision_user_invitation(
         db.flush()
     elif not user.is_active:
         raise ValueError("User account is deactivated")
+    elif user.hashed_password is None:
+        user.full_name = clean_name
 
     membership = (
         db.query(OrganizationMembership)
@@ -150,7 +154,8 @@ def provision_user_invitation(
     expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_hours)
     invitation = UserInvitation(
         organization_id=organization_id,
-        email=email,
+        email=clean_email,
+        invitee_full_name=clean_name,
         role=role.value,
         invitation_kind="member" if role != Role.ORG_ADMIN else "org_admin",
         token_hash=hash_invitation_token(raw_token),
@@ -175,8 +180,8 @@ def provision_user_invitation(
 
         send_member_invitation_email(
             db,
-            to_email=email.lower(),
-            invitee_name=full_name,
+            to_email=clean_email,
+            invitee_name=clean_name,
             organization_name=org.name,
             invitation_url=build_invite_url("member", raw_token),
             expires_at=expires_at,
