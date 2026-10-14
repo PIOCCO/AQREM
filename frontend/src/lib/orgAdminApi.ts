@@ -30,6 +30,7 @@ export type SetupChecklist = {
   employee_link_enabled: boolean;
   storage_configured: boolean;
   model_token_status: string;
+  postgres_database_status: string;
 };
 
 export type OrgOverview = {

@@ -146,19 +146,21 @@ def admin_console_enter(
 def get_setup_checklist(
     tenant: TenantContext = Depends(_require_org_admin_surface),
     db: Session = Depends(get_tenant_db),
+    control_db: Session = Depends(get_db),
 ) -> dict:
     assert_org_admin_action(tenant, action="read", resource_type="setup", resource_org_id=tenant.organization_id)
-    return build_setup_checklist(db, organization_id=tenant.organization_id)
+    return build_setup_checklist(db, organization_id=tenant.organization_id, control_db=control_db)
 
 
 @router.get("/overview")
 def org_admin_overview(
     tenant: TenantContext = Depends(_require_org_admin_surface),
     db: Session = Depends(get_tenant_db),
+    control_db: Session = Depends(get_db),
 ) -> dict:
-    org = db.get(Organization, tenant.organization_id)
-    checklist = build_setup_checklist(db, organization_id=tenant.organization_id)
-    usage = get_seat_usage(db, org) if org else None
+    org = control_db.get(Organization, tenant.organization_id)
+    checklist = build_setup_checklist(db, organization_id=tenant.organization_id, control_db=control_db)
+    usage = get_seat_usage(control_db, org) if org else None
     return {
         "organization": {
             "id": str(org.id) if org else None,
@@ -490,7 +492,25 @@ def save_model_token(
         event_type="credential.expiry_metadata_updated",
         payload={"expires_at_iso": expires.date().isoformat(), "status": cred.status},
     )
+    ok, test_message = get_client_secret_store().test_model_token(tenant.organization_id)
+    cred.last_test_at = datetime.now(UTC)
+    cred.last_test_status = "success" if ok else "failed"
+    record_audit(
+        db,
+        organization_id=tenant.organization_id,
+        user_id=tenant.user_id,
+        action="model_token_tested",
+        resource_type="credential",
+        resource_id=str(cred.id),
+        metadata={"result": cred.last_test_status, "trigger": "save"},
+    )
     db.commit()
+    if not ok:
+        raise org_admin_error(
+            code="TOKEN_TEST_FAILED",
+            message=test_message or "Token was saved but the connection test failed. Fix the key and try again.",
+            field="token",
+        )
     return get_model_token(tenant=tenant, db=db)
 
 
@@ -991,8 +1011,9 @@ def configure_data_storage(
 def employee_link_copied(
     tenant: TenantContext = Depends(_require_org_admin_surface),
     db: Session = Depends(get_tenant_db),
+    control_db: Session = Depends(get_db),
 ) -> None:
-    checklist = build_setup_checklist(db, organization_id=tenant.organization_id)
+    checklist = build_setup_checklist(db, organization_id=tenant.organization_id, control_db=control_db)
     if not checklist.get("employee_link_enabled"):
         raise org_admin_error(
             code="LINK_LOCKED",
