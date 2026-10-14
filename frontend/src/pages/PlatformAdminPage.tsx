@@ -396,7 +396,7 @@ function PlatformAdminInner({
         <div className="mx-6 mt-4 admin-inline-alert admin-inline-alert-danger" role="alert">
           <strong className="font-medium">Organization delete unavailable.</strong> The API at{" "}
           {resolveApiBase() || "port 8000"} does not report soft-delete support. Restart the backend from the latest
-          AQREM code on port 8000 (branch with POST …/organizations/&#123;id&#125;/delete). The Vite UI on :5173 alone
+          AQREM code on port 8000 (POST /api/v1/admin/organizations/…/delete). The Vite UI on :5173 alone
           cannot schedule deletion.
         </div>
       ) : null}
@@ -533,6 +533,13 @@ function PlatformAdminInner({
           </div>
           {loading ? (
             <p className="text-sm text-chat-muted">Loading organizations…</p>
+          ) : orgs.length === 0 && (counts.all ?? 0) === 0 && filter === "all" && !search.trim() ? (
+            <div className="admin-card p-6 space-y-3 text-center">
+              <p className="text-sm text-chat-muted">No organizations yet. The platform starts empty — create one to invite an admin and employees.</p>
+              <button type="button" className="aq-btn-primary text-sm mx-auto" onClick={() => setShowNewOrg(true)}>
+                Create your first organization
+              </button>
+            </div>
           ) : orgs.length === 0 ? (
             <p className="text-sm text-chat-muted">No organizations match your filters.</p>
           ) : (

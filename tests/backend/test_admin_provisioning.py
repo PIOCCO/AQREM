@@ -115,7 +115,7 @@ def test_admin_provisions_org_and_client_user(client: TestClient, db_session):
     create_res = client.post(
         "/api/v1/admin/organizations",
         headers=admin_headers,
-        json={"name": "Client Co", "license_limit": 1, "environment": "test"},
+        json={"name": "Client Co", "license_limit": 1, "environment": "production"},
     )
     assert create_res.status_code == 201, create_res.text
     org_id = create_res.json()["id"]
@@ -128,7 +128,7 @@ def test_admin_provisions_org_and_client_user(client: TestClient, db_session):
     )
     assert prov_res.status_code == 201, prov_res.text
     setup_path = prov_res.json()["invitation_setup_path"]
-    assert "token=" in setup_path
+    assert setup_path.startswith("/invite/admin/")
 
     non_admin = User(
         email="editor@test.example",
@@ -235,7 +235,11 @@ def test_admin_invite_validation_error_includes_message(client: TestClient, db_s
 
 
 @pytest.mark.skipif(not _postgres_available(), reason="PostgreSQL not available")
-def test_invitation_single_use_and_expiry(db_session):
+def test_invitation_single_use_and_expiry(db_session, monkeypatch):
+    monkeypatch.setenv("LICENSING_TEST_MODE", "true")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
     admin = User(
         email="admin-invite@test.example",
         full_name="Admin",

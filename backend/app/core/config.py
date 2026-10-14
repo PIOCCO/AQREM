@@ -120,7 +120,7 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = True
     allow_public_registration: bool = False
     licensing_test_mode: bool = Field(
-        default=True,
+        default=False,
         validation_alias=AliasChoices("licensing_test_mode", "LICENSING_TEST_MODE"),
     )
     platform_admin_email: str | None = Field(
@@ -132,9 +132,9 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("platform_admin_password", "PLATFORM_ADMIN_PASSWORD"),
     )
     platform_admin_sync_password: bool = Field(
-        default=True,
+        default=False,
         validation_alias=AliasChoices("platform_admin_sync_password", "PLATFORM_ADMIN_SYNC_PASSWORD"),
-        description="When true (default in dev), reset platform admin password from env on API startup.",
+        description="When true, reset platform admin password from env on every API startup (dev only).",
     )
     invitation_ttl_hours: int = 72
 

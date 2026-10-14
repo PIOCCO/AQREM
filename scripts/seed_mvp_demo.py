@@ -10,8 +10,16 @@ from pathlib import Path
 import httpx
 
 
+def _refuse_production() -> None:
+    import os
+
+    if os.environ.get("APP_ENV", "development").strip().lower() == "production":
+        raise SystemExit("seed_mvp_demo.py must not run when APP_ENV=production")
+
+
 async def main() -> None:
-    parser = argparse.ArgumentParser(description="Seed MVP demo organization data")
+    _refuse_production()
+    parser = argparse.ArgumentParser(description="Seed MVP demo organization data (manual dev only)")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--email", required=True)
     parser.add_argument("--password", required=True)
