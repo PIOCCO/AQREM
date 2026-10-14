@@ -59,6 +59,8 @@ export type AdminContext = {
   test_mode_effective: boolean;
   active_super_admin_count?: number;
   super_admin_warning?: boolean;
+  /** False or missing when the API on :8000 is an older build without soft delete routes. */
+  organization_soft_delete?: boolean;
 };
 
 export type PlatformStaffMember = {
@@ -123,10 +125,13 @@ function isDeleteOrganizationResponse(body: unknown): body is {
 } {
   if (!body || typeof body !== "object") return false;
   const row = body as Record<string, unknown>;
+  const orgId = row.organization_id ?? row.organizationId;
+  const purgeAt = row.purge_scheduled_at ?? row.purgeScheduledAt;
+  const retention = row.retention_days ?? row.retentionDays;
   return (
-    typeof row.organization_id === "string" &&
-    typeof row.purge_scheduled_at === "string" &&
-    typeof row.retention_days === "number" &&
+    (typeof orgId === "string" || typeof orgId === "number") &&
+    typeof purgeAt === "string" &&
+    typeof retention === "number" &&
     !("seats" in row)
   );
 }
@@ -219,14 +224,17 @@ export async function deleteAdminOrganization(
 ): Promise<{ organization_id: string; purge_scheduled_at: string; retention_days: number }> {
   const body = JSON.stringify({ confirmName: confirmName });
   const headers = adminHeaders(session);
-  const attempts: { method: string; url: string; body?: string }[] = [
-    { method: "POST", url: apiUrl(`/api/v1/admin/organizations/${orgId}/delete`), body },
-    { method: "POST", url: apiUrl(`/api/v1/admin/organizations/${orgId}/schedule-deletion`), body },
-    { method: "PATCH", url: apiUrl(`/api/v1/admin/organizations/${orgId}`), body },
+  const apiBase = resolveApiBase() || "(same origin)";
+  const attempts: { method: string; path: string; body?: string }[] = [
+    { method: "POST", path: `/api/v1/admin/organizations/${orgId}/delete`, body },
+    { method: "POST", path: `/api/v1/admin/organizations/${orgId}/schedule-deletion`, body },
+    { method: "DELETE", path: `/api/v1/admin/organizations/${orgId}`, body },
   ];
+  const attemptLog: string[] = [];
   let last: Response | null = null;
   for (const attempt of attempts) {
-    last = await fetch(attempt.url, {
+    const url = apiUrl(attempt.path);
+    last = await fetch(url, {
       ...adminFetchInit,
       method: attempt.method,
       headers,
@@ -235,20 +243,27 @@ export async function deleteAdminOrganization(
     if (last.ok) {
       const payload: unknown = await last.json();
       if (isDeleteOrganizationResponse(payload)) {
-        return payload;
+        const row = payload as Record<string, unknown>;
+        return {
+          organization_id: String(row.organization_id ?? row.organizationId),
+          purge_scheduled_at: String(row.purge_scheduled_at ?? row.purgeScheduledAt),
+          retention_days: Number(row.retention_days ?? row.retentionDays),
+        };
       }
-      throw new Error(
-        "Organization was not scheduled for deletion — the API returned a normal organization payload. Restart the backend on port 8000 with the latest code.",
-      );
+      attemptLog.push(`${attempt.method} ${attempt.path} → ${last.status} (organization payload, not a delete result)`);
+      continue;
     }
+    attemptLog.push(`${attempt.method} ${attempt.path} → ${last.status}`);
     if (last.status !== 404 && last.status !== 405) {
       await parseError(last, "Failed to delete organization");
     }
   }
-  return parseError(
-    last ?? new Response(null, { status: 503 }),
-    "Organization delete is not available on this API server — restart the backend on port 8000 with the latest code.",
-  ) as never;
+  const detail = attemptLog.length ? attemptLog.join("; ") : "no endpoints responded";
+  throw new Error(
+    `Organization delete is not available on the API at ${apiBase}. ${detail}. ` +
+      "Stop and restart the backend on port 8000 from the latest AQREM branch (POST …/delete or …/schedule-deletion must return purge_scheduled_at). " +
+      "The UI at :5173 calls that host for API requests — updating only the frontend is not enough.",
+  );
 }
 
 export async function fetchPlatformStaff(session: AuthSession): Promise<PlatformStaffMember[]> {

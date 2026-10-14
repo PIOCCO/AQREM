@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { LogoHomeLink } from "../components/brand/LogoHomeLink";
 import { ToastProvider, useToast } from "../components/ui/Toast";
 import { loadSession } from "../lib/api";
+import { resolveApiBase } from "../lib/apiBase";
 import {
   licenseStatusLabel,
   platformRoleLabel,
@@ -388,6 +389,15 @@ function PlatformAdminInner({
           <button type="button" className="aq-btn-primary text-sm" onClick={() => setShowNewOrg(true)}>
             + New organization
           </button>
+        </div>
+      ) : null}
+
+      {context?.organization_soft_delete !== true && (embedded || consoleSection === "organizations") ? (
+        <div className="mx-6 mt-4 admin-inline-alert admin-inline-alert-danger" role="alert">
+          <strong className="font-medium">Organization delete unavailable.</strong> The API at{" "}
+          {resolveApiBase() || "port 8000"} does not report soft-delete support. Restart the backend from the latest
+          AQREM code on port 8000 (branch with POST …/organizations/&#123;id&#125;/delete). The Vite UI on :5173 alone
+          cannot schedule deletion.
         </div>
       ) : null}
 

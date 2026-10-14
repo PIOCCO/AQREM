@@ -119,6 +119,7 @@ def admin_context(
         test_mode_effective=effective,
         active_super_admin_count=super_count,
         super_admin_warning=super_count < 2,
+        organization_soft_delete=True,
     )
 
 

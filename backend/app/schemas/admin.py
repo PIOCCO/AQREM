@@ -12,6 +12,10 @@ class AdminContextResponse(BaseModel):
     test_mode_effective: bool
     active_super_admin_count: int = 0
     super_admin_warning: bool = False
+    organization_soft_delete: bool = Field(
+        default=True,
+        description="When true, POST .../organizations/{id}/delete schedules soft deletion.",
+    )
 
 
 class PlatformStaffRow(BaseModel):
