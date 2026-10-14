@@ -337,14 +337,33 @@ def join_start(
     db.add(pending)
     db.flush()
 
-    code = f"{secrets.randbelow(900000) + 100000:06d}"
+    from app.services.email.verification_policy import (
+        assert_can_send_verification_email,
+        generate_six_digit_code,
+        hash_verification_code,
+        verification_expires_at,
+    )
+
+    try:
+        assert_can_send_verification_email(db, recipient=normalized, email_type="join_verification_code")
+    except ValueError:
+        raise ValueError(GENERIC_JOIN_ERROR) from None
+    code = generate_six_digit_code()
     ver = EmployeeJoinVerification(
         pending_id=pending.id,
-        code_hash=hash_token(code),
-        expires_at=_utcnow() + timedelta(minutes=15),
+        code_hash=hash_verification_code(code),
+        expires_at=verification_expires_at(),
+        failed_attempts=0,
     )
     db.add(ver)
-    send_join_verification_email(to_email=normalized, organization_name=org.name, code=code)
+    send_join_verification_email(
+        db,
+        to_email=normalized,
+        organization_name=org.name,
+        organization_id=str(org.id),
+        pending_id=str(pending.id),
+        code=code,
+    )
 
     record_audit(
         db,
@@ -389,7 +408,10 @@ def join_verify_email(db: Session, *, token: str, pending_id: UUID, code: str) -
         exp = exp.replace(tzinfo=timezone.utc)
     if exp < _utcnow():
         raise ValueError(GENERIC_JOIN_ERROR)
+    if int(ver.failed_attempts or 0) >= 5:
+        raise ValueError(GENERIC_JOIN_ERROR)
     if not tokens_equal(ver.code_hash, code.strip()):
+        ver.failed_attempts = int(ver.failed_attempts or 0) + 1
         _record_failed_attempt(db, link)
         raise ValueError(GENERIC_JOIN_ERROR)
 
@@ -545,7 +567,7 @@ def _finalize_join(
 
     _assign_all_staff_group(db, org.id, user.id)
 
-    send_employee_welcome_email(to_email=user.email, organization_name=org.name)
+    send_employee_welcome_email(db, to_email=user.email, organization_name=org.name, organization_id=str(org.id))
     record_audit(
         db,
         organization_id=org.id,
@@ -631,7 +653,7 @@ def approve_pending_join(
     link.pending_approval_count = max(0, link.pending_approval_count - 1)
     link.joined_count += 1
     _assign_all_staff_group(db, organization_id, user.id)
-    send_employee_welcome_email(to_email=user.email, organization_name=org.name)
+    send_employee_welcome_email(db, to_email=user.email, organization_name=org.name, organization_id=str(org.id))
     record_audit(
         db,
         organization_id=organization_id,

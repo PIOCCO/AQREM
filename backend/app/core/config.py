@@ -39,8 +39,28 @@ class Settings(BaseSettings):
     email_delivery_mode: str = Field(
         default="log",
         validation_alias=AliasChoices("email_delivery_mode", "EMAIL_DELIVERY_MODE"),
-        description="log (dev only) or disabled until SMTP is configured",
+        description="Legacy; prefer EMAIL_PROVIDER (log→console in dev, none in prod)",
     )
+    email_provider: str = Field(
+        default="",
+        validation_alias=AliasChoices("email_provider", "EMAIL_PROVIDER"),
+        description="brevo | console (dev only, explicit) | none",
+    )
+    brevo_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("brevo_api_key", "BREVO_API_KEY"),
+    )
+    email_from_address: str = Field(
+        default="",
+        validation_alias=AliasChoices("email_from_address", "EMAIL_FROM_ADDRESS"),
+    )
+    email_from_name: str = Field(
+        default="AQREM",
+        validation_alias=AliasChoices("email_from_name", "EMAIL_FROM_NAME"),
+    )
+    email_send_timeout_seconds: float = Field(default=15.0)
+    email_send_max_retries: int = Field(default=2)
+    email_send_retry_backoff_seconds: float = Field(default=0.5)
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     serve_frontend: bool = False
@@ -161,6 +181,20 @@ class Settings(BaseSettings):
                         f"Missing: {', '.join(status.missing)}"
                     )
         return self
+
+    @property
+    def resolved_email_provider(self) -> str:
+        explicit = (self.email_provider or "").strip().lower()
+        if explicit:
+            return explicit
+        legacy = (self.email_delivery_mode or "log").strip().lower()
+        if legacy in {"log", "console"}:
+            return "console" if self.app_env != "production" else "none"
+        if legacy in {"none", "disabled", ""}:
+            return "none"
+        if legacy == "brevo":
+            return "brevo"
+        return "none"
 
     @property
     def cors_origins_list(self) -> list[str]:

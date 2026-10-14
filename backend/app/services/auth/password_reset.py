@@ -45,7 +45,7 @@ def request_password_reset(db: Session, *, email: str) -> None:
     db.flush()
 
     reset_url = f"{settings.app_public_base_url.rstrip('/')}/reset-password?token={raw}"
-    send_password_reset_email(to_email=user.email, reset_url=reset_url)
+    send_password_reset_email(db, to_email=user.email, reset_url=reset_url, user_id=str(user.id))
 
 
 def reset_password_with_token(db: Session, *, token: str, new_password: str) -> None:

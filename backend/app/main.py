@@ -55,6 +55,10 @@ async def lifespan(_: FastAPI):
     with SessionLocal() as session:
         ensure_platform_admin(session)
         session.commit()
+
+    from app.services.email.service import validate_email_config_at_startup
+
+    validate_email_config_at_startup(settings)
     yield
 
 

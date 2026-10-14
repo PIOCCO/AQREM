@@ -167,6 +167,20 @@ def provision_user_invitation(
         resource_id=str(user.id),
         metadata={"email": email, "role": role.value, "invitation_id": str(invitation.id)},
     )
+    if org is not None and invitation.invitation_kind == "member":
+        from app.services.email.invitations import send_member_invitation_email
+        from app.services.invitations.invite_urls import build_invite_url
+
+        send_member_invitation_email(
+            db,
+            to_email=email.lower(),
+            invitee_name=full_name,
+            organization_name=org.name,
+            invitation_url=build_invite_url("member", raw_token),
+            expires_at=expires_at,
+            organization_id=str(organization_id),
+            invitation_id=str(invitation.id),
+        )
     return user, membership, invitation, raw_token, expires_at
 
 
@@ -336,6 +350,7 @@ def accept_invitation(
     user.hashed_password = hash_password(password)
     user.must_change_password = False
     user.is_active = True
+    user.email_verified_at = now
     if full_name:
         user.full_name = full_name
 

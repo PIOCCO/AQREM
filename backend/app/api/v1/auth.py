@@ -143,6 +143,11 @@ def accept_invite_send_verification(
         code = str(exc)
         if code == "EMAIL_MISMATCH":
             raise HTTPException(status_code=400, detail={"message": "Email does not match this invitation."}) from exc
+        if code == "RATE_LIMIT":
+            raise HTTPException(
+                status_code=429,
+                detail={"message": "Please wait before requesting another code."},
+            ) from exc
         raise HTTPException(status_code=404, detail={"message": "This invitation is not valid."}) from None
     db.commit()
     return AcceptInvitationSendVerificationResponse(dev_verification_code=dev)

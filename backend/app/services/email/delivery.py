@@ -1,17 +1,7 @@
-import logging
+from app.services.email.invitations import send_password_reset_email as _send_password_reset
 
-from app.core.config import get_settings
-
-logger = logging.getLogger("aqrem.email")
+__all__ = ["send_password_reset_email"]
 
 
-def send_password_reset_email(*, to_email: str, reset_url: str) -> None:
-    settings = get_settings()
-    mode = (settings.email_delivery_mode or "log").lower()
-    if settings.app_env == "production" and mode == "log":
-        logger.warning("Password reset email not sent: configure EMAIL_DELIVERY_MODE for production")
-        return
-    if mode == "log":
-        logger.info("Password reset email not sent (delivery mode=log) for recipient")
-        return
-    logger.warning("Email delivery mode %s not implemented; reset not sent", mode)
+def send_password_reset_email(*, db, to_email: str, reset_url: str, user_id: str) -> None:
+    _send_password_reset(db, to_email=to_email, reset_url=reset_url, user_id=str(user_id))

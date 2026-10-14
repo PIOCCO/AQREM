@@ -216,13 +216,30 @@ def provision_admin_invitation(
     )
 
     invitation_url = invitation_setup_url(raw_token)
+    inviter = db.get(User, admin_user_id)
+    inviter_label = inviter.full_name if inviter else "AQREM Platform"
     email_sent = send_admin_invitation_email(
+        db,
         to_email=normalized_email,
         invitee_name=full_name,
         organization_name=org.name,
         invitation_url=invitation_url,
+        inviter_label=inviter_label,
+        expires_at=expires_at,
         personal_message=personal_message,
+        organization_id=str(organization_id),
+        invitation_id=str(invitation.id),
     )
+    if email_sent:
+        record_audit(
+            db,
+            organization_id=organization_id,
+            user_id=admin_user_id,
+            action="invitation_email_sent",
+            resource_type="invitation",
+            resource_id=str(invitation.id),
+            metadata={"email": normalized_email},
+        )
     return user, membership, invitation, raw_token, expires_at, email_sent
 
 
@@ -252,6 +269,21 @@ def resend_admin_invitation(
         resource_id=str(invitation.id),
         metadata={"email": invitation.email},
     )
+    org = db.get(Organization, invitation.organization_id)
+    inviter = db.get(User, admin_user_id)
+    if org is not None:
+        send_admin_invitation_email(
+            db,
+            to_email=invitation.email,
+            invitee_name=invitation.invitee_full_name or invitation.email,
+            organization_name=org.name,
+            invitation_url=invitation_setup_url(raw_token),
+            inviter_label=inviter.full_name if inviter else "AQREM Platform",
+            expires_at=expires_at,
+            personal_message=invitation.personal_message,
+            organization_id=str(org.id),
+            invitation_id=str(invitation.id),
+        )
     return raw_token, expires_at
 
 
