@@ -20,7 +20,9 @@ from app.models.employee_join import (
 from app.models.organization import Organization, OrganizationMembership, User
 from app.services.email.invitations import send_join_verification_email, send_employee_welcome_email
 from app.services.invitations.admin_invitation import assert_email_available_for_org
+from app.services.invitations.token_vault import seal_invitation_token, unseal_invitation_token
 from app.services.invitations.tokens import generate_opaque_token, hash_token, tokens_equal
+from urllib.parse import quote
 from app.services.licensing import LicenseDenied, assert_can_add_seat, org_allows_sign_in
 from app.services.access_control.groups import ensure_default_access_groups
 from app.models.access_group import AccessGroupMembership
@@ -40,6 +42,10 @@ ABUSE_THRESHOLD = 25
 ABUSE_WINDOW_MINUTES = 15
 
 GENERIC_JOIN_ERROR = "This link is not valid. Ask your administrator for a new one."
+
+
+def join_setup_path(raw_token: str) -> str:
+    return f"/join?token={quote(raw_token, safe='')}"
 
 
 def _utcnow() -> datetime:
@@ -144,6 +150,7 @@ def create_employee_join_link(
     link = EmployeeJoinLink(
         organization_id=organization_id,
         token_hash=hash_token(raw),
+        token_ciphertext=seal_invitation_token(raw),
         status=LINK_ACTIVE,
         allowed_domains=domains,
         require_admin_approval=require_admin_approval,
@@ -174,6 +181,7 @@ def create_employee_join_link(
 def rotate_employee_link(db: Session, *, admin_user_id: UUID, link: EmployeeJoinLink) -> str:
     raw = generate_opaque_token()
     link.token_hash = hash_token(raw)
+    link.token_ciphertext = seal_invitation_token(raw)
     link.rotated_at = _utcnow()
     record_audit(
         db,
@@ -185,6 +193,26 @@ def rotate_employee_link(db: Session, *, admin_user_id: UUID, link: EmployeeJoin
         metadata={},
     )
     return raw
+
+
+def resolve_employee_join_link(link: EmployeeJoinLink) -> str:
+    if not link.token_ciphertext:
+        raise ValueError("LINK_UNAVAILABLE")
+    raw = unseal_invitation_token(link.token_ciphertext)
+    return join_setup_path(raw)
+
+
+def delete_employee_join_link(db: Session, *, admin_user_id: UUID, link: EmployeeJoinLink) -> None:
+    record_audit(
+        db,
+        organization_id=link.organization_id,
+        user_id=admin_user_id,
+        action="employee_link_deleted",
+        resource_type="employee_join_link",
+        resource_id=str(link.id),
+        metadata={"joined_count": link.joined_count},
+    )
+    db.delete(link)
 
 
 def set_link_status(

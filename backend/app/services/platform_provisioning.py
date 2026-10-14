@@ -257,6 +257,8 @@ def accept_invitation(
     user = db.query(User).filter(User.email == invitation.email).first()
     if user is None:
         raise ValueError("User not found for invitation")
+    if user.is_platform_admin or (user.platform_role or "").strip():
+        raise ValueError("PLATFORM_ACCOUNT")
 
     user.hashed_password = hash_password(password)
     user.must_change_password = False

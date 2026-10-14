@@ -13,6 +13,12 @@ class AdminInvitationCreateRequest(BaseModel):
     expires_days: int = Field(default=7, ge=1, le=14)
 
 
+class InvitationLinkResponse(BaseModel):
+    invitation_setup_path: str | None = None
+    join_path: str | None = None
+    expires_at: datetime | None = None
+
+
 class AdminInvitationCreateResponse(BaseModel):
     user_id: UUID
     organization_id: UUID

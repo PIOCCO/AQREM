@@ -7,6 +7,10 @@ import {
   fetchEmployeeLinkSummary,
   fetchInvitationHistory,
   fetchInvitationsSetup,
+  deleteAdminInvitationRecord,
+  deleteEmployeeLinkRecord,
+  fetchAdminInvitationLink,
+  fetchEmployeeLinkUrl,
   resendInvitation,
   revokeInvitation,
   rotateEmployeeLink,
@@ -76,9 +80,7 @@ export function OrgInvitationsPanel({
         title: "Admin invitation link",
         path: result.invitation_setup_path,
         expires: result.invitation_expires_at,
-        note: result.email_sent
-          ? "We sent this link by email as well."
-          : "Email is not configured — copy this link now. You cannot view it again.",
+        note: result.email_sent ? "We sent this link by email as well." : "Email is not configured — copy this link now.",
       });
       (e.target as HTMLFormElement).reset();
       await reload();
@@ -258,8 +260,8 @@ export function OrgInvitationsPanel({
           </select>
         </div>
         <p className="text-xs text-chat-muted mb-3">
-          Active admin invites and employee links stay listed until they expire; expired unused admin invites are then
-          removed automatically.
+          Expired invitations stay in this list for audit. Use Copy link to retrieve a pending invite; expired or revoked
+          admin invites get a new token when you copy or regenerate.
         </p>
         {loading ? (
           <p className="text-sm text-chat-muted">Loading…</p>
@@ -296,7 +298,40 @@ export function OrgInvitationsPanel({
                   <td className="py-2 capitalize">{row.status}</td>
                   <td className="py-2">{formatDate(row.expires_at)}</td>
                   <td className="py-2">{formatDate(row.created_at)}</td>
-                  <td className="py-2 space-x-2">
+                  <td className="py-2 flex flex-wrap gap-2">
+                    {row.status !== "accepted" ? (
+                      <button
+                        type="button"
+                        className="text-xs underline"
+                        onClick={async () => {
+                          try {
+                            if (row.record_type === "admin_invitation") {
+                              const r = await fetchAdminInvitationLink(session, org.id, row.id);
+                              if (r.invitation_setup_path) {
+                                setSecret({
+                                  title: "Admin invitation link",
+                                  path: r.invitation_setup_path,
+                                  expires: r.expires_at,
+                                });
+                              }
+                            } else {
+                              const r = await fetchEmployeeLinkUrl(session, org.id, row.id);
+                              if (r.join_path) {
+                                setSecret({
+                                  title: "Employee join link",
+                                  path: r.join_path,
+                                  expires: r.expires_at ?? undefined,
+                                });
+                              }
+                            }
+                          } catch (err) {
+                            toast.push(err instanceof Error ? err.message : "Could not load link", "err");
+                          }
+                        }}
+                      >
+                        Copy link
+                      </button>
+                    ) : null}
                     {row.record_type === "admin_invitation" && row.status === "pending" ? (
                       <>
                         <button
@@ -318,14 +353,65 @@ export function OrgInvitationsPanel({
                         <button
                           type="button"
                           className="text-xs underline"
-                          onClick={() =>
-                            revokeInvitation(session, org.id, row.id).then(() => reload())
-                          }
+                          onClick={() => revokeInvitation(session, org.id, row.id).then(() => reload())}
                         >
                           Revoke
                         </button>
                       </>
                     ) : null}
+                    {row.record_type === "admin_invitation" &&
+                    (row.status === "expired" || row.status === "revoked") ? (
+                      <button
+                        type="button"
+                        className="text-xs underline"
+                        onClick={async () => {
+                          const r = await fetchAdminInvitationLink(session, org.id, row.id);
+                          void reload();
+                          if (r.invitation_setup_path) {
+                            setSecret({
+                              title: "Regenerated admin invitation link",
+                              path: r.invitation_setup_path,
+                              expires: r.expires_at,
+                            });
+                          }
+                        }}
+                      >
+                        Regenerate
+                      </button>
+                    ) : null}
+                    {row.record_type === "employee_link" &&
+                    (row.status === "expired" || row.status === "revoked") ? (
+                      <button
+                        type="button"
+                        className="text-xs underline"
+                        onClick={() =>
+                          rotateEmployeeLink(session, org.id, row.id).then((r) => {
+                            void reload();
+                            setSecret({ title: "Employee join link", path: r.join_path, expires: r.expires_at });
+                          })
+                        }
+                      >
+                        Regenerate
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="text-xs underline text-[var(--color-danger)]"
+                      onClick={() => {
+                        if (!window.confirm("Delete this history row? Pending links will stop working.")) return;
+                        const run =
+                          row.record_type === "admin_invitation"
+                            ? deleteAdminInvitationRecord(session, org.id, row.id)
+                            : deleteEmployeeLinkRecord(session, org.id, row.id);
+                        void run.then(async () => {
+                          await reload();
+                          await onRefreshOrgs();
+                          toast.push("Deleted", "ok");
+                        });
+                      }}
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}

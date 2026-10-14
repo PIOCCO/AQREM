@@ -26,6 +26,7 @@ import SuperAdminAuditPage from "./pages/super-admin/SuperAdminAuditPage";
 import SuperAdminSettingsPage from "./pages/super-admin/SuperAdminSettingsPage";
 import RequireSuperAdmin from "./components/RequireSuperAdmin";
 import RequireOrgAdminOnly from "./components/RequireOrgAdminOnly";
+import WorkspaceOrInvitationGate from "./components/WorkspaceOrInvitationGate";
 import RequireTenantWorkspace from "./components/RequireTenantWorkspace";
 import ClientAdminShell from "./components/client-admin/ClientAdminShell";
 import ClientAdminSetupPage from "./pages/ClientAdminSetupPage";
@@ -206,9 +207,9 @@ export default function App() {
       <Route
         path="/*"
         element={
-          <RequireTenantWorkspace>
+          <WorkspaceOrInvitationGate>
             <AuthenticatedApp />
-          </RequireTenantWorkspace>
+          </WorkspaceOrInvitationGate>
         }
       />
     </Routes>

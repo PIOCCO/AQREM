@@ -18,6 +18,7 @@ class EmployeeJoinLink(ControlBase):
         UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
     )
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    token_ciphertext: Mapped[str | None] = mapped_column(String(512), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
     allowed_domains: Mapped[list[str] | None] = mapped_column(ARRAY(String(255)), nullable=True)
     require_admin_approval: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

@@ -134,7 +134,12 @@ def accept_invite(
             password=payload.password,
             full_name=payload.full_name,
         )
-    except ValueError:
+    except ValueError as exc:
+        if str(exc) == "PLATFORM_ACCOUNT":
+            raise HTTPException(
+                status_code=400,
+                detail={"message": "This email is a platform administrator account and cannot accept an organization invitation."},
+            ) from exc
         raise HTTPException(status_code=400, detail={"message": "This invitation is not valid."}) from None
     db.commit()
 

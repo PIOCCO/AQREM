@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from urllib.parse import quote
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -12,6 +13,7 @@ from app.core.roles import Role
 from app.models.invitation import UserInvitation
 from app.models.organization import Organization, OrganizationMembership, User
 from app.services.email.invitations import send_admin_invitation_email
+from app.services.invitations.token_vault import seal_invitation_token, unseal_invitation_token
 from app.services.invitations.tokens import generate_opaque_token, hash_token
 from app.services.licensing import LicenseDenied, assert_can_add_seat
 
@@ -21,6 +23,39 @@ DEFAULT_EXPIRY_DAYS = 7
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def invitation_setup_path(raw_token: str) -> str:
+    return f"/accept-invite?token={quote(raw_token, safe='')}"
+
+
+def assert_can_create_org_admin_invite(db: Session, *, organization_id: UUID) -> None:
+    """One org admin slot: no active ORG_ADMIN member and no pending admin invite."""
+    admin_member = (
+        db.query(OrganizationMembership)
+        .filter(
+            OrganizationMembership.organization_id == organization_id,
+            OrganizationMembership.role == Role.ORG_ADMIN.value,
+            OrganizationMembership.is_active.is_(True),
+        )
+        .first()
+    )
+    if admin_member is not None:
+        raise ValueError("ORG_ADMIN_EXISTS")
+    now = _utcnow()
+    pending = (
+        db.query(UserInvitation)
+        .filter(
+            UserInvitation.organization_id == organization_id,
+            UserInvitation.invitation_kind == INVITATION_KIND_ORG_ADMIN,
+            UserInvitation.used_at.is_(None),
+            UserInvitation.revoked_at.is_(None),
+            UserInvitation.expires_at > now,
+        )
+        .first()
+    )
+    if pending is not None:
+        raise ValueError("ORG_ADMIN_INVITE_PENDING")
 
 
 def assert_email_available_for_org(db: Session, *, email: str, organization_id: UUID) -> None:
@@ -96,7 +131,7 @@ def provision_admin_invitation(
     except LicenseDenied as exc:
         raise LicenseDenied(exc.detail) from exc
 
-    revoke_active_admin_invitations(db, organization_id=organization_id, admin_user_id=admin_user_id)
+    assert_can_create_org_admin_invite(db, organization_id=organization_id)
 
     now = _utcnow()
     pending_same = (
@@ -159,6 +194,7 @@ def provision_admin_invitation(
         invitee_full_name=full_name,
         personal_message=(personal_message or "")[:2000] or None,
         token_hash=hash_token(raw_token),
+        token_ciphertext=seal_invitation_token(raw_token),
         expires_at=expires_at,
         created_by_user_id=admin_user_id,
     )
@@ -175,7 +211,7 @@ def provision_admin_invitation(
         metadata={"email": normalized_email, "expires_days": expires_days},
     )
 
-    invitation_url = f"{invitation_base_path}?token={raw_token}"
+    invitation_url = invitation_setup_path(raw_token) if invitation_base_path == "/accept-invite" else f"{invitation_base_path}?token={quote(raw_token, safe='')}"
     email_sent = send_admin_invitation_email(
         to_email=normalized_email,
         invitee_name=full_name,
@@ -201,6 +237,7 @@ def resend_admin_invitation(
     raw_token = generate_opaque_token()
     expires_at = _utcnow() + timedelta(days=expires_days)
     invitation.token_hash = hash_token(raw_token)
+    invitation.token_ciphertext = seal_invitation_token(raw_token)
     invitation.expires_at = expires_at
     record_audit(
         db,
@@ -235,20 +272,69 @@ def preview_admin_invitation(db: Session, *, token: str) -> tuple[UserInvitation
     return invitation, org
 
 
-def purge_expired_admin_invitations(db: Session, *, organization_id: UUID) -> int:
-    """Remove unused admin invites past expiry (accepted/revoked rows are kept for audit)."""
-    now = _utcnow()
-    q = db.query(UserInvitation).filter(
-        UserInvitation.organization_id == organization_id,
-        UserInvitation.used_at.is_(None),
-        UserInvitation.revoked_at.is_(None),
-        UserInvitation.expires_at < now,
+def resolve_admin_invitation_link(invitation: UserInvitation) -> str:
+    """Return setup path for a pending invite using sealed token."""
+    if invitation.used_at is not None:
+        raise ValueError("INVITATION_ACCEPTED")
+    if not invitation.token_ciphertext:
+        raise ValueError("LINK_UNAVAILABLE")
+    raw = unseal_invitation_token(invitation.token_ciphertext)
+    return invitation_setup_path(raw)
+
+
+def reissue_admin_invitation(
+    db: Session,
+    *,
+    admin_user_id: UUID,
+    invitation: UserInvitation,
+    expires_days: int = DEFAULT_EXPIRY_DAYS,
+) -> tuple[str, datetime]:
+    """New token for expired/revoked pending invites (still unused)."""
+    if invitation.invitation_kind != INVITATION_KIND_ORG_ADMIN:
+        raise ValueError("Not an admin invitation")
+    if invitation.used_at is not None:
+        raise ValueError("Invitation already accepted")
+    expires_days = max(1, min(14, int(expires_days)))
+    raw_token = generate_opaque_token()
+    expires_at = _utcnow() + timedelta(days=expires_days)
+    invitation.token_hash = hash_token(raw_token)
+    invitation.token_ciphertext = seal_invitation_token(raw_token)
+    invitation.expires_at = expires_at
+    invitation.revoked_at = None
+    record_audit(
+        db,
+        organization_id=invitation.organization_id,
+        user_id=admin_user_id,
+        action="admin_invitation_reissued",
+        resource_type="invitation",
+        resource_id=str(invitation.id),
+        metadata={"email": invitation.email},
     )
-    count = q.count()
-    if count:
-        q.delete(synchronize_session=False)
-        db.flush()
-    return count
+    return raw_token, expires_at
+
+
+def delete_admin_invitation(
+    db: Session,
+    *,
+    admin_user_id: UUID,
+    invitation: UserInvitation,
+) -> None:
+    """Remove invitation history row; pending invites are revoked first."""
+    if invitation.invitation_kind != INVITATION_KIND_ORG_ADMIN:
+        raise ValueError("Not an admin invitation")
+    now = _utcnow()
+    if invitation.used_at is None and invitation.revoked_at is None:
+        invitation.revoked_at = now
+    record_audit(
+        db,
+        organization_id=invitation.organization_id,
+        user_id=admin_user_id,
+        action="admin_invitation_deleted",
+        resource_type="invitation",
+        resource_id=str(invitation.id),
+        metadata={"email": invitation.email, "was_accepted": invitation.used_at is not None},
+    )
+    db.delete(invitation)
 
 
 def invitation_public_status(inv: UserInvitation, *, now: datetime | None = None) -> str:

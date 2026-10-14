@@ -1,22 +1,14 @@
-import { FormEvent, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { AuthPageShell } from "../components/auth/AuthPageShell";
-import { acceptInvitation, saveSession } from "../lib/api";
-import { resolveOrganizationIdForSession, resolvePostAuthPath } from "../lib/authRouting";
+import { acceptInvitation, clearSession, fetchAuthMe, loadSession, saveSession } from "../lib/api";
+import { isPlatformSessionToken, resolveOrganizationIdForSession, resolvePostAuthPath } from "../lib/authRouting";
 import { previewAcceptInvitation } from "../lib/joinApi";
 import { roleLabel } from "../lib/roleLabels";
 
-function readInitialToken(): string {
-  const params = new URLSearchParams(window.location.search);
-  const t = params.get("token") ?? "";
-  if (t) {
-    window.history.replaceState({}, "", "/accept-invite");
-  }
-  return t;
-}
-
 export default function AcceptInvitePage() {
-  const [token] = useState(readInitialToken);
+  const [searchParams] = useSearchParams();
+  const token = useMemo(() => searchParams.get("token")?.trim() ?? "", [searchParams]);
   const navigate = useNavigate();
   const [preview, setPreview] = useState<{
     organization_name: string;
@@ -26,6 +18,33 @@ export default function AcceptInvitePage() {
   } | null>(null);
   const [error, setError] = useState<string | null>(token ? null : "This invitation is not valid.");
   const [loading, setLoading] = useState(false);
+  const [signedInEmail, setSignedInEmail] = useState<string | null>(null);
+  const [platformSession, setPlatformSession] = useState(false);
+
+  useEffect(() => {
+    const session = loadSession();
+    if (!session?.token) {
+      setSignedInEmail(null);
+      setPlatformSession(false);
+      return;
+    }
+    if (isPlatformSessionToken(session.token)) {
+      setPlatformSession(true);
+      fetchAuthMe({ token: session.token, organizationId: null })
+        .then((me) => setSignedInEmail(me.email ?? "platform administrator"))
+        .catch(() => setSignedInEmail("another account"));
+      return;
+    }
+    fetchAuthMe(session)
+      .then((me) => {
+        setPlatformSession(false);
+        setSignedInEmail(me.email ?? null);
+      })
+      .catch(() => {
+        clearSession();
+        setSignedInEmail(null);
+      });
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -34,9 +53,22 @@ export default function AcceptInvitePage() {
       .catch(() => setError("This invitation is not valid."));
   }, [token]);
 
+  const wrongAccount =
+    preview &&
+    signedInEmail &&
+    (platformSession ||
+      preview.email.trim().toLowerCase() !== signedInEmail.trim().toLowerCase());
+
+  function signOutForInvite() {
+    clearSession();
+    setSignedInEmail(null);
+    setPlatformSession(false);
+    navigate(`/accept-invite?token=${encodeURIComponent(token)}`, { replace: true });
+  }
+
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!token) return;
+    if (!token || wrongAccount) return;
     setError(null);
     setLoading(true);
     const form = new FormData(e.currentTarget);
@@ -50,7 +82,7 @@ export default function AcceptInvitePage() {
       saveSession(data.access_token, orgId);
       navigate(resolvePostAuthPath({ ...data, organization_id: orgId }));
     } catch {
-      setError("Could not accept invitation. The link may be expired or already used.");
+      setError("Could not accept invitation. The link may be expired, already used, or not valid for this account.");
     } finally {
       setLoading(false);
     }
@@ -61,44 +93,63 @@ export default function AcceptInvitePage() {
       title={preview ? `Join ${preview.organization_name}` : "Accept invitation"}
       subtitle={preview ? `You are invited as ${roleLabel(preview.role)}` : undefined}
     >
-      {preview ? (
+      {wrongAccount ? (
+        <div className="aq-alert-error mb-4 space-y-3" role="alert">
+          <p className="text-sm">
+            You are signed in as <strong>{signedInEmail}</strong>. This invitation is for{" "}
+            <strong>{preview?.email}</strong>.
+          </p>
+          <p className="text-sm text-chat-muted">
+            Sign out to continue with the invitation. Your super admin or other sessions will not be converted into this
+            organization account.
+          </p>
+          <button type="button" className="aq-btn-primary w-full" onClick={signOutForInvite}>
+            Sign out and continue
+          </button>
+        </div>
+      ) : null}
+
+      {preview && !wrongAccount ? (
         <p className="text-sm text-[var(--color-text-muted)] mb-4">
-          Signed in as <span className="text-[var(--color-text-primary)]">{preview.email}</span>
+          Create a password for <span className="text-[var(--color-text-primary)]">{preview.email}</span>
         </p>
       ) : null}
-      <form className="space-y-3" onSubmit={onSubmit}>
-        <div>
-          <label htmlFor="inv-full-name" className="text-xs font-medium">
-            Full name
-          </label>
-          <input
-            id="inv-full-name"
-            name="full_name"
-            className="aq-input mt-1"
-            defaultValue={preview?.invitee_full_name ?? ""}
-            required
-          />
-        </div>
-        <div>
-          <label htmlFor="inv-password" className="text-xs font-medium">
-            New password
-          </label>
-          <input
-            id="inv-password"
-            name="password"
-            type="password"
-            placeholder="At least 8 characters"
-            className="aq-input mt-1"
-            required
-            minLength={8}
-            autoComplete="new-password"
-          />
-        </div>
-        {error ? <div className="aq-alert-error">{error}</div> : null}
-        <button type="submit" disabled={loading || !token || !preview} className="aq-btn-primary w-full">
-          {loading ? "Saving…" : "Activate account"}
-        </button>
-      </form>
+
+      {!wrongAccount ? (
+        <form className="space-y-3" onSubmit={onSubmit}>
+          <div>
+            <label htmlFor="inv-full-name" className="text-xs font-medium">
+              Full name
+            </label>
+            <input
+              id="inv-full-name"
+              name="full_name"
+              className="aq-input mt-1"
+              defaultValue={preview?.invitee_full_name ?? ""}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="inv-password" className="text-xs font-medium">
+              New password
+            </label>
+            <input
+              id="inv-password"
+              name="password"
+              type="password"
+              placeholder="At least 8 characters"
+              className="aq-input mt-1"
+              required
+              minLength={8}
+              autoComplete="new-password"
+            />
+          </div>
+          {error ? <div className="aq-alert-error">{error}</div> : null}
+          <button type="submit" disabled={loading || !token || !preview} className="aq-btn-primary w-full">
+            {loading ? "Saving…" : "Activate account"}
+          </button>
+        </form>
+      ) : null}
     </AuthPageShell>
   );
 }

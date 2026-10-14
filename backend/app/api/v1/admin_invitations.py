@@ -21,20 +21,26 @@ from app.schemas.invitations import (
     EmployeeLinkCreateRequest,
     EmployeeLinkCreateResponse,
     EmployeeLinkSummary,
+    InvitationLinkResponse,
     InvitationsSetupStatus,
 )
 from app.services.admin_org import get_admin_visible_org, seat_usage_response
 from app.services.email.invitations import email_delivery_configured
 from app.services.invitations.admin_invitation import (
+    delete_admin_invitation,
     invitation_public_status,
+    invitation_setup_path,
     provision_admin_invitation,
-    purge_expired_admin_invitations,
+    reissue_admin_invitation,
     resend_admin_invitation,
-    revoke_active_admin_invitations,
+    resolve_admin_invitation_link,
 )
 from app.services.invitations.employee_join import (
     create_employee_join_link,
+    delete_employee_join_link,
     get_active_link_for_org,
+    join_setup_path,
+    resolve_employee_join_link,
     rotate_employee_link,
     set_link_status,
     LINK_DISABLED,
@@ -116,8 +122,6 @@ def invitation_history(
     admin: User = Depends(require_platform_permission("invitation:read")),
 ) -> list[AdminInvitationHistoryRow]:
     _visible_org(db, organization_id)
-    purge_expired_admin_invitations(db, organization_id=organization_id)
-    db.commit()
 
     now = datetime.now(timezone.utc)
     invites = (
@@ -223,6 +227,18 @@ def create_admin_invitation(
                 message="This email already belongs to a user in another organization.",
                 field="email",
             ) from exc
+        if code == "ORG_ADMIN_EXISTS":
+            raise admin_error(
+                code=code,
+                message="This organization already has an active organization admin.",
+                status_code=409,
+            ) from exc
+        if code == "ORG_ADMIN_INVITE_PENDING":
+            raise admin_error(
+                code=code,
+                message="A pending organization admin invitation already exists. Revoke or delete it first.",
+                status_code=409,
+            ) from exc
         raise admin_error(code="VALIDATION_ERROR", message=str(exc)) from exc
     db.commit()
     return AdminInvitationCreateResponse(
@@ -232,9 +248,100 @@ def create_admin_invitation(
         role=Role.ORG_ADMIN,
         invitation_id=invitation.id,
         invitation_expires_at=expires_at,
-        invitation_setup_path=f"/accept-invite?token={raw_token}",
+        invitation_setup_path=invitation_setup_path(raw_token),
         email_sent=email_sent,
     )
+
+
+@router.get(
+    "/organizations/{organization_id}/invitations/admin/{invitation_id}/link",
+    response_model=InvitationLinkResponse,
+)
+def get_admin_invitation_link(
+    organization_id: UUID,
+    invitation_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:read")),
+) -> InvitationLinkResponse:
+    _visible_org(db, organization_id)
+    invitation = db.get(UserInvitation, invitation_id)
+    if invitation is None or invitation.organization_id != organization_id:
+        raise admin_error(code="NOT_FOUND", message="Invitation not found", status_code=404)
+    st = invitation_public_status(invitation)
+    try:
+        if st == "pending":
+            path = resolve_admin_invitation_link(invitation)
+        elif st in {"expired", "revoked"}:
+            raw, expires_at = reissue_admin_invitation(db, admin_user_id=admin.id, invitation=invitation)
+            db.commit()
+            path = invitation_setup_path(raw)
+            return InvitationLinkResponse(invitation_setup_path=path, expires_at=expires_at)
+        else:
+            raise admin_error(code="INVALID_STATE", message="Accepted invitations cannot expose a link.", status_code=400)
+    except ValueError as exc:
+        if str(exc) == "LINK_UNAVAILABLE":
+            raw, expires_at = reissue_admin_invitation(db, admin_user_id=admin.id, invitation=invitation)
+            db.commit()
+            path = invitation_setup_path(raw)
+            return InvitationLinkResponse(invitation_setup_path=path, expires_at=expires_at)
+        raise admin_error(code="INVALID_STATE", message=str(exc), status_code=400) from exc
+    db.commit()
+    return InvitationLinkResponse(invitation_setup_path=path, expires_at=invitation.expires_at)
+
+
+@router.delete("/organizations/{organization_id}/invitations/admin/{invitation_id}", status_code=204)
+def delete_admin_invitation_row(
+    organization_id: UUID,
+    invitation_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:revoke")),
+) -> None:
+    _visible_org(db, organization_id)
+    invitation = db.get(UserInvitation, invitation_id)
+    if invitation is None or invitation.organization_id != organization_id:
+        raise admin_error(code="NOT_FOUND", message="Invitation not found", status_code=404)
+    delete_admin_invitation(db, admin_user_id=admin.id, invitation=invitation)
+    db.commit()
+
+
+@router.get(
+    "/organizations/{organization_id}/employee-link/{link_id}/link",
+    response_model=InvitationLinkResponse,
+)
+def get_employee_link_url(
+    organization_id: UUID,
+    link_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:read")),
+) -> InvitationLinkResponse:
+    _visible_org(db, organization_id)
+    link = db.get(EmployeeJoinLink, link_id)
+    if link is None or link.organization_id != organization_id:
+        raise admin_error(code="NOT_FOUND", message="Link not found", status_code=404)
+    try:
+        path = resolve_employee_join_link(link)
+    except ValueError:
+        raw = rotate_employee_link(db, admin_user_id=admin.id, link=link)
+        db.commit()
+        path = join_setup_path(raw)
+        return InvitationLinkResponse(join_path=path, expires_at=link.expires_at)
+    db.commit()
+    return InvitationLinkResponse(join_path=path, expires_at=link.expires_at)
+
+
+@router.delete("/organizations/{organization_id}/employee-link/{link_id}", status_code=204)
+def delete_employee_link_row(
+    organization_id: UUID,
+    link_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:revoke")),
+) -> None:
+    _visible_org(db, organization_id)
+    link = db.get(EmployeeJoinLink, link_id)
+    if link is None or link.organization_id != organization_id:
+        raise admin_error(code="NOT_FOUND", message="Link not found", status_code=404)
+    delete_employee_join_link(db, admin_user_id=admin.id, link=link)
+    db.commit()
 
 
 @router.get("/organizations/{organization_id}/employee-link", response_model=EmployeeLinkSummary)
@@ -303,7 +410,7 @@ def create_employee_link(
     db.commit()
     return EmployeeLinkCreateResponse(
         link_id=link.id,
-        join_path=f"/join?token={raw}",
+        join_path=join_setup_path(raw),
         expires_at=link.expires_at,
         require_admin_approval=link.require_admin_approval,
         allowed_domains=list(link.allowed_domains or []),
@@ -327,7 +434,7 @@ def rotate_link(
     db.commit()
     return EmployeeLinkCreateResponse(
         link_id=link.id,
-        join_path=f"/join?token={raw}",
+        join_path=join_setup_path(raw),
         expires_at=link.expires_at,
         require_admin_approval=link.require_admin_approval,
         allowed_domains=list(link.allowed_domains or []),

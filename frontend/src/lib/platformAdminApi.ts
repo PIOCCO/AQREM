@@ -333,6 +333,40 @@ export async function resendInvitation(session: AuthSession, orgId: string, invi
   return res.json();
 }
 
+export async function fetchAdminInvitationLink(session: AuthSession, orgId: string, invitationId: string) {
+  const res = await fetch(
+    `${API_BASE}/api/v1/admin/organizations/${orgId}/invitations/admin/${invitationId}/link`,
+    { headers: adminHeaders(session) },
+  );
+  if (!res.ok) await parseError(res, "Failed to load invitation link");
+  return res.json() as Promise<{ invitation_setup_path?: string; join_path?: string; expires_at?: string }>;
+}
+
+export async function deleteAdminInvitationRecord(session: AuthSession, orgId: string, invitationId: string) {
+  const res = await fetch(
+    `${API_BASE}/api/v1/admin/organizations/${orgId}/invitations/admin/${invitationId}`,
+    { method: "DELETE", headers: adminHeaders(session) },
+  );
+  if (!res.ok) await parseError(res, "Failed to delete invitation");
+}
+
+export async function fetchEmployeeLinkUrl(session: AuthSession, orgId: string, linkId: string) {
+  const res = await fetch(
+    `${API_BASE}/api/v1/admin/organizations/${orgId}/employee-link/${linkId}/link`,
+    { headers: adminHeaders(session) },
+  );
+  if (!res.ok) await parseError(res, "Failed to load employee link");
+  return res.json() as Promise<{ join_path?: string; expires_at?: string }>;
+}
+
+export async function deleteEmployeeLinkRecord(session: AuthSession, orgId: string, linkId: string) {
+  const res = await fetch(
+    `${API_BASE}/api/v1/admin/organizations/${orgId}/employee-link/${linkId}`,
+    { method: "DELETE", headers: adminHeaders(session) },
+  );
+  if (!res.ok) await parseError(res, "Failed to delete employee link");
+}
+
 export async function revokeInvitation(session: AuthSession, orgId: string, invitationId: string) {
   const res = await fetch(
     `${API_BASE}/api/v1/admin/organizations/${orgId}/invitations/${invitationId}/revoke`,
@@ -504,7 +538,7 @@ export async function rotateEmployeeLink(session: AuthSession, orgId: string, li
     headers: adminHeaders(session),
   });
   if (!res.ok) await parseError(res, "Failed to rotate link");
-  return res.json() as Promise<{ join_path: string }>;
+  return res.json() as Promise<{ join_path: string; expires_at?: string }>;
 }
 
 export async function fetchOrgInvitations(session: AuthSession, orgId: string) {

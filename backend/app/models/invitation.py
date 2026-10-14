@@ -21,6 +21,7 @@ class UserInvitation(Base):
     invitee_full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     personal_message: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    token_ciphertext: Mapped[str | None] = mapped_column(String(512), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

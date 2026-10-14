@@ -81,12 +81,12 @@ def test_admin_invitation_single_active_and_accept(client: TestClient, db_sessio
         headers={"Authorization": f"Bearer {token}"},
         json={"email": "admin2@corp.example", "full_name": "Admin Two"},
     )
-    assert second.status_code == 201
+    assert second.status_code == 409
 
     preview = client.post("/api/v1/auth/accept-invitation/preview", json={"token": raw1})
-    assert preview.status_code == 404
+    assert preview.status_code == 200
 
-    raw2 = second.json()["invitation_setup_path"].split("token=")[1]
+    raw2 = raw1
     preview2 = client.post("/api/v1/auth/accept-invitation/preview", json={"token": raw2})
     assert preview2.status_code == 200
     assert preview2.json()["organization_name"] == "Invite Org"

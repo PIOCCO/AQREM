@@ -24,6 +24,8 @@ _ORG_PATCHES = (
     "ALTER TABLE user_invitations ADD COLUMN IF NOT EXISTS invitation_kind VARCHAR(32) NOT NULL DEFAULT 'org_admin'",
     "ALTER TABLE user_invitations ADD COLUMN IF NOT EXISTS invitee_full_name VARCHAR(255)",
     "ALTER TABLE user_invitations ADD COLUMN IF NOT EXISTS personal_message VARCHAR(2000)",
+    "ALTER TABLE user_invitations ADD COLUMN IF NOT EXISTS token_ciphertext TEXT",
+    "ALTER TABLE employee_join_links ADD COLUMN IF NOT EXISTS token_ciphertext TEXT",
     """
     UPDATE organizations o SET license_limit = GREATEST(
         1,

@@ -129,7 +129,7 @@ pytest tests/backend/test_interface_separation.py \
   tests/backend/test_security_authorization.py \
   tests/backend/test_worker_ingestion_isolation.py \
   tests/backend/test_evidence_storage_lifecycle.py -q
-# Result: see CI output below
+# 38 passed, 2 warnings (2026-10-13)
 
 cd frontend && npm run build
 # Result: success
