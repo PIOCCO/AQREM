@@ -162,17 +162,28 @@ def purge_organization_tenant_data(db: Session, organization_id: UUID) -> None:
     db.execute(delete(ClientDocument).where(ClientDocument.organization_id == organization_id))
     db.execute(delete(EmployeeJoinPending).where(EmployeeJoinPending.organization_id == organization_id))
 
-    try:
-        from app.services.storage.factory import get_blob_storage
+    from app.models.audit import AuditEvent
 
-        storage = get_blob_storage()
-        for path in blob_paths:
-            try:
-                storage.delete(path)
-            except Exception:
-                logger.exception("Failed to delete blob %s during org purge", path)
-    except Exception:
-        logger.exception("Storage backend unavailable during org purge for %s", organization_id)
+    db.query(AuditEvent).filter(AuditEvent.organization_id == organization_id).delete(
+        synchronize_session=False
+    )
+
+    if blob_paths:
+        try:
+            from app.services.storage.factory import get_blob_storage
+
+            storage = get_blob_storage()
+            for path in blob_paths:
+                try:
+                    storage.delete(path)
+                except OSError:
+                    logger.warning("Skipped blob delete during org purge (path=%s)", path)
+                except Exception:
+                    logger.exception("Failed to delete blob %s during org purge", path)
+        except OSError:
+            logger.warning("Storage root unavailable during org purge for %s", organization_id)
+        except Exception:
+            logger.exception("Storage backend unavailable during org purge for %s", organization_id)
 
     db.flush()
 

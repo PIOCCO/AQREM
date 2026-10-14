@@ -63,11 +63,10 @@ def test_pending_deletion_filter_and_restore(client: TestClient, db_session):
     )
     assert again.status_code == 409, again.text
     assert again.json()["detail"]["code"] == "ALREADY_PENDING_DELETION"
-    restored = client.post(
-        f"/api/v1/admin/organizations/{org_id}/restore",
+    purged = client.post(
+        f"/api/v1/admin/organizations/{org_id}/purge-now",
         headers={"Authorization": f"Bearer {token}"},
+        json={"confirmName": "Pending Filter Org"},
     )
-    assert restored.status_code == 200, restored.text
-    org = db_session.get(Organization, org_id)
-    assert org is not None
-    assert org.deleted_at is None
+    assert purged.status_code == 204, purged.text
+    assert db_session.get(Organization, org_id) is None

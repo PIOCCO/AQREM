@@ -62,6 +62,15 @@ bash scripts/check-admin-delete-api.sh http://127.0.0.1:8000
 
 Expect `organization_soft_delete: true` and revision `2026-03-org-soft-delete-v1`.
 
+**CORS (browser on `:5173` → API `:8000`):** If the API container runs with `APP_ENV=production`, set in `.env`:
+
+```env
+PUBLIC_APP_URL=http://100.80.43.124:5173
+CORS_ALLOWED_ORIGINS=http://100.80.43.124:5173
+```
+
+The API also auto-allows the origin derived from `PUBLIC_APP_URL` / `APP_PUBLIC_BASE_URL`. Without that, purge/delete POSTs fail in the browser with a CORS error (often alongside a 500).
+
 ## Manual dev seed (optional)
 
 ```bash

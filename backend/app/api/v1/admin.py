@@ -1,3 +1,4 @@
+import logging
 import secrets
 from datetime import datetime, timezone
 from uuid import UUID
@@ -18,6 +19,8 @@ from app.services.platform_staff import (
 )
 from app.services.roles_audit import run_roles_audit
 from app.core.roles import Role
+
+logger = logging.getLogger(__name__)
 from app.db.session import get_db
 from app.models.audit import AuditEvent
 from app.models.enums import LicenseStatus
@@ -364,7 +367,9 @@ def purge_organization_now_admin(
         raise admin_error(code="NOT_FOUND", message="Organization not found", status_code=404)
     try:
         purge_organization_now(db, admin=admin, org=org, confirm_name=payload.confirm_name)
+        db.commit()
     except OrganizationDeleteError as exc:
+        db.rollback()
         code = str(exc)
         if code == "CONFIRM_NAME_MISMATCH":
             raise admin_error(
@@ -376,7 +381,14 @@ def purge_organization_now_admin(
         if code == "NOT_PENDING_DELETION":
             raise admin_error(code="INVALID_STATE", message="Schedule deletion before purge now", status_code=409) from exc
         raise admin_error(code="FORBIDDEN", message="Super admin required", status_code=403) from exc
-    db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.exception("purge-now failed for organization %s", organization_id)
+        raise admin_error(
+            code="PURGE_FAILED",
+            message="Organization purge failed. Check API logs for details.",
+            status_code=500,
+        ) from exc
 
 
 @router.post("/organizations/{organization_id}/schedule-deletion", response_model=DeleteOrganizationResponse)

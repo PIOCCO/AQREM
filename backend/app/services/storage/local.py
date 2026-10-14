@@ -7,9 +7,12 @@ from app.services.storage.path_utils import resolve_under_root
 class LocalBlobStorage(BlobStorage):
     def __init__(self, root_dir: str) -> None:
         self.root = Path(root_dir)
+
+    def _ensure_root(self) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
 
     def _path(self, blob_path: str) -> Path:
+        self._ensure_root()
         full = resolve_under_root(self.root, blob_path)
         full.parent.mkdir(parents=True, exist_ok=True)
         return full

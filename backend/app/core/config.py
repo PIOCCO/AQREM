@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from urllib.parse import urlparse
 
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -166,9 +167,18 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> list[str]:
         if self.app_env == "development":
             return ["*"]
-        if not self.cors_allowed_origins.strip():
-            return []
-        return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
+        origins: list[str] = []
+        for part in self.cors_allowed_origins.split(","):
+            o = part.strip()
+            if o and o not in origins:
+                origins.append(o)
+        for url in (self.app_public_base_url,):
+            parsed = urlparse(url.strip())
+            if parsed.scheme in ("http", "https") and parsed.netloc:
+                origin = f"{parsed.scheme}://{parsed.netloc}"
+                if origin not in origins:
+                    origins.append(origin)
+        return origins
 
     @property
     def allowed_extensions_set(self) -> set[str]:
