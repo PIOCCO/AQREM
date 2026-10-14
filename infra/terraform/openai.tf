@@ -1,52 +1,28 @@
-resource "azurerm_cognitive_account" "openai" {
-  name                  = local.openai_account_name
-  location              = var.location
-  resource_group_name   = data.azurerm_resource_group.main.name
-  kind                  = "OpenAI"
-  sku_name              = var.openai_sku_name
-  custom_subdomain_name = local.openai_account_name
+module "openai" {
+  source = "./modules/openai"
 
-  public_network_access_enabled = var.public_network_access_enabled
+  resource_group_name = data.azurerm_resource_group.main.name
+  location            = var.location
+  openai_account_name = local.openai_account_name
 
-  tags = local.common_tags
-
-  lifecycle {
-    prevent_destroy = false
-  }
-}
-
-resource "azurerm_cognitive_deployment" "chat" {
-  name                 = var.chat_deployment_name
-  cognitive_account_id = azurerm_cognitive_account.openai.id
-
-  rai_policy_name = "Microsoft.Default"
-
-  model {
-    format  = "OpenAI"
-    name    = var.chat_model_name
-    version = var.chat_model_version
-  }
-
-  sku {
-    name     = var.deployment_sku_name
-    capacity = var.chat_capacity
-  }
-}
-
-resource "azurerm_cognitive_deployment" "embedding" {
-  name                 = var.embedding_deployment_name
-  cognitive_account_id = azurerm_cognitive_account.openai.id
-
-  rai_policy_name = "Microsoft.Default"
-
-  model {
-    format  = "OpenAI"
-    name    = var.embedding_model_name
-    version = var.embedding_model_version
-  }
-
-  sku {
-    name     = var.deployment_sku_name
-    capacity = var.embedding_capacity
-  }
+  openai_sku_name                   = var.openai_sku_name
+  public_network_access_enabled     = var.public_network_access_enabled
+  deployment_sku_name               = var.deployment_sku_name
+  chat_model_name                   = var.chat_model_name
+  chat_model_version                = var.chat_model_version
+  chat_deployment_name              = var.chat_deployment_name
+  chat_capacity                     = var.chat_capacity
+  embedding_model_name              = var.embedding_model_name
+  embedding_model_version           = var.embedding_model_version
+  embedding_deployment_name         = var.embedding_deployment_name
+  embedding_capacity                = var.embedding_capacity
+  embedding_dimensions              = var.embedding_dimensions
+  azure_openai_api_version          = var.azure_openai_api_version
+  key_vault_id                      = var.key_vault_id
+  store_api_key_in_key_vault        = var.store_api_key_in_key_vault
+  key_vault_secret_name             = var.key_vault_secret_name
+  managed_identity_principal_id     = var.managed_identity_principal_id
+  assign_openai_user_role           = var.assign_openai_user_role
+  tags                              = local.common_tags
+  purge_cognitive_account_on_destroy = var.purge_cognitive_account_on_destroy
 }

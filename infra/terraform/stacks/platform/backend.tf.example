@@ -1,0 +1,10 @@
+# Copy to backend.tf and fill before terraform init -apply.
+#
+# terraform {
+#   backend "azurerm" {
+#     resource_group_name  = "aqrem-tfstate-rg"
+#     storage_account_name = "aqremtfstate001"
+#     container_name       = "tfstate"
+#     key                  = "platform/production.tfstate"
+#   }
+# }

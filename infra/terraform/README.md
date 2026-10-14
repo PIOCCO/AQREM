@@ -1,6 +1,17 @@
-# AQREM — Azure OpenAI (Terraform)
+# AQREM — Azure infrastructure (Terraform)
 
-Production-oriented Terraform for the **Azure OpenAI** account and **model deployments** used by AQREM (chat answers + evidence embeddings). This stack **does not** deploy Container Apps, PostgreSQL, Redis, or the AQREM application — only OpenAI resources inside an **existing** resource group.
+## Layout
+
+| Path | Purpose |
+|------|---------|
+| **`/` (this directory)** | Legacy **OpenAI-only** stack in an **existing** resource group (unchanged workflow). |
+| **`modules/openai/`** | Shared OpenAI module (used by root and platform stack). |
+| **`stacks/platform/`** | **Stage 1 — shared platform** (ACR, Key Vault, monitoring, control-plane PostgreSQL, OpenAI, APIM Standard v2 gateway, Front Door). |
+| **`docs/`** | Azure verification notes, cell model, email DNS. |
+
+Production-oriented Terraform for the **Azure OpenAI** account and **model deployments** used by AQREM (chat answers + evidence embeddings). The root stack **does not** deploy Container Apps or client stacks — only OpenAI inside an **existing** resource group. Use **`stacks/platform/`** for the full shared platform.
+
+See **`stacks/platform/README.md`** and **`docs/AZURE_VERIFICATION_2026-10.md`** before apply.
 
 ## Prerequisites
 

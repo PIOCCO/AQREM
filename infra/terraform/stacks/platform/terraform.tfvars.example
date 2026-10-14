@@ -1,0 +1,31 @@
+# Platform stack — production example (separate dev subscription recommended).
+
+subscription_id  = null # use az login context
+project_name     = "aqrem"
+environment      = "production"
+location         = "westeurope"
+publisher_email  = "platform-ops@example.com"
+
+deploy_openai         = true
+deploy_model_gateway  = true
+deploy_front_door     = true
+
+apim_sku_name              = "StandardV2_1"
+front_door_sku_name        = "Standard_AzureFrontDoor"
+control_plane_postgres_sku = "B_Standard_B1ms"
+
+chat_model_name        = "gpt-4.1-mini"
+chat_model_version     = "2025-04-14"
+chat_deployment_name   = "aqrem-chat"
+embedding_model_name   = "text-embedding-3-small"
+embedding_model_version = "1"
+embedding_deployment_name = "aqrem-embeddings"
+embedding_dimensions   = 1536
+
+# After APIM managed identity exists, set principal ID and re-apply for OpenAI RBAC.
+# gateway_managed_identity_principal_id = "..."
+
+tags = {
+  costCenter = "platform"
+  owner      = "devops"
+}
