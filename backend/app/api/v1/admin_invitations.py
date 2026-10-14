@@ -25,7 +25,7 @@ from app.schemas.invitations import (
     InvitationsSetupStatus,
 )
 from app.services.admin_org import get_admin_visible_org, seat_usage_response
-from app.services.email.invitations import email_delivery_configured
+from app.services.email.service import email_delivery_configured, latest_delivery_status
 from app.services.invitations.admin_invitation import (
     delete_admin_invitation,
     invitation_public_status,
@@ -202,6 +202,13 @@ def invitation_history(
         if status_filter and status_filter != "all" and st != status_filter:
             continue
         inv_path, inv_url = _history_invite_urls_admin(inv)
+        email_type = "admin_invitation" if (inv.invitation_kind or "org_admin") == "org_admin" else "member_invitation"
+        email_status, email_error = latest_delivery_status(
+            db,
+            email_type=email_type,
+            resource_id=str(inv.id),
+            recipient=inv.email,
+        )
         rows.append(
             AdminInvitationHistoryRow(
                 id=inv.id,
@@ -218,6 +225,8 @@ def invitation_history(
                 created_by_user_id=inv.created_by_user_id,
                 invite_path=inv_path,
                 invite_url=inv_url,
+                email_delivery_status=email_status,
+                email_delivery_error=email_error,
             )
         )
     for link in links:
@@ -310,6 +319,59 @@ def create_admin_invitation(
         invitation_setup_url=invitation_setup_url(raw_token),
         email_sent=email_sent,
     )
+
+
+@router.post(
+    "/organizations/{organization_id}/invitations/admin/{invitation_id}/send-email",
+    status_code=204,
+)
+def send_admin_invitation_email_now(
+    organization_id: UUID,
+    invitation_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:create_admin")),
+) -> None:
+    from app.services.email.invitations import send_admin_invitation_email
+    from app.services.invitations.admin_invitation import invitation_setup_url, resolve_admin_invitation_link
+
+    _visible_org(db, organization_id)
+    invitation = db.get(UserInvitation, invitation_id)
+    if invitation is None or invitation.organization_id != organization_id:
+        raise admin_error(code="NOT_FOUND", message="Invitation not found", status_code=404)
+    if invitation.used_at is not None or invitation.revoked_at is not None:
+        raise admin_error(code="INVALID_STATE", message="Invitation is not pending", status_code=409)
+    org = db.get(Organization, organization_id)
+    if org is None:
+        raise admin_error(code="NOT_FOUND", message="Organization not found", status_code=404)
+    try:
+        path = resolve_admin_invitation_link(invitation)
+    except ValueError as exc:
+        raise admin_error(code="INVALID_STATE", message=str(exc), status_code=400) from exc
+    from app.services.invitations.invite_urls import absolute_from_invite_path
+
+    url = absolute_from_invite_path(path)
+    if not url:
+        raise admin_error(code="CONFIG_ERROR", message="PUBLIC_APP_URL is not configured", status_code=503)
+    inviter = db.get(User, admin.id)
+    sent = send_admin_invitation_email(
+        db,
+        to_email=invitation.email,
+        invitee_name=invitation.invitee_full_name or invitation.email,
+        organization_name=org.name,
+        invitation_url=url,
+        inviter_label=inviter.full_name if inviter else "AQREM Platform",
+        expires_at=invitation.expires_at,
+        personal_message=invitation.personal_message,
+        organization_id=str(organization_id),
+        invitation_id=str(invitation.id),
+    )
+    if not sent:
+        raise admin_error(
+            code="EMAIL_NOT_CONFIGURED",
+            message="Email provider is not configured (set EMAIL_PROVIDER=brevo or EMAIL_PROVIDER=console in dev)",
+            status_code=503,
+        )
+    db.commit()
 
 
 @router.get(

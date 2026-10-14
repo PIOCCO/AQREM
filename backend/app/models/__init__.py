@@ -8,6 +8,7 @@ from app.models.client_admin import ClientCredentialMetadata, ClientDocument
 from app.models.evidence import EvidenceItem, EvidenceItemVersion
 from app.models.environment import ClientEnvironment, ControlPlaneEvent, ProvisioningJob
 from app.models.tenant_data_store import TenantDataStoreConfig
+from app.models.email_delivery import EmailDeliveryLog
 from app.models.invitation import UserInvitation
 from app.models.employee_join import (
     EmployeeJoinLink,

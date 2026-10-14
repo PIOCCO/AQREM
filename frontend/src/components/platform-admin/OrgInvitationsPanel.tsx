@@ -12,6 +12,7 @@ import {
   fetchAdminInvitationLink,
   fetchEmployeeLinkUrl,
   resendInvitation,
+  sendAdminInvitationEmail,
   revokeInvitation,
   rotateEmployeeLink,
   type AdminOrganization,
@@ -311,6 +312,7 @@ export function OrgInvitationsPanel({
                 <th className="pb-2">Details</th>
                 <th className="pb-2">Invitation link</th>
                 <th className="pb-2">Status</th>
+                <th className="pb-2">Email</th>
                 <th className="pb-2">Expires</th>
                 <th className="pb-2">Created</th>
                 <th className="pb-2">Actions</th>
@@ -356,6 +358,18 @@ export function OrgInvitationsPanel({
                     })()}
                   </td>
                   <td className="py-2 capitalize">{row.status}</td>
+                  <td className="py-2 text-xs">
+                    {invitationHistoryRecordType(row) === "admin_invitation" ? (
+                      <>
+                        <span className="capitalize">{row.email_delivery_status ?? "—"}</span>
+                        {row.email_delivery_error ? (
+                          <div className="text-red-600 mt-0.5 max-w-[12rem] break-words">{row.email_delivery_error}</div>
+                        ) : null}
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="py-2">{formatDate(row.expires_at)}</td>
                   <td className="py-2">{formatDate(row.created_at)}</td>
                   <td className="py-2 flex flex-wrap gap-2">
@@ -406,7 +420,23 @@ export function OrgInvitationsPanel({
                             })
                           }
                         >
-                          Resend
+                          Resend link
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs underline"
+                          onClick={() =>
+                            void sendAdminInvitationEmail(session, org.id, row.id)
+                              .then(() => {
+                                toast.push("Invitation email queued", "ok");
+                                return reload();
+                              })
+                              .catch((err: unknown) =>
+                                toast.push(err instanceof Error ? err.message : "Email send failed", "err"),
+                              )
+                          }
+                        >
+                          Resend email
                         </button>
                         <button
                           type="button"

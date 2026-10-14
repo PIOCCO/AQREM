@@ -59,11 +59,13 @@ async def lifespan(_: FastAPI):
         session.commit()
 
     from app.api.v1.meta import API_CAPABILITIES_REVISION
+    from app.services.email.service import validate_email_config_at_startup
 
     logger.info(
         "API capabilities revision=%s (org soft-delete via POST /api/v1/admin/organizations/{id}/delete)",
         API_CAPABILITIES_REVISION,
     )
+    validate_email_config_at_startup(settings)
 
     async def _org_purge_worker() -> None:
         while True:

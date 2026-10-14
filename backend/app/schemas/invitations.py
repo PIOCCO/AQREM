@@ -50,6 +50,8 @@ class AdminInvitationHistoryRow(BaseModel):
     pending_approval_count: int | None = None
     invite_url: str | None = None
     invite_path: str | None = None
+    email_delivery_status: str | None = None
+    email_delivery_error: str | None = None
 
 
 class EmployeeLinkCreateRequest(BaseModel):

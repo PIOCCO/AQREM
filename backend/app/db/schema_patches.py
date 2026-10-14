@@ -57,6 +57,31 @@ _ACL_PATCHES = (
     "UPDATE evidence_items SET visibility_mode = 'admins_only' WHERE visibility_mode IS NULL OR visibility_mode = 'unset'",
 )
 
+_EMAIL_PATCHES = (
+    """
+    CREATE TABLE IF NOT EXISTS email_delivery_logs (
+        id UUID PRIMARY KEY,
+        email_type VARCHAR(64) NOT NULL,
+        recipient VARCHAR(320) NOT NULL,
+        subject VARCHAR(255) NOT NULL,
+        status VARCHAR(32) NOT NULL DEFAULT 'queued',
+        provider VARCHAR(32) NOT NULL,
+        provider_message_id VARCHAR(128),
+        error_message TEXT,
+        organization_id UUID,
+        resource_id VARCHAR(64),
+        tags JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_email_delivery_logs_recipient ON email_delivery_logs (recipient)",
+    "CREATE INDEX IF NOT EXISTS ix_email_delivery_logs_resource ON email_delivery_logs (resource_id)",
+    "ALTER TABLE user_invitations ADD COLUMN IF NOT EXISTS accept_verification_failed_attempts INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE employee_join_verifications ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ",
+)
+
 _ANSWER_PATCHES = (
     "ALTER TABLE answers ADD COLUMN IF NOT EXISTS potentially_stale BOOLEAN NOT NULL DEFAULT false",
     "ALTER TABLE answers ADD COLUMN IF NOT EXISTS stale_detected_at TIMESTAMPTZ",
@@ -73,4 +98,6 @@ def apply_schema_patches(conn: Connection) -> None:
     for stmt in _ACL_PATCHES:
         conn.execute(text(stmt))
     for stmt in _ANSWER_PATCHES:
+        conn.execute(text(stmt))
+    for stmt in _EMAIL_PATCHES:
         conn.execute(text(stmt))
