@@ -58,6 +58,13 @@ async def lifespan(_: FastAPI):
         ensure_platform_admin(session)
         session.commit()
 
+    from app.api.v1.meta import API_CAPABILITIES_REVISION
+
+    logger.info(
+        "API capabilities revision=%s (org soft-delete via POST /api/v1/admin/organizations/{id}/delete)",
+        API_CAPABILITIES_REVISION,
+    )
+
     async def _org_purge_worker() -> None:
         while True:
             await asyncio.sleep(3600)

@@ -8,6 +8,26 @@ from app.core.config import get_settings
 
 router = APIRouter()
 
+# Bump when platform delete routes or behavior change (for dev verification).
+API_CAPABILITIES_REVISION = "2026-03-org-soft-delete-v1"
+
+
+class ApiCapabilities(BaseModel):
+    revision: str
+    organization_soft_delete: bool = True
+    organization_delete_routes: list[str] = [
+        "POST /api/v1/admin/organizations/{organization_id}/delete",
+        "POST /api/v1/admin/organizations/{organization_id}/schedule-deletion",
+        "PATCH /api/v1/admin/organizations/{organization_id} (body: confirmName)",
+        "DELETE /api/v1/admin/organizations/{organization_id} (body: confirmName)",
+    ]
+
+
+@router.get("/api-capabilities", response_model=ApiCapabilities)
+def api_capabilities() -> ApiCapabilities:
+    """Unauthenticated feature probe — use to confirm :8000 runs a build with org soft-delete."""
+    return ApiCapabilities(revision=API_CAPABILITIES_REVISION)
+
 
 class FrontendBuildInfo(BaseModel):
     build_id: str

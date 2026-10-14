@@ -228,6 +228,7 @@ export async function deleteAdminOrganization(
   const attempts: { method: string; path: string; body?: string }[] = [
     { method: "POST", path: `/api/v1/admin/organizations/${orgId}/delete`, body },
     { method: "POST", path: `/api/v1/admin/organizations/${orgId}/schedule-deletion`, body },
+    { method: "PATCH", path: `/api/v1/admin/organizations/${orgId}`, body },
     { method: "DELETE", path: `/api/v1/admin/organizations/${orgId}`, body },
   ];
   const attemptLog: string[] = [];
@@ -261,8 +262,10 @@ export async function deleteAdminOrganization(
   const detail = attemptLog.length ? attemptLog.join("; ") : "no endpoints responded";
   throw new Error(
     `Organization delete is not available on the API at ${apiBase}. ${detail}. ` +
-      "Stop and restart the backend on port 8000 from the latest AQREM branch (POST …/delete or …/schedule-deletion must return purge_scheduled_at). " +
-      "The UI at :5173 calls that host for API requests — updating only the frontend is not enough.",
+      "The process on port 8000 is an older build (POST …/delete and …/schedule-deletion return 404). " +
+      "On the server: git pull, checkout a branch with org soft-delete (e.g. cursor/batch1-delete-persist-81ca), " +
+      "restart uvicorn from backend/, then verify: curl -s http://127.0.0.1:8000/api/v1/meta/api-capabilities " +
+      '(expect organization_soft_delete true and revision 2026-03-org-soft-delete-v1). Updating only the :5173 UI is not enough.',
   );
 }
 
@@ -282,6 +285,22 @@ export async function fetchRolesAudit(session: AuthSession): Promise<{ issues: R
   const res = await fetch(apiUrl(`/api/v1/admin/roles/audit`), { headers: adminHeaders(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to run roles audit"));
   return res.json();
+}
+
+export type ApiCapabilities = {
+  revision: string;
+  organization_soft_delete: boolean;
+  organization_delete_routes?: string[];
+};
+
+export async function fetchApiCapabilities(): Promise<ApiCapabilities | null> {
+  try {
+    const res = await fetch(apiUrl("/api/v1/meta/api-capabilities"), adminFetchInit);
+    if (!res.ok) return null;
+    return (await res.json()) as ApiCapabilities;
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchAdminContext(session: AuthSession): Promise<AdminContext> {

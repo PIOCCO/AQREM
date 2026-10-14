@@ -34,6 +34,21 @@ LICENSING_TEST_MODE=true
 
 Allows `license_status=test` orgs to sign in; forced off when `APP_ENV=production`.
 
+## Organization delete (Super Admin)
+
+The UI schedules soft deletion via `POST /api/v1/admin/organizations/{id}/delete` (or `…/schedule-deletion`). If those return **404**, the process on **port 8000 is an old build** — restarting only Vite on `:5173` does not help.
+
+On the machine that serves API requests (same host as `100.x.x.x:8000` when using Tailscale):
+
+```bash
+git fetch origin
+git checkout cursor/remove-mock-seed-81ca   # or latest merged main / your deploy branch
+bash scripts/restart-backend-8000.sh        # binds 0.0.0.0:8000 — not 127.0.0.1 only
+bash scripts/check-admin-delete-api.sh http://127.0.0.1:8000
+```
+
+Expect `organization_soft_delete: true` and revision `2026-03-org-soft-delete-v1`. If you use Docker instead of host uvicorn: `docker compose up -d --build api` so the `api` service picks up current `backend/` routes.
+
 ## Manual dev seed (optional)
 
 ```bash
