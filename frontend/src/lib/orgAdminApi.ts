@@ -160,10 +160,55 @@ export async function fetchOrgUsage(session: AuthSession) {
   return res.json();
 }
 
-export async function fetchOrgAudit(session: AuthSession, limit = 50) {
-  const res = await fetch(apiUrl(`/api/v1/org-admin/audit?limit=${limit}`), { headers: headers(session) });
+export type OrgAuditRow = {
+  id: string;
+  created_at: string;
+  action: string;
+  resource_type: string;
+  actor_email: string | null;
+};
+
+export type OrgAuditList = {
+  items: OrgAuditRow[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export async function fetchOrgAudit(session: AuthSession, page = 1, pageSize = 50): Promise<OrgAuditList> {
+  const res = await fetch(
+    apiUrl(`/api/v1/org-admin/audit?page=${page}&page_size=${pageSize}`),
+    { headers: headers(session) },
+  );
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load audit log"));
   return res.json();
+}
+
+export async function cleanupOrgAuditLogs(
+  session: AuthSession,
+  scope: "older_than_7d" | "older_than_30d" | "all",
+): Promise<{ deleted_count: number; scope: string }> {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/audit-logs?scope=${encodeURIComponent(scope)}`), {
+    method: "DELETE",
+    headers: {
+      ...headers(session),
+      "X-Requested-With": "AQREM",
+    },
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to clean up audit logs"));
+  return res.json();
+}
+
+export async function downloadOrgAuditCsv(session: AuthSession): Promise<void> {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/audit/export`), { headers: headers(session) });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to export audit log"));
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "audit-log.csv";
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export async function fetchChatSharing(session: AuthSession): Promise<{ enabled: boolean; default_ttl_days: number }> {

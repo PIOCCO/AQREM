@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.audit.service import record_audit
@@ -33,6 +34,8 @@ from app.schemas.tenant_storage import (
     TenantStorageResponse,
 )
 from app.schemas.org_admin import (
+    AuditCleanupResponse,
+    AuditListResponse,
     AuditRowResponse,
     DocumentListResponse,
     DocumentRowResponse,
@@ -134,14 +137,13 @@ def admin_console_enter(
     tenant: TenantContext = Depends(_require_org_admin_surface),
     db: Session = Depends(get_tenant_db),
 ) -> dict[str, bool]:
-    record_audit(
+    from app.services.audit.console_enter import record_admin_console_entered
+
+    record_admin_console_entered(
         db,
         organization_id=tenant.organization_id,
         user_id=tenant.user_id,
-        action="admin_console_entered",
-        resource_type="admin_console",
-        resource_id=str(tenant.organization_id),
-        metadata={"request_id": request.headers.get("X-Request-Id")},
+        request_id=request.headers.get("X-Request-Id"),
     )
     db.commit()
     return {"ok": True}
@@ -709,31 +711,155 @@ def usage_summary(
     )
 
 
-@router.get("/audit", response_model=list[AuditRowResponse])
+def _audit_rows(
+    db: Session,
+    organization_id: UUID,
+    *,
+    page: int,
+    page_size: int,
+) -> AuditListResponse:
+    base = db.query(AuditEvent).filter(AuditEvent.organization_id == organization_id)
+    total = base.count()
+    rows = (
+        db.query(AuditEvent, User)
+        .outerjoin(User, User.id == AuditEvent.user_id)
+        .filter(AuditEvent.organization_id == organization_id)
+        .order_by(AuditEvent.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return AuditListResponse(
+        items=[
+            AuditRowResponse(
+                id=event.id,
+                created_at=event.created_at,
+                action=event.action.replace("_", " "),
+                resource_type=event.resource_type,
+                actor_email=user.email if user else None,
+            )
+            for event, user in rows
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/audit", response_model=AuditListResponse)
 def list_audit(
     tenant: TenantContext = Depends(_require_org_admin_surface),
     db: Session = Depends(get_tenant_db),
-    limit: int = Query(default=50, ge=1, le=200),
-) -> list[AuditRowResponse]:
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+) -> AuditListResponse:
+    assert_org_admin_action(tenant, action="read", resource_type="audit", resource_org_id=tenant.organization_id)
+    return _audit_rows(db, tenant.organization_id, page=page, page_size=page_size)
+
+
+def _assert_browser_origin(request: Request) -> None:
+    """CSRF-equivalent for Bearer SPA: require Origin/Referer on destructive org-admin calls."""
+    settings = get_settings()
+    if settings.app_env == "development":
+        return
+    if request.headers.get("X-Requested-With") != "AQREM":
+        raise org_admin_error(
+            code="CSRF_CHECK_FAILED",
+            message="Missing confirmation header for this action.",
+            status_code=403,
+        )
+    allowed = set(settings.cors_origins_list)
+    origin = (request.headers.get("Origin") or "").strip()
+    if not origin:
+        referer = request.headers.get("Referer") or ""
+        if referer:
+            from urllib.parse import urlparse
+
+            parsed = urlparse(referer)
+            if parsed.scheme and parsed.netloc:
+                origin = f"{parsed.scheme}://{parsed.netloc}"
+    if origin and (origin in allowed or "*" in allowed):
+        return
+    raise org_admin_error(
+        code="ORIGIN_REQUIRED",
+        message="This action must be requested from the admin web application (missing or invalid Origin).",
+        status_code=403,
+    )
+
+
+@router.get("/audit/export")
+def export_audit_csv(
+    request: Request,
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    db: Session = Depends(get_tenant_db),
+) -> Response:
+    import csv
+    import io
+
     assert_org_admin_action(tenant, action="read", resource_type="audit", resource_org_id=tenant.organization_id)
     rows = (
         db.query(AuditEvent, User)
         .outerjoin(User, User.id == AuditEvent.user_id)
         .filter(AuditEvent.organization_id == tenant.organization_id)
         .order_by(AuditEvent.created_at.desc())
-        .limit(limit)
+        .limit(10_000)
         .all()
     )
-    return [
-        AuditRowResponse(
-            id=event.id,
-            created_at=event.created_at,
-            action=event.action.replace("_", " "),
-            resource_type=event.resource_type,
-            actor_email=user.email if user else None,
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["created_at", "actor_email", "action", "resource_type", "resource_id"])
+    for event, user in rows:
+        writer.writerow(
+            [
+                event.created_at.isoformat(),
+                user.email if user else "",
+                event.action,
+                event.resource_type,
+                event.resource_id or "",
+            ]
         )
-        for event, user in rows
-    ]
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="audit-log.csv"'},
+    )
+
+
+@router.delete("/audit-logs", response_model=AuditCleanupResponse)
+@limiter.limit("6/hour")
+def delete_audit_logs(
+    request: Request,
+    scope: str = Query(..., description="older_than_7d | older_than_30d | all"),
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    db: Session = Depends(get_tenant_db),
+) -> AuditCleanupResponse:
+    from app.services.audit.org_cleanup import ALLOWED_SCOPES, cleanup_org_audit_logs
+
+    _assert_browser_origin(request)
+    try:
+        assert_org_admin_action(tenant, action="delete", resource_type="audit", resource_org_id=tenant.organization_id)
+    except PolicyDenied as exc:
+        raise org_admin_error(code=exc.code, message=exc.message, status_code=403) from exc
+    if scope not in ALLOWED_SCOPES:
+        raise org_admin_error(
+            code="INVALID_SCOPE",
+            message="Choose older than 7 days, older than 30 days, or all logs.",
+            field="scope",
+            status_code=400,
+        )
+    try:
+        deleted = cleanup_org_audit_logs(
+            db,
+            organization_id=tenant.organization_id,
+            admin_user_id=tenant.user_id,
+            scope=scope,
+        )
+    except ValueError as exc:
+        if str(exc) == "INVALID_SCOPE":
+            raise org_admin_error(code="INVALID_SCOPE", message="Invalid cleanup scope.", field="scope") from exc
+        raise
+    db.commit()
+    return AuditCleanupResponse(deleted_count=deleted, scope=scope)
 
 
 @router.get("/telemetry-schema")

@@ -33,10 +33,18 @@ export default function RequireOrgAdmin({ children }: { children: ReactNode }) {
           setReady(true);
         }
         if (ok) {
-          try {
-            await recordAdminConsoleEnter(session);
-          } catch {
-            /* audit failure must not block access after server verified role */
+          const orgId = session.organizationId ?? "";
+          const throttleKey = `aqrem:admin-console-enter:${orgId}`;
+          const last = sessionStorage.getItem(throttleKey);
+          const now = Date.now();
+          const fifteenMin = 15 * 60 * 1000;
+          if (!last || now - Number(last) >= fifteenMin) {
+            try {
+              await recordAdminConsoleEnter(session);
+              sessionStorage.setItem(throttleKey, String(now));
+            } catch {
+              /* audit failure must not block access after server verified role */
+            }
           }
         }
       } catch {
@@ -53,7 +61,7 @@ export default function RequireOrgAdmin({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [location.pathname]);
+  }, []);
 
   if (!ready) {
     return (

@@ -158,6 +158,11 @@ class Settings(BaseSettings):
         description="When true, reset platform admin password from env on every API startup (dev only).",
     )
     invitation_ttl_hours: int = 72
+    audit_retention_days: int = Field(
+        default=0,
+        validation_alias=AliasChoices("audit_retention_days", "AUDIT_RETENTION_DAYS"),
+        description="When > 0, scheduled job deletes audit events older than this many days (except cleanup records).",
+    )
 
     @model_validator(mode="after")
     def _production_guardrails(self) -> Settings:

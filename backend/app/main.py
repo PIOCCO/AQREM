@@ -79,7 +79,34 @@ async def lifespan(_: FastAPI):
             except Exception:
                 logger.exception("Scheduled organization purge failed")
 
+    async def _audit_retention_worker() -> None:
+        while True:
+            await asyncio.sleep(3600)
+            if settings.audit_retention_days <= 0:
+                continue
+            try:
+                from app.models.organization import Organization
+                from app.services.audit.org_cleanup import purge_audit_logs_older_than_days
+                from app.tenant_store.resolver import open_tenant_session
+
+                with SessionLocal() as control:
+                    org_ids = [row[0] for row in control.query(Organization.id).filter(Organization.is_active.is_(True)).all()]
+                    for org_id in org_ids:
+                        tenant = open_tenant_session(control, org_id)
+                        try:
+                            purge_audit_logs_older_than_days(
+                                tenant,
+                                organization_id=org_id,
+                                days=settings.audit_retention_days,
+                            )
+                            tenant.commit()
+                        finally:
+                            tenant.close()
+            except Exception:
+                logger.exception("Scheduled audit retention failed")
+
     purge_task = asyncio.create_task(_org_purge_worker())
+    audit_retention_task = asyncio.create_task(_audit_retention_worker())
     try:
         yield
     finally:

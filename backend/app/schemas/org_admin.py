@@ -81,3 +81,15 @@ class AuditRowResponse(BaseModel):
     action: str
     resource_type: str
     actor_email: str | None
+
+
+class AuditListResponse(BaseModel):
+    items: list[AuditRowResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class AuditCleanupResponse(BaseModel):
+    deleted_count: int
+    scope: str

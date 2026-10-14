@@ -1458,6 +1458,15 @@
     @apply inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent;
   }
 
+  .admin-btn-danger-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors;
+    @apply border bg-transparent text-red-400;
+    border-color: #ef4444;
+    @apply hover:bg-red-500/10 active:bg-red-500/20;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--admin-canvas)];
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
   .admin-skeleton-line {
     @apply h-3 rounded animate-pulse;
     background: var(--color-surface-raised);

@@ -34,6 +34,7 @@ def assert_org_admin_action(
         ("read", "member"),
         ("write", "member"),
         ("read", "audit"),
+        ("delete", "audit"),
         ("read", "usage"),
         ("read", "telemetry_schema"),
     }

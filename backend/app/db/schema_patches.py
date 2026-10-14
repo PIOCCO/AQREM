@@ -100,6 +100,10 @@ _ANSWER_PATCHES = (
     "ALTER TABLE answers ADD COLUMN IF NOT EXISTS library_entry_id UUID",
 )
 
+_AUDIT_PATCHES = (
+    "CREATE INDEX IF NOT EXISTS ix_audit_events_org_created_at ON audit_events (organization_id, created_at DESC)",
+)
+
 
 def apply_schema_patches(conn: Connection) -> None:
     for stmt in _ORG_PATCHES:
@@ -109,4 +113,6 @@ def apply_schema_patches(conn: Connection) -> None:
     for stmt in _ANSWER_PATCHES:
         conn.execute(text(stmt))
     for stmt in _EMAIL_PATCHES:
+        conn.execute(text(stmt))
+    for stmt in _AUDIT_PATCHES:
         conn.execute(text(stmt))
