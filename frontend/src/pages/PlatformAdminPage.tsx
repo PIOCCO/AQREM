@@ -629,8 +629,8 @@ function PlatformAdminInner({
                   <div className="admin-card p-4 space-y-4">
                     <h3 className="font-medium text-sm">Invite organization admin</h3>
                     <p className="text-xs text-chat-muted">
-                      This list shows active members and pending invitations only. Removed members disappear here;
-                      inactive accounts are not counted in the tab total.
+                      Statuses: <strong>Active</strong> — member with access; <strong>Pending invite</strong> — invited
+                      but not finished setup. Removed members are deleted from this organization (not shown as inactive).
                     </p>
                     {licenseBlocksInvite ? (
                       <p className="text-xs text-amber-700 border border-amber-200 rounded-lg px-3 py-2">

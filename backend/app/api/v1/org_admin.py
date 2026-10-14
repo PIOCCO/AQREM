@@ -51,7 +51,7 @@ from app.services.setup_checklist import build_setup_checklist
 from app.services.seat_usage import get_seat_usage
 from app.services.storage.factory import get_blob_storage
 from app.services.storage.path_utils import safe_blob_filename
-from app.services.platform_provisioning import deactivate_membership
+from app.services.membership_lifecycle import MembershipRemoveError, normalize_org_admin_singleton, remove_organization_membership
 from app.services.telemetry_ingest import ingest_org_telemetry
 from app.services.telemetry_schema import TELEMETRY_FIELD_CATALOG
 from app.services.access_control.constants import VISIBILITY_ADMINS_ONLY, VISIBILITY_ALL_STAFF, VISIBILITY_GROUPS, VISIBILITY_USERS
@@ -533,10 +533,16 @@ def list_members(
     db: Session = Depends(get_tenant_db),
 ) -> list[MemberRow]:
     assert_org_admin_action(tenant, action="read", resource_type="member", resource_org_id=tenant.organization_id)
+    normalize_org_admin_singleton(db, tenant.organization_id)
+    db.flush()
     rows = (
         db.query(OrganizationMembership, User)
         .join(User, User.id == OrganizationMembership.user_id)
-        .filter(OrganizationMembership.organization_id == tenant.organization_id)
+        .filter(
+            OrganizationMembership.organization_id == tenant.organization_id,
+            OrganizationMembership.is_active.is_(True),
+            User.is_active.is_(True),
+        )
         .all()
     )
     return [
@@ -546,7 +552,7 @@ def list_members(
             email=u.email,
             full_name=u.full_name,
             role=m.role,
-            is_active=m.is_active and u.is_active,
+            is_active=True,
         )
         for m, u in rows
     ]
@@ -574,6 +580,23 @@ def invite_member(
         raise org_admin_error(code="INVALID_ROLE", message="Choose Organization admin, Editor, or Viewer.", field="role") from exc
     if payload.role.upper() == "PLATFORM_ADMIN":
         raise org_admin_error(code="INVALID_ROLE", message="Invalid role.", field="role")
+    if role == Role.ORG_ADMIN:
+        existing_admin = (
+            db.query(OrganizationMembership)
+            .filter(
+                OrganizationMembership.organization_id == tenant.organization_id,
+                OrganizationMembership.role == Role.ORG_ADMIN.value,
+                OrganizationMembership.is_active.is_(True),
+            )
+            .first()
+        )
+        if existing_admin is not None:
+            raise org_admin_error(
+                code="ORG_ADMIN_EXISTS",
+                message="This organization already has an administrator. Use Replace admin from platform support.",
+                field="role",
+                status_code=409,
+            )
     try:
         _user, _membership, invitation, raw_token, expires_at = provision_user_invitation(
             db,
@@ -628,9 +651,30 @@ def deactivate_org_member(
     membership = db.get(OrganizationMembership, membership_id)
     if membership is None or membership.organization_id != tenant.organization_id:
         raise org_admin_error(code="NOT_FOUND", message="Member not found.", status_code=404)
-    if membership.user_id == tenant.user_id:
-        raise org_admin_error(code="INVALID_STATE", message="You cannot deactivate your own membership.", status_code=400)
-    deactivate_membership(db, admin_user_id=tenant.user_id, membership=membership)
+    try:
+        remove_organization_membership(
+            db,
+            admin_user_id=tenant.user_id,
+            membership=membership,
+            reason="org_admin_removed",
+            source="organization_admin_console",
+            audit_action="organization_member_removed",
+        )
+    except MembershipRemoveError as exc:
+        code = str(exc)
+        if code == "SELF_REMOVE_FORBIDDEN":
+            raise org_admin_error(
+                code="SELF_REMOVE_FORBIDDEN",
+                message="You cannot remove your own membership.",
+                status_code=400,
+            ) from exc
+        if code == "LAST_ORG_ADMIN":
+            raise org_admin_error(
+                code="LAST_ORG_ADMIN",
+                message="Replace the organization admin before removing them.",
+                status_code=409,
+            ) from exc
+        raise org_admin_error(code=code, message=code.replace("_", " ").capitalize()) from exc
     db.commit()
 
 

@@ -252,21 +252,15 @@ def revoke_invitation(
                 .first()
             )
             if membership is not None:
-                membership.is_active = False
-                membership.auth_version = int(membership.auth_version or 1) + 1
-                record_audit(
+                from app.services.membership_lifecycle import remove_organization_membership
+
+                remove_organization_membership(
                     db,
-                    organization_id=invitation.organization_id,
-                    user_id=admin_user_id,
-                    action="platform_member_removed",
-                    resource_type="organization_membership",
-                    resource_id=str(membership.id),
-                    metadata={
-                        "user_id": str(user.id),
-                        "reason": "invitation_revoked",
-                        "source": "platform_control_plane",
-                        "platform_action": "Platform: remove member (invitation revoked)",
-                    },
+                    admin_user_id=admin_user_id,
+                    membership=membership,
+                    reason="invitation_revoked",
+                    source="platform_control_plane",
+                    audit_action="platform_member_removed",
                 )
 
 
@@ -277,8 +271,26 @@ def update_membership_role(
     membership: OrganizationMembership,
     role: Role,
 ) -> None:
+    from app.services.membership_lifecycle import normalize_org_admin_singleton
+
     old = membership.role
+    if role == Role.ORG_ADMIN:
+        others = (
+            db.query(OrganizationMembership)
+            .filter(
+                OrganizationMembership.organization_id == membership.organization_id,
+                OrganizationMembership.role == Role.ORG_ADMIN.value,
+                OrganizationMembership.id != membership.id,
+                OrganizationMembership.is_active.is_(True),
+            )
+            .all()
+        )
+        for other in others:
+            other.role = Role.EDITOR.value
+            other.auth_version = int(other.auth_version or 1) + 1
     membership.role = role.value
+    if role == Role.ORG_ADMIN:
+        normalize_org_admin_singleton(db, membership.organization_id)
     record_audit(
         db,
         organization_id=membership.organization_id,
@@ -400,29 +412,16 @@ def deactivate_membership(
     reason: str | None = None,
     source: str = "platform_control_plane",
 ) -> None:
-    membership.is_active = False
-    membership.auth_version = int(membership.auth_version or 1) + 1
-    user = db.get(User, membership.user_id)
-    if user is not None and user.email:
-        revoke_pending_invitations_for_email(
-            db,
-            admin_user_id=admin_user_id,
-            organization_id=membership.organization_id,
-            email=user.email,
-        )
-    record_audit(
+    """Deprecated alias: removes membership from the organization (hard delete)."""
+    from app.services.membership_lifecycle import remove_organization_membership
+
+    remove_organization_membership(
         db,
-        organization_id=membership.organization_id,
-        user_id=admin_user_id,
-        action="platform_member_removed",
-        resource_type="organization_membership",
-        resource_id=str(membership.id),
-        metadata={
-            "user_id": str(membership.user_id),
-            "reason": reason,
-            "source": source,
-            "platform_action": f"Platform: remove member",
-        },
+        admin_user_id=admin_user_id,
+        membership=membership,
+        reason=reason,
+        source=source,
+        audit_action="platform_member_removed",
     )
 
 

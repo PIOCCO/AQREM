@@ -58,9 +58,9 @@ from app.services.admin_org import (
 )
 from app.audit.service import record_audit
 from app.services.licensing import LicenseDenied, assert_can_add_seat, licensing_test_mode_effective
+from app.services.membership_lifecycle import MembershipRemoveError, normalize_org_admin_singleton, remove_organization_membership
 from app.services.platform_provisioning import (
     create_organization_admin,
-    deactivate_membership,
     set_organization_license,
     unique_org_slug,
     update_membership_role,
@@ -283,6 +283,8 @@ def organization_directory(
     admin: User = Depends(require_platform_permission("org:read")),
 ) -> AdminDirectoryResponse:
     org = _require_admin_visible_org(db, organization_id)
+    normalize_org_admin_singleton(db, organization_id)
+    db.flush()
 
     usage = get_seat_usage(db, org)
     rows: list[AdminDirectoryRow] = []
@@ -517,10 +519,16 @@ def list_members(
     admin: User = Depends(require_platform_permission("org:read")),
 ) -> list[AdminMembershipResponse]:
     _require_admin_visible_org(db, organization_id)
+    normalize_org_admin_singleton(db, organization_id)
+    db.flush()
     rows = (
         db.query(OrganizationMembership, User)
         .join(User, User.id == OrganizationMembership.user_id)
-        .filter(OrganizationMembership.organization_id == organization_id)
+        .filter(
+            OrganizationMembership.organization_id == organization_id,
+            OrganizationMembership.is_active.is_(True),
+            User.is_active.is_(True),
+        )
         .order_by(User.full_name.asc())
         .all()
     )
@@ -585,22 +593,26 @@ def deactivate_member(
     if membership is None or membership.organization_id != organization_id:
         raise admin_error(code="NOT_FOUND", message="Membership not found", status_code=404)
     reason = payload.reason.strip()
-    active_admins = (
-        db.query(OrganizationMembership)
-        .filter(
-            OrganizationMembership.organization_id == organization_id,
-            OrganizationMembership.is_active.is_(True),
-            OrganizationMembership.role == Role.ORG_ADMIN.value,
+    try:
+        remove_organization_membership(
+            db,
+            admin_user_id=admin.id,
+            membership=membership,
+            reason=reason,
+            source="platform_control_plane",
+            audit_action="platform_member_removed",
         )
-        .count()
-    )
-    if membership.role == Role.ORG_ADMIN.value and membership.is_active and active_admins <= 1:
-        raise admin_error(
-            code="LAST_ORG_ADMIN",
-            message="Cannot remove the last organization admin without replacing them first",
-            status_code=409,
-        )
-    deactivate_membership(db, admin_user_id=admin.id, membership=membership, reason=reason)
+    except MembershipRemoveError as exc:
+        code = str(exc)
+        if code == "LAST_ORG_ADMIN":
+            raise admin_error(
+                code="LAST_ORG_ADMIN",
+                message="Cannot remove the last organization admin without replacing them first",
+                status_code=409,
+            ) from exc
+        if code == "SELF_REMOVE_FORBIDDEN":
+            raise admin_error(code="SELF_REMOVE_FORBIDDEN", message="You cannot remove yourself", status_code=400) from exc
+        raise admin_error(code=code, message=code.replace("_", " ").capitalize()) from exc
     db.commit()
 
 

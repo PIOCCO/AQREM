@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Combobox } from "../components/ui/dialog/Combobox";
 import { Field } from "../components/ui/dialog/Field";
 import { useAuth } from "../lib/authContext";
-import { fetchMembers, fetchOrgOverview, inviteMember } from "../lib/orgAdminApi";
+import { fetchMembers, fetchOrgOverview, inviteMember, removeOrgMember } from "../lib/orgAdminApi";
 
 const ROLE_OPTIONS = [
   { value: "ORG_ADMIN", label: "Organization admin" },
@@ -12,7 +12,9 @@ const ROLE_OPTIONS = [
 
 export default function ClientAdminUsersPage() {
   const { session } = useAuth();
-  const [members, setMembers] = useState<Array<{ email: string; full_name: string; role: string; is_active: boolean }>>([]);
+  const [members, setMembers] = useState<
+    Array<{ membership_id: string; email: string; full_name: string; role: string; is_active: boolean }>
+  >([]);
   const [seatsFull, setSeatsFull] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -107,14 +109,33 @@ export default function ClientAdminUsersPage() {
               <th className="p-3">Name</th>
               <th className="p-3">Email</th>
               <th className="p-3">Role</th>
+              <th className="p-3">Actions</th>
             </tr>
           </thead>
           <tbody>
             {members.map((m) => (
-              <tr key={m.email} className="border-b border-chat-border last:border-0">
+              <tr key={m.membership_id} className="border-b border-chat-border last:border-0">
                 <td className="p-3">{m.full_name}</td>
                 <td className="p-3">{m.email}</td>
                 <td className="p-3">{m.role.replace("_", " ")}</td>
+                <td className="p-3">
+                  <button
+                    type="button"
+                    className="text-xs text-red-700 underline"
+                    onClick={async () => {
+                      if (!session) return;
+                      if (!window.confirm(`Remove ${m.full_name || m.email} from this organization?`)) return;
+                      try {
+                        await removeOrgMember(session, m.membership_id);
+                        reload();
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Remove failed");
+                      }
+                    }}
+                  >
+                    Remove
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

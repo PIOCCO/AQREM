@@ -164,6 +164,14 @@ export async function inviteMember(
   return res.json();
 }
 
+export async function removeOrgMember(session: AuthSession, membershipId: string) {
+  const res = await fetch(`${API_BASE}/api/v1/org-admin/members/${membershipId}/deactivate`, {
+    method: "POST",
+    headers: headers(session),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to remove member"));
+}
+
 export async function fetchOrgUsage(session: AuthSession) {
   const res = await fetch(`${API_BASE}/api/v1/org-admin/usage`, { headers: headers(session) });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load usage"));

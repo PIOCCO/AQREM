@@ -48,8 +48,8 @@ export function RemoveMemberDialog({ open, memberName, orgName, loading, onConfi
     >
       <div className="space-y-3 text-sm text-[var(--color-text-secondary)]">
         <p>
-          They will lose access immediately, their seat will be freed, and their content stays with the organization.
-          This is recorded in the organization audit log as a platform action.
+          They will lose access immediately (sessions revoked), their membership will be removed from this organization
+          (not merely marked inactive), and their seat will be freed. Content they created stays with the organization.
         </p>
         <div>
           <label htmlFor={reasonId} className="block text-xs font-medium text-[var(--color-text-primary)] mb-1">
