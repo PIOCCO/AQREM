@@ -42,8 +42,8 @@ export default function ClientAdminAuditPage() {
     setError(null);
     try {
       const data = await fetchOrgAudit(session, page, pageSize);
-      setRows(data.items);
-      setTotal(data.total);
+      setRows(data.items ?? []);
+      setTotal(data.total ?? 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Load failed");
     } finally {
@@ -86,7 +86,9 @@ export default function ClientAdminAuditPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  if (error && rows.length === 0 && !loading) {
+  const safeRows = rows ?? [];
+
+  if (error && safeRows.length === 0 && !loading) {
     return (
       <div className="p-8 admin-inline-alert border rounded m-6" role="alert">
         {error}
@@ -122,9 +124,9 @@ export default function ClientAdminAuditPage() {
         </div>
       </div>
 
-      {loading && rows.length === 0 ? (
+      {loading && safeRows.length === 0 ? (
         <p className="admin-card p-6 mt-6 text-sm text-chat-muted">Loading audit log…</p>
-      ) : rows.length === 0 ? (
+      ) : safeRows.length === 0 ? (
         <p className="admin-card p-6 mt-6 text-sm text-chat-muted">No audit logs</p>
       ) : (
         <>
@@ -138,7 +140,7 @@ export default function ClientAdminAuditPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {safeRows.map((r) => (
                   <tr key={r.id} className="border-b border-chat-border last:border-0">
                     <td className="p-3 whitespace-nowrap">{new Date(r.created_at).toLocaleString()}</td>
                     <td className="p-3">{r.actor_email ?? "System"}</td>

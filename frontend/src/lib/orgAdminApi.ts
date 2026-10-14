@@ -175,13 +175,36 @@ export type OrgAuditList = {
   page_size: number;
 };
 
+function normalizeOrgAuditList(raw: unknown, page: number, pageSize: number): OrgAuditList {
+  if (Array.isArray(raw)) {
+    return {
+      items: raw as OrgAuditRow[],
+      total: raw.length,
+      page: 1,
+      page_size: raw.length || pageSize,
+    };
+  }
+  if (raw && typeof raw === "object") {
+    const body = raw as Partial<OrgAuditList> & { rows?: OrgAuditRow[] };
+    const items = body.items ?? body.rows ?? [];
+    return {
+      items,
+      total: typeof body.total === "number" ? body.total : items.length,
+      page: typeof body.page === "number" ? body.page : page,
+      page_size: typeof body.page_size === "number" ? body.page_size : pageSize,
+    };
+  }
+  return { items: [], total: 0, page, page_size: pageSize };
+}
+
 export async function fetchOrgAudit(session: AuthSession, page = 1, pageSize = 50): Promise<OrgAuditList> {
   const res = await fetch(
     apiUrl(`/api/v1/org-admin/audit?page=${page}&page_size=${pageSize}`),
     { headers: headers(session) },
   );
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load audit log"));
-  return res.json();
+  const raw = await res.json();
+  return normalizeOrgAuditList(raw, page, pageSize);
 }
 
 export async function cleanupOrgAuditLogs(
