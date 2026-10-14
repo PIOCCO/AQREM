@@ -165,6 +165,20 @@ def test_batch_cleanup_many_rows(client: TestClient, db_session, monkeypatch):
     assert "audit logs cleaned up" in listing["items"][0]["action"]
 
 
+def test_audit_logs_delete_cors_preflight_allows_x_requested_with(client: TestClient):
+    res = client.options(
+        "/api/v1/org-admin/audit-logs?scope=all",
+        headers={
+            "Origin": "http://100.80.43.124:5173",
+            "Access-Control-Request-Method": "DELETE",
+            "Access-Control-Request-Headers": "authorization,content-type,x-organization-id,x-requested-with",
+        },
+    )
+    assert res.status_code == 200, res.text
+    allowed = (res.headers.get("access-control-allow-headers") or "").lower()
+    assert "x-requested-with" in allowed
+
+
 def test_console_enter_deduped(client: TestClient, db_session):
     org, admin, token = _seed_org_admin(db_session)
     h = _headers(token, str(org.id))
