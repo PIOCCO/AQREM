@@ -6,6 +6,10 @@ Usage:
   cd backend && python ../scripts/cleanup_delete_inconsistencies.py --dry-run
   cd backend && python ../scripts/cleanup_delete_inconsistencies.py --apply
 
+Before querying, the script runs the same idempotent schema patches as API startup
+(ADD COLUMN IF NOT EXISTS for deleted_at, license_expires_at, etc.). Use
+--skip-schema-patches only if you already patched the database.
+
 Actions when --apply:
   1. Hard-delete organization_memberships with is_active=false (legacy soft-remove).
   2. Normalize duplicate ORG_ADMIN rows per org (keep newest active, delete inactive dupes).
@@ -26,7 +30,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.roles import Role
-from app.db.session import SessionLocal
+from app.db.schema_patches import apply_schema_patches
+from app.db.session import SessionLocal, engine
 from app.models.invitation import UserInvitation
 from app.models.organization import Organization, OrganizationMembership, User
 from app.services.membership_lifecycle import normalize_org_admin_singleton, purge_legacy_inactive_memberships
@@ -44,7 +49,19 @@ def _parse_args() -> argparse.Namespace:
         default=[],
         help="Exact organization name to mark pending_deletion (repeatable)",
     )
+    p.add_argument(
+        "--skip-schema-patches",
+        action="store_true",
+        help="Do not run apply_schema_patches before cleanup (DB must already match models)",
+    )
     return p.parse_args()
+
+
+def ensure_database_schema(*, skip: bool) -> None:
+    if skip:
+        return
+    with engine.begin() as conn:
+        apply_schema_patches(conn)
 
 
 def main() -> int:
@@ -52,6 +69,11 @@ def main() -> int:
     apply = args.apply and not args.dry_run
     if not apply:
         print("DRY RUN — pass --apply to persist changes\n")
+
+    if not args.skip_schema_patches:
+        print("Applying idempotent schema patches (same as API startup)...")
+        ensure_database_schema(skip=False)
+        print()
 
     with SessionLocal() as db:
         report = run_cleanup(
