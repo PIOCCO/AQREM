@@ -16,6 +16,7 @@ import {
   rotateEmployeeLink,
   type AdminOrganization,
   type EmployeeLinkSummary,
+  invitationHistoryRecordType,
   type InvitationHistoryRow,
 } from "../../lib/platformAdminApi";
 import { pickInviteUrl } from "../../lib/inviteLinks";
@@ -289,11 +290,11 @@ export function OrgInvitationsPanel({
               {history.map((row) => (
                 <tr key={`${row.record_type}-${row.id}`} className="border-t border-chat-border">
                   <td className="py-2 capitalize">
-                    {row.record_type === "employee_link" ? "Employee link" : "Admin invite"}
+                    {invitationHistoryRecordType(row) === "employee_link" ? "Employee link" : "Admin invite"}
                   </td>
                   <td className="py-2">
                     <div>{row.invitee_full_name ? `${row.invitee_full_name} · ` : ""}{row.email}</div>
-                    {row.record_type === "employee_link" ? (
+                    {invitationHistoryRecordType(row) === "employee_link" ? (
                       <div className="text-xs text-chat-muted">
                         {row.joined_count ?? 0} joined · {row.pending_approval_count ?? 0} pending approval
                       </div>
@@ -327,7 +328,7 @@ export function OrgInvitationsPanel({
                         className="text-xs underline"
                         onClick={async () => {
                           try {
-                            if (row.record_type === "admin_invitation") {
+                            if (invitationHistoryRecordType(row) === "admin_invitation") {
                               const r = await fetchAdminInvitationLink(session, org.id, row.id);
                               const url = pickInviteUrl(r);
                               if (url) {
@@ -348,7 +349,7 @@ export function OrgInvitationsPanel({
                         Copy link
                       </button>
                     ) : null}
-                    {row.record_type === "admin_invitation" && row.status === "pending" ? (
+                    {invitationHistoryRecordType(row) === "admin_invitation" && row.status === "pending" ? (
                       <>
                         <button
                           type="button"
@@ -378,7 +379,7 @@ export function OrgInvitationsPanel({
                         </button>
                       </>
                     ) : null}
-                    {row.record_type === "admin_invitation" &&
+                    {invitationHistoryRecordType(row) === "admin_invitation" &&
                     (row.status === "expired" || row.status === "revoked") ? (
                       <button
                         type="button"
@@ -399,7 +400,7 @@ export function OrgInvitationsPanel({
                         Regenerate
                       </button>
                     ) : null}
-                    {row.record_type === "employee_link" &&
+                    {invitationHistoryRecordType(row) === "employee_link" &&
                     (row.status === "expired" || row.status === "revoked") ? (
                       <button
                         type="button"
@@ -423,15 +424,20 @@ export function OrgInvitationsPanel({
                       className="text-xs underline text-[var(--color-danger)]"
                       onClick={() => {
                         if (!window.confirm("Delete this history row? Pending links will stop working.")) return;
+                        const recordType = invitationHistoryRecordType(row);
                         const run =
-                          row.record_type === "admin_invitation"
+                          recordType === "admin_invitation"
                             ? deleteAdminInvitationRecord(session, org.id, row.id)
                             : deleteEmployeeLinkRecord(session, org.id, row.id);
-                        void run.then(async () => {
-                          await reload();
-                          await onRefreshOrgs();
-                          toast.push("Deleted", "ok");
-                        });
+                        void run
+                          .then(async () => {
+                            await reload();
+                            await onRefreshOrgs();
+                            toast.push("Deleted", "ok");
+                          })
+                          .catch((err: unknown) => {
+                            toast.push(err instanceof Error ? err.message : "Delete failed", "err");
+                          });
                       }}
                     >
                       Delete

@@ -375,12 +375,27 @@ export async function fetchAdminInvitationLink(session: AuthSession, orgId: stri
   }>;
 }
 
+async function deleteWithPostFallback(
+  postUrl: string,
+  deleteUrl: string,
+  session: AuthSession,
+  fallbackMessage: string,
+) {
+  const headers = adminHeaders(session);
+  let res = await fetch(postUrl, { method: "POST", headers });
+  if (res.status === 404 || res.status === 405) {
+    res = await fetch(deleteUrl, { method: "DELETE", headers });
+  }
+  if (!res.ok) await parseError(res, fallbackMessage);
+}
+
 export async function deleteAdminInvitationRecord(session: AuthSession, orgId: string, invitationId: string) {
-  const res = await fetch(
+  await deleteWithPostFallback(
+    `${API_BASE}/api/v1/admin/organizations/${orgId}/invitations/admin/${invitationId}/delete`,
     `${API_BASE}/api/v1/admin/organizations/${orgId}/invitations/admin/${invitationId}`,
-    { method: "DELETE", headers: adminHeaders(session) },
+    session,
+    "Failed to delete invitation",
   );
-  if (!res.ok) await parseError(res, "Failed to delete invitation");
 }
 
 export async function fetchEmployeeLinkUrl(session: AuthSession, orgId: string, linkId: string) {
@@ -393,11 +408,12 @@ export async function fetchEmployeeLinkUrl(session: AuthSession, orgId: string, 
 }
 
 export async function deleteEmployeeLinkRecord(session: AuthSession, orgId: string, linkId: string) {
-  const res = await fetch(
+  await deleteWithPostFallback(
+    `${API_BASE}/api/v1/admin/organizations/${orgId}/employee-link/${linkId}/delete`,
     `${API_BASE}/api/v1/admin/organizations/${orgId}/employee-link/${linkId}`,
-    { method: "DELETE", headers: adminHeaders(session) },
+    session,
+    "Failed to delete employee link",
   );
-  if (!res.ok) await parseError(res, "Failed to delete employee link");
 }
 
 export async function revokeInvitation(session: AuthSession, orgId: string, invitationId: string) {
@@ -464,6 +480,14 @@ export async function updatePlatformStaffRole(
   });
   if (!res.ok) await parseError(res, "Failed to update platform role");
   return res.json();
+}
+
+export function invitationHistoryRecordType(row: InvitationHistoryRow): "admin_invitation" | "employee_link" {
+  const rt = (row.record_type ?? "").toLowerCase();
+  if (rt === "employee_link" || row.kind === "employee_link") return "employee_link";
+  if (rt === "admin_invitation" || row.kind === "org_admin") return "admin_invitation";
+  if (row.email?.startsWith("Employee link")) return "employee_link";
+  return "admin_invitation";
 }
 
 export type InvitationHistoryRow = {

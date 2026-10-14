@@ -326,7 +326,10 @@ def delete_admin_invitation(
     invitation: UserInvitation,
 ) -> None:
     """Remove invitation history row; pending invites are revoked first."""
-    if invitation.invitation_kind != INVITATION_KIND_ORG_ADMIN:
+    is_org_admin_invite = invitation.invitation_kind == INVITATION_KIND_ORG_ADMIN or (
+        invitation.role == Role.ORG_ADMIN.value
+    )
+    if not is_org_admin_invite:
         raise ValueError("Not an admin invitation")
     now = _utcnow()
     if invitation.used_at is None and invitation.revoked_at is None:

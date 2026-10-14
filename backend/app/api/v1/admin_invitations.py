@@ -351,6 +351,24 @@ def get_admin_invitation_link(
     return _admin_link_response(path=path, expires_at=invitation.expires_at)
 
 
+def _delete_admin_invitation_impl(
+    db: Session,
+    *,
+    organization_id: UUID,
+    invitation_id: UUID,
+    admin: User,
+) -> None:
+    _visible_org(db, organization_id)
+    invitation = db.get(UserInvitation, invitation_id)
+    if invitation is None or invitation.organization_id != organization_id:
+        raise admin_error(code="NOT_FOUND", message="Invitation not found", status_code=404)
+    try:
+        delete_admin_invitation(db, admin_user_id=admin.id, invitation=invitation)
+    except ValueError as exc:
+        raise admin_error(code="INVALID_STATE", message=str(exc), status_code=400) from exc
+    db.commit()
+
+
 @router.delete("/organizations/{organization_id}/invitations/admin/{invitation_id}", status_code=204)
 def delete_admin_invitation_row(
     organization_id: UUID,
@@ -358,12 +376,20 @@ def delete_admin_invitation_row(
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("invitation:revoke")),
 ) -> None:
-    _visible_org(db, organization_id)
-    invitation = db.get(UserInvitation, invitation_id)
-    if invitation is None or invitation.organization_id != organization_id:
-        raise admin_error(code="NOT_FOUND", message="Invitation not found", status_code=404)
-    delete_admin_invitation(db, admin_user_id=admin.id, invitation=invitation)
-    db.commit()
+    _delete_admin_invitation_impl(db, organization_id=organization_id, invitation_id=invitation_id, admin=admin)
+
+
+@router.post(
+    "/organizations/{organization_id}/invitations/admin/{invitation_id}/delete",
+    status_code=204,
+)
+def delete_admin_invitation_row_post(
+    organization_id: UUID,
+    invitation_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:revoke")),
+) -> None:
+    _delete_admin_invitation_impl(db, organization_id=organization_id, invitation_id=invitation_id, admin=admin)
 
 
 @router.get(
@@ -391,12 +417,12 @@ def get_employee_link_url(
     return _employee_link_response(path=path, expires_at=link.expires_at)
 
 
-@router.delete("/organizations/{organization_id}/employee-link/{link_id}", status_code=204)
-def delete_employee_link_row(
+def _delete_employee_link_impl(
+    db: Session,
+    *,
     organization_id: UUID,
     link_id: UUID,
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_platform_permission("invitation:revoke")),
+    admin: User,
 ) -> None:
     _visible_org(db, organization_id)
     link = db.get(EmployeeJoinLink, link_id)
@@ -404,6 +430,26 @@ def delete_employee_link_row(
         raise admin_error(code="NOT_FOUND", message="Link not found", status_code=404)
     delete_employee_join_link(db, admin_user_id=admin.id, link=link)
     db.commit()
+
+
+@router.delete("/organizations/{organization_id}/employee-link/{link_id}", status_code=204)
+def delete_employee_link_row(
+    organization_id: UUID,
+    link_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:revoke")),
+) -> None:
+    _delete_employee_link_impl(db, organization_id=organization_id, link_id=link_id, admin=admin)
+
+
+@router.post("/organizations/{organization_id}/employee-link/{link_id}/delete", status_code=204)
+def delete_employee_link_row_post(
+    organization_id: UUID,
+    link_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_permission("invitation:revoke")),
+) -> None:
+    _delete_employee_link_impl(db, organization_id=organization_id, link_id=link_id, admin=admin)
 
 
 @router.get("/organizations/{organization_id}/employee-link", response_model=EmployeeLinkSummary)
