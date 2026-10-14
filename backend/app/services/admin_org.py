@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query, Session
 
 from app.models.enums import LicenseStatus
 from app.models.organization import Organization
@@ -86,6 +86,23 @@ def org_status_bucket(org: Organization) -> str:
     return "active"
 
 
+def organization_is_pending_deletion(org: Organization) -> bool:
+    return getattr(org, "deleted_at", None) is not None
+
+
+def organizations_base_query(db: Session) -> Query[Organization]:
+    return db.query(Organization)
+
+
+def organizations_excluding_pending_deletion(db: Session) -> Query[Organization]:
+    """Default scope for operational org lists, seat usage, and get-by-id."""
+    return organizations_base_query(db).filter(Organization.deleted_at.is_(None))
+
+
+def organizations_pending_deletion_only(db: Session) -> Query[Organization]:
+    return organizations_base_query(db).filter(Organization.deleted_at.isnot(None))
+
+
 def filter_orgs_for_admin(orgs: list[Organization]) -> list[Organization]:
     visible = [o for o in orgs if getattr(o, "deleted_at", None) is None]
     if licensing_test_mode_effective():
@@ -94,10 +111,8 @@ def filter_orgs_for_admin(orgs: list[Organization]) -> list[Organization]:
 
 
 def get_admin_visible_org(db: Session, organization_id: UUID) -> Organization | None:
-    org = db.get(Organization, organization_id)
+    org = organizations_excluding_pending_deletion(db).filter(Organization.id == organization_id).first()
     if org is None:
-        return None
-    if getattr(org, "deleted_at", None) is not None:
         return None
     if org.license_status == LicenseStatus.TEST.value and not licensing_test_mode_effective():
         return None

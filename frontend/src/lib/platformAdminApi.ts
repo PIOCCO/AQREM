@@ -109,11 +109,29 @@ async function parseError(res: Response, fallback: string): Promise<never> {
 }
 
 function statusBucket(status: string): string {
-  if (status === "test") return "test";
-  if (status === "expired") return "expired";
-  if (status === "suspended") return "suspended";
+  const s = status.trim().toLowerCase();
+  if (s === "test") return "test";
+  if (s === "expired") return "expired";
+  if (s === "suspended") return "suspended";
   return "active";
 }
+
+function isDeleteOrganizationResponse(body: unknown): body is {
+  organization_id: string;
+  purge_scheduled_at: string;
+  retention_days: number;
+} {
+  if (!body || typeof body !== "object") return false;
+  const row = body as Record<string, unknown>;
+  return (
+    typeof row.organization_id === "string" &&
+    typeof row.purge_scheduled_at === "string" &&
+    typeof row.retention_days === "number" &&
+    !("seats" in row)
+  );
+}
+
+const adminFetchInit: RequestInit = { cache: "no-store" };
 
 function computeCounts(items: AdminOrganization[]): Record<string, number> {
   const counts = { all: 0, active: 0, suspended: 0, expired: 0, test: 0, pending_deletion: 0 };
@@ -209,11 +227,20 @@ export async function deleteAdminOrganization(
   let last: Response | null = null;
   for (const attempt of attempts) {
     last = await fetch(attempt.url, {
+      ...adminFetchInit,
       method: attempt.method,
       headers,
       body: attempt.body,
     });
-    if (last.ok) return last.json();
+    if (last.ok) {
+      const payload: unknown = await last.json();
+      if (isDeleteOrganizationResponse(payload)) {
+        return payload;
+      }
+      throw new Error(
+        "Organization was not scheduled for deletion — the API returned a normal organization payload. Restart the backend on port 8000 with the latest code.",
+      );
+    }
     if (last.status !== 404 && last.status !== 405) {
       await parseError(last, "Failed to delete organization");
     }
@@ -256,7 +283,10 @@ export async function fetchAdminOrganizations(
   const qs = new URLSearchParams();
   if (params?.q) qs.set("q", params.q);
   if (params?.status && params.status !== "all") qs.set("status", params.status);
-  const res = await fetch(apiUrl(`/api/v1/admin/organizations?${qs}`), { headers: adminHeaders(session) });
+  const res = await fetch(apiUrl(`/api/v1/admin/organizations?${qs}`), {
+    ...adminFetchInit,
+    headers: adminHeaders(session),
+  });
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load organizations"));
   const body: unknown = await res.json();
   if (Array.isArray(body)) {
@@ -437,22 +467,19 @@ async function deleteWithPostOnly(
 }
 
 export async function deleteAdminInvitationRecord(session: AuthSession, orgId: string, invitationId: string) {
-  let res = await deleteWithPostOnly(
+  const res = await deleteWithPostOnly(
     [
       apiUrl(`/api/v1/admin/organizations/${orgId}/invitations/admin/${invitationId}/delete`),
       apiUrl(`/api/v1/admin/organizations/${orgId}/invitation-history/${invitationId}/delete`),
     ],
     session,
   );
-  if (res.status === 404 || res.status === 405) {
-    try {
-      await revokeInvitation(session, orgId, invitationId);
-      return;
-    } catch {
-      /* fall through */
-    }
+  if (!res.ok) {
+    await parseError(
+      res,
+      "Failed to delete invitation history — update the backend on port 8000 (revoke alone does not remove history rows).",
+    );
   }
-  if (!res.ok) await parseError(res, "Failed to delete invitation");
 }
 
 export async function fetchEmployeeLinkUrl(session: AuthSession, orgId: string, linkId: string) {

@@ -997,14 +997,16 @@ function PlatformAdminInner({
           setDeleteOrgLoading(true);
           setDeleteOrgError(null);
           try {
-            const result = await deleteAdminOrganization(auth, selectedId, confirmName);
+            const deletedId = selectedId;
+            const result = await deleteAdminOrganization(auth, deletedId, confirmName);
+            setOrgs((prev) => prev.filter((o) => o.id !== deletedId));
+            setSelectedId((id) => (id === deletedId ? "" : id));
             toast.push(
               `${selected.name} scheduled for deletion (purge in ${result.retention_days} days)`,
               "ok",
             );
             setDeleteOrgOpen(false);
             await refreshOrgs();
-            setSelectedId((id) => (id === selectedId ? "" : id));
           } catch (err) {
             const msg = err instanceof Error ? err.message : "Delete failed";
             setDeleteOrgError(msg);

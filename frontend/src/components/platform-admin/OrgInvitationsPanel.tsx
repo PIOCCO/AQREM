@@ -478,14 +478,21 @@ export function OrgInvitationsPanel({
                         if (!window.confirm("Delete this history row? Pending links will stop working.")) return;
                         void runRowAction(`delete-${row.id}`, async () => {
                           const recordType = invitationHistoryRecordType(row);
-                          if (recordType === "admin_invitation") {
-                            await deleteAdminInvitationRecord(session, org.id, row.id);
-                          } else {
-                            await deleteEmployeeLinkRecord(session, org.id, row.id);
+                          const rowId = row.id;
+                          setHistory((prev) => prev.filter((r) => r.id !== rowId));
+                          try {
+                            if (recordType === "admin_invitation") {
+                              await deleteAdminInvitationRecord(session, org.id, rowId);
+                            } else {
+                              await deleteEmployeeLinkRecord(session, org.id, rowId);
+                            }
+                            await reload();
+                            await onRefreshOrgs();
+                            toast.push("Deleted", "ok");
+                          } catch (err) {
+                            await reload();
+                            throw err;
                           }
-                          await reload();
-                          await onRefreshOrgs();
-                          toast.push("Deleted", "ok");
                         });
                       }}
                     >

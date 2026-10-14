@@ -24,4 +24,10 @@ def list_organizations(
         )
         .all()
     ]
-    return db.query(Organization).filter(Organization.id.in_(org_ids)).all()
+    if not org_ids:
+        return []
+    return (
+        db.query(Organization)
+        .filter(Organization.id.in_(org_ids), Organization.deleted_at.is_(None))
+        .all()
+    )

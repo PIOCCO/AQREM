@@ -110,6 +110,14 @@ def create_app() -> FastAPI:
     )
     app.include_router(api_router)
 
+    @app.middleware("http")
+    async def admin_api_no_store(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/api/v1/admin"):
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["Pragma"] = "no-cache"
+        return response
+
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
         parts: list[str] = []

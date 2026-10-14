@@ -54,6 +54,8 @@ from app.services.admin_org import (
     get_admin_visible_org,
     org_status_bucket,
     org_to_admin_response,
+    organizations_excluding_pending_deletion,
+    organizations_pending_deletion_only,
     seat_usage_response,
 )
 from app.audit.service import record_audit
@@ -144,19 +146,9 @@ def list_organizations_admin(
     admin: User = Depends(require_platform_permission("org:read")),
 ) -> AdminOrganizationListResponse:
     if status_filter == "pending_deletion":
-        orgs = (
-            db.query(Organization)
-            .filter(Organization.deleted_at.isnot(None))
-            .order_by(Organization.purge_scheduled_at.asc())
-            .all()
-        )
+        orgs = organizations_pending_deletion_only(db).order_by(Organization.purge_scheduled_at.asc()).all()
     else:
-        orgs = (
-            db.query(Organization)
-            .filter(Organization.deleted_at.is_(None))
-            .order_by(Organization.name.asc())
-            .all()
-        )
+        orgs = organizations_excluding_pending_deletion(db).order_by(Organization.name.asc()).all()
         orgs = filter_orgs_for_admin(orgs)
     if q:
         needle = q.strip().lower()
