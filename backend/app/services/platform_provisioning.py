@@ -176,18 +176,20 @@ def provision_user_invitation(
     )
     if org is not None and invitation.invitation_kind == "member":
         from app.services.email.invitations import send_member_invitation_email
-        from app.services.invitations.invite_urls import build_invite_url
+        from app.services.invitations.invite_urls import try_build_invite_url
 
-        send_member_invitation_email(
-            db,
-            to_email=clean_email,
-            invitee_name=clean_name,
-            organization_name=org.name,
-            invitation_url=build_invite_url("member", raw_token),
-            expires_at=expires_at,
-            organization_id=str(organization_id),
-            invitation_id=str(invitation.id),
-        )
+        invitation_url = try_build_invite_url("member", raw_token)
+        if invitation_url:
+            send_member_invitation_email(
+                db,
+                to_email=clean_email,
+                invitee_name=clean_name,
+                organization_name=org.name,
+                invitation_url=invitation_url,
+                expires_at=expires_at,
+                organization_id=str(organization_id),
+                invitation_id=str(invitation.id),
+            )
     return user, membership, invitation, raw_token, expires_at
 
 

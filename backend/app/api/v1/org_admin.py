@@ -558,14 +558,6 @@ def invite_member(
     db: Session = Depends(get_tenant_db),
 ) -> dict:
     assert_org_admin_action(tenant, action="write", resource_type="member", resource_org_id=tenant.organization_id)
-    from app.services.invitations.invite_urls import public_app_base_url
-
-    if not public_app_base_url():
-        raise org_admin_error(
-            code="PUBLIC_URL_NOT_CONFIGURED",
-            message="PUBLIC_APP_URL (APP_PUBLIC_BASE_URL) must be set on the server before sending invitations.",
-            status_code=503,
-        )
     org = db.get(Organization, tenant.organization_id)
     if org is None:
         raise org_admin_error(code="NOT_FOUND", message="Organization not found.", status_code=404)

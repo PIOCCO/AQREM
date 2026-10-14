@@ -79,11 +79,15 @@ const orgAdminRouteTree = (
 
 function OrgAdminRouteShell() {
   return (
-    <RequireTenantWorkspace>
-      <RequireOrgAdminOnly>
-        <ClientAdminShell />
-      </RequireOrgAdminOnly>
-    </RequireTenantWorkspace>
+    <ThemeProvider>
+      <ToastProvider>
+        <RequireTenantWorkspace>
+          <RequireOrgAdminOnly>
+            <ClientAdminShell />
+          </RequireOrgAdminOnly>
+        </RequireTenantWorkspace>
+      </ToastProvider>
+    </ThemeProvider>
   );
 }
 
