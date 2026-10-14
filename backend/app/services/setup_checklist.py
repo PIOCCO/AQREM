@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.client_admin import ClientCredentialMetadata, ClientDocument
+from app.models.client_admin import ClientDocument
 from app.models.enums import SourceStatus, SyncJobStatus
 from app.models.evidence import EvidenceItem
 from app.models.invitation import UserInvitation
@@ -33,13 +33,6 @@ def build_setup_checklist(
     org = ctrl.get(Organization, organization_id)
     storage_ok = bool(settings.azure_storage_connection_string or settings.local_upload_dir)
     env_ready = bool(org and org.is_active and storage_ok)
-
-    cred = ctrl.query(ClientCredentialMetadata).filter(ClientCredentialMetadata.organization_id == organization_id).first()
-    token_connected = (
-        cred is not None
-        and cred.status in {"connected", "expiring_soon"}
-        and cred.last_test_status == "success"
-    )
 
     store_cfg = ensure_managed_config(ctrl, organization_id)
     postgres_ok = _postgres_storage_ready(store_cfg)
@@ -93,14 +86,6 @@ def build_setup_checklist(
             else "Waiting for organization activation and storage.",
         ),
         _step(
-            "complete" if token_connected else "pending",
-            step_id="model_token",
-            title="OpenAI API token connected",
-            detail="OpenAI API token saved and connection test succeeded."
-            if token_connected
-            else _model_token_detail(cred),
-        ),
-        _step(
             "complete" if postgres_ok else "pending",
             step_id="postgres_database",
             title="PostgreSQL database configured",
@@ -140,19 +125,8 @@ def build_setup_checklist(
         "percent": int((completed / len(steps)) * 100) if steps else 0,
         "employee_link_enabled": access_ok,
         "storage_configured": storage_ok,
-        "model_token_status": cred.status if cred else "not_configured",
         "postgres_database_status": _postgres_status_label(store_cfg, postgres_ok),
     }
-
-
-def _model_token_detail(cred: ClientCredentialMetadata | None) -> str:
-    if cred is None or cred.status == "not_configured":
-        return "Add your OpenAI API key, save it to Key Vault, then run Test connection."
-    if cred.last_test_status == "failed":
-        return "Token is saved but the last connection test failed. Fix the key and test again."
-    if cred.last_test_status != "success":
-        return "Token is saved. Run Test connection to verify before continuing setup."
-    return "Add your OpenAI API key — it is never stored in the platform database."
 
 
 def _postgres_storage_ready(cfg: TenantDataStoreConfig) -> bool:

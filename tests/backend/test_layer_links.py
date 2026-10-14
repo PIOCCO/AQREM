@@ -265,9 +265,27 @@ def test_l2_telemetry_persisted_for_l1(client: TestClient, db_session, monkeypat
     db_session.commit()
     oa_tok = _org_admin_token(str(oa.id), str(org.id))
 
+    from app.core.platform_roles import PlatformRole
+    from app.core.jwt_audiences import AUD_PLATFORM
+    from app.core.security import create_access_token
+
+    super_user = User(
+        email="tel-super@test.com",
+        full_name="Super",
+        hashed_password=hash_password("password"),
+        is_platform_admin=True,
+        platform_role=PlatformRole.SUPER_ADMIN.value,
+    )
+    db_session.add(super_user)
+    db_session.commit()
+    super_tok = create_access_token(
+        str(super_user.id),
+        {"platform_role": PlatformRole.SUPER_ADMIN.value, "platform_auth_version": 1},
+        audience=AUD_PLATFORM,
+    )
     res = client.put(
-        "/api/v1/org-admin/model-token",
-        headers=_tenant_headers(oa_tok, str(org.id)),
+        f"/api/v1/admin/organizations/{org.id}/model-token",
+        headers={"Authorization": f"Bearer {super_tok}"},
         json={"token": "sk-test-123456789012345678901234"},
     )
     assert res.status_code == 200, res.text

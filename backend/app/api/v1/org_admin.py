@@ -20,7 +20,7 @@ from app.core.security import decode_access_token
 from app.core.tenant import TenantContext
 from app.db.session import get_db
 from app.tenant_store.deps import get_tenant_db
-from app.models.client_admin import ClientCredentialMetadata, ClientDocument
+from app.models.client_admin import ClientDocument
 from app.models.enums import EvidenceScope, SourceType, SyncJobStatus
 from app.models.invitation import UserInvitation
 from app.models.organization import Organization, OrganizationMembership, User
@@ -38,11 +38,8 @@ from app.schemas.org_admin import (
     DocumentRowResponse,
     MemberInviteRequest,
     MemberRow,
-    ModelTokenResponse,
-    ModelTokenSaveRequest,
     UsageSummaryResponse,
 )
-from app.services.client_secrets.vault_store import get_client_secret_store
 from app.services.licensing import LicenseDenied, assert_can_add_seat
 from app.services.org_admin.malware_scan import scan_upload_content
 from app.services.org_admin.policy import PolicyDenied, assert_org_admin_action
@@ -412,143 +409,54 @@ def retry_document(
     return {"job_id": str(job.id)}
 
 
-@router.get("/model-token", response_model=ModelTokenResponse)
-def get_model_token(
+_ORG_ADMIN_MODEL_TOKEN_FORBIDDEN = (
+    "OpenAI API credentials are configured by the platform super admin team, not in the organization admin console."
+)
+
+
+@router.get("/model-token")
+def org_admin_get_model_token_forbidden(
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_tenant_db),
-) -> ModelTokenResponse:
+) -> None:
     assert_org_admin_action(tenant, action="read", resource_type="credential", resource_org_id=tenant.organization_id)
-    cred = db.query(ClientCredentialMetadata).filter(ClientCredentialMetadata.organization_id == tenant.organization_id).first()
-    if cred is None:
-        return ModelTokenResponse(
-            masked_value="Not configured",
-            status="not_configured",
-            expires_at=None,
-            last_rotated_at=None,
-            last_test_at=None,
-            last_test_status=None,
-        )
-    warning = None
-    if cred.expires_at:
-        days = (cred.expires_at - datetime.now(UTC)).days
-        if days <= 7:
-            warning = days
-        elif days <= 30:
-            warning = days
-    return ModelTokenResponse(
-        masked_value=cred.masked_hint,
-        status=cred.status,
-        expires_at=cred.expires_at,
-        last_rotated_at=cred.last_rotated_at,
-        last_test_at=cred.last_test_at,
-        last_test_status=cred.last_test_status,
-        expiry_warning_days=warning,
+    raise org_admin_error(
+        code="CREDENTIAL_PLATFORM_MANAGED",
+        message=_ORG_ADMIN_MODEL_TOKEN_FORBIDDEN,
+        status_code=403,
     )
 
 
-@router.put("/model-token", response_model=ModelTokenResponse)
-@limiter.limit("10/minute")
-def save_model_token(
-    request: Request,
-    payload: ModelTokenSaveRequest,
+@router.put("/model-token")
+def org_admin_save_model_token_forbidden(
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_tenant_db),
-) -> ModelTokenResponse:
+) -> None:
     assert_org_admin_action(tenant, action="write", resource_type="credential", resource_org_id=tenant.organization_id)
-    store = get_client_secret_store()
-    vault_ref = store.write_model_token(tenant.organization_id, payload.token.strip())
-    hint = f"****{payload.token.strip()[-4:]}" if len(payload.token.strip()) >= 4 else "****"
-    cred = db.query(ClientCredentialMetadata).filter(ClientCredentialMetadata.organization_id == tenant.organization_id).first()
-    now = datetime.now(UTC)
-    expires = now + timedelta(days=365)
-    if cred is None:
-        cred = ClientCredentialMetadata(
-            organization_id=tenant.organization_id,
-            vault_secret_name=vault_ref,
-            masked_hint=hint,
-            status="connected",
-            expires_at=expires,
-            last_rotated_at=now,
-        )
-        db.add(cred)
-    else:
-        cred.vault_secret_name = vault_ref
-        cred.masked_hint = hint
-        cred.status = "connected"
-        cred.last_rotated_at = now
-        cred.expires_at = expires
-    record_audit(
-        db,
-        organization_id=tenant.organization_id,
-        user_id=tenant.user_id,
-        action="model_token_configured",
-        resource_type="credential",
-        resource_id=str(cred.id),
-        metadata={"status": cred.status},
+    raise org_admin_error(
+        code="CREDENTIAL_PLATFORM_MANAGED",
+        message=_ORG_ADMIN_MODEL_TOKEN_FORBIDDEN,
+        status_code=403,
     )
-    ingest_org_telemetry(
-        db,
-        organization_id=tenant.organization_id,
-        event_type="credential.expiry_metadata_updated",
-        payload={"expires_at_iso": expires.date().isoformat(), "status": cred.status},
-    )
-    ok, test_message = get_client_secret_store().test_model_token(tenant.organization_id)
-    cred.last_test_at = datetime.now(UTC)
-    cred.last_test_status = "success" if ok else "failed"
-    record_audit(
-        db,
-        organization_id=tenant.organization_id,
-        user_id=tenant.user_id,
-        action="model_token_tested",
-        resource_type="credential",
-        resource_id=str(cred.id),
-        metadata={"result": cred.last_test_status, "trigger": "save"},
-    )
-    db.commit()
-    if not ok:
-        raise org_admin_error(
-            code="TOKEN_TEST_FAILED",
-            message=test_message or "Token was saved but the connection test failed. Fix the key and try again.",
-            field="token",
-        )
-    return get_model_token(tenant=tenant, db=db)
 
 
 @router.post("/model-token/test")
-@limiter.limit("10/minute")
-def test_model_token(
-    request: Request,
+def org_admin_test_model_token_forbidden(
     tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_tenant_db),
-) -> dict:
-    cred = db.query(ClientCredentialMetadata).filter(ClientCredentialMetadata.organization_id == tenant.organization_id).first()
-    if cred is None:
-        raise org_admin_error(code="NOT_CONFIGURED", message="Configure a model token first.", field="token")
-    ok, message = get_client_secret_store().test_model_token(tenant.organization_id)
-    cred.last_test_at = datetime.now(UTC)
-    cred.last_test_status = "success" if ok else "failed"
-    record_audit(
-        db,
-        organization_id=tenant.organization_id,
-        user_id=tenant.user_id,
-        action="model_token_tested",
-        resource_type="credential",
-        resource_id=str(cred.id),
-        metadata={"result": cred.last_test_status},
-    )
-    db.commit()
-    return {"success": ok, "message": message}
-
-
-@router.post("/model-token/rotate", response_model=ModelTokenResponse)
-def rotate_model_token(
-    tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_tenant_db),
-) -> ModelTokenResponse:
+) -> None:
     raise org_admin_error(
-        code="ROTATION_REQUIRES_NEW_TOKEN",
-        message="Paste a new token in the form and save to rotate. The previous secret is replaced in Key Vault.",
-        field="token",
+        code="CREDENTIAL_PLATFORM_MANAGED",
+        message=_ORG_ADMIN_MODEL_TOKEN_FORBIDDEN,
+        status_code=403,
+    )
+
+
+@router.post("/model-token/rotate")
+def org_admin_rotate_model_token_forbidden(
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+) -> None:
+    raise org_admin_error(
+        code="CREDENTIAL_PLATFORM_MANAGED",
+        message=_ORG_ADMIN_MODEL_TOKEN_FORBIDDEN,
+        status_code=403,
     )
 
 

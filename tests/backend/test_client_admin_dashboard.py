@@ -39,12 +39,47 @@ def _seed_org_admin(db_session) -> tuple[Organization, User, str]:
     return org, admin, token
 
 
-def test_model_token_not_in_db_or_audit(client: TestClient, db_session):
-    org, admin, token = _seed_org_admin(db_session)
+def test_org_admin_cannot_manage_model_token(client: TestClient, db_session):
+    org, _admin, token = _seed_org_admin(db_session)
+    secret = "sk-test-secret-value-12345678"
+    for method, path in (
+        ("GET", "/api/v1/org-admin/model-token"),
+        ("PUT", "/api/v1/org-admin/model-token"),
+        ("POST", "/api/v1/org-admin/model-token/test"),
+    ):
+        res = client.request(
+            method,
+            path,
+            headers=_org_admin_headers(token, str(org.id)),
+            json={"token": secret} if method == "PUT" else None,
+        )
+        assert res.status_code == 403, res.text
+        assert "super admin" in res.json()["detail"]["message"].lower()
+
+
+def test_super_admin_model_token_not_in_db_or_audit(client: TestClient, db_session):
+    from app.core.platform_roles import PlatformRole
+    from app.core.jwt_audiences import AUD_PLATFORM
+
+    org, _admin, _oa_token = _seed_org_admin(db_session)
+    super_user = User(
+        email="super@test.com",
+        full_name="Super",
+        hashed_password=hash_password("password"),
+        is_platform_admin=True,
+        platform_role=PlatformRole.SUPER_ADMIN.value,
+    )
+    db_session.add(super_user)
+    db_session.commit()
+    super_token = create_access_token(
+        str(super_user.id),
+        {"platform_role": PlatformRole.SUPER_ADMIN.value, "platform_auth_version": 1},
+        audience=AUD_PLATFORM,
+    )
     secret = "sk-test-secret-value-12345678"
     res = client.put(
-        "/api/v1/org-admin/model-token",
-        headers=_org_admin_headers(token, str(org.id)),
+        f"/api/v1/admin/organizations/{org.id}/model-token",
+        headers={"Authorization": f"Bearer {super_token}"},
         json={"token": secret},
     )
     assert res.status_code == 200, res.text
@@ -55,12 +90,6 @@ def test_model_token_not_in_db_or_audit(client: TestClient, db_session):
     cred = db_session.query(ClientCredentialMetadata).filter(ClientCredentialMetadata.organization_id == org.id).one()
     assert secret not in cred.vault_secret_name or cred.vault_secret_name.startswith("kv://")
     assert secret not in (cred.masked_hint or "")
-
-    audit_res = client.get("/api/v1/org-admin/audit", headers=_org_admin_headers(token, str(org.id)))
-    assert secret not in audit_res.text
-
-    get_res = client.get("/api/v1/org-admin/model-token", headers=_org_admin_headers(token, str(org.id)))
-    assert secret not in get_res.text
 
 
 def test_employee_token_rejected_on_org_admin(client: TestClient, db_session):

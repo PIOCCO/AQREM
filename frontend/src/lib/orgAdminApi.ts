@@ -29,7 +29,6 @@ export type SetupChecklist = {
   percent: number;
   employee_link_enabled: boolean;
   storage_configured: boolean;
-  model_token_status: string;
   postgres_database_status: string;
 };
 
@@ -112,41 +111,6 @@ export async function retryDocument(session: AuthSession, documentId: string) {
   });
   if (!res.ok) throw new Error(await readApiError(res, "Retry failed"));
   return res.json();
-}
-
-export type ModelTokenInfo = {
-  masked_value: string;
-  status: string;
-  expires_at: string | null;
-  last_rotated_at: string | null;
-  last_test_at: string | null;
-  last_test_status: string | null;
-  expiry_warning_days: number | null;
-};
-
-export async function fetchModelToken(session: AuthSession): Promise<ModelTokenInfo> {
-  const res = await fetch(apiUrl(`/api/v1/org-admin/model-token`), { headers: headers(session) });
-  if (!res.ok) throw new Error(await readApiError(res, "Failed to load model token status"));
-  return res.json();
-}
-
-export async function saveModelToken(session: AuthSession, token: string) {
-  const res = await fetch(apiUrl(`/api/v1/org-admin/model-token`), {
-    method: "PUT",
-    headers: headers(session),
-    body: JSON.stringify({ token }),
-  });
-  if (!res.ok) throw new Error(await readApiError(res, "Failed to save token"));
-  return res.json() as Promise<ModelTokenInfo>;
-}
-
-export async function testModelToken(session: AuthSession) {
-  const res = await fetch(apiUrl(`/api/v1/org-admin/model-token/test`), {
-    method: "POST",
-    headers: headers(session),
-  });
-  if (!res.ok) throw new Error(await readApiError(res, "Connection test failed"));
-  return res.json() as Promise<{ success: boolean; message: string }>;
 }
 
 export async function fetchMembers(session: AuthSession) {

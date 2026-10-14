@@ -10,6 +10,11 @@ from app.core.admin_errors import admin_error
 from app.core.platform_access import require_platform_permission, require_super_admin, resolve_platform_role
 from app.core.platform_roles import PlatformRole
 from app.core.permissions_catalog import platform_permission_matrix, platform_endpoint_permissions
+from app.services.client_secrets.model_token_ops import (
+    get_model_token_response,
+    save_model_token_for_org,
+    test_model_token_for_org,
+)
 from app.services.platform_staff import (
     PlatformStaffError,
     count_active_super_admins,
@@ -26,6 +31,7 @@ from app.models.audit import AuditEvent
 from app.models.enums import LicenseStatus
 from app.models.invitation import UserInvitation
 from app.models.organization import Organization, OrganizationMembership, User
+from app.schemas.org_admin import ModelTokenResponse, ModelTokenSaveRequest
 from app.schemas.admin import (
     AdminAuditListResponse,
     AdminAuditRow,
@@ -172,6 +178,53 @@ def get_organization(
 ) -> AdminOrganizationResponse:
     org = _require_admin_visible_org(db, organization_id)
     return org_to_admin_response(db, org)
+
+
+@router.get("/organizations/{organization_id}/model-token", response_model=ModelTokenResponse)
+def platform_get_model_token(
+    organization_id: UUID,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_super_admin),
+) -> ModelTokenResponse:
+    _require_admin_visible_org(db, organization_id)
+    return get_model_token_response(db, organization_id=organization_id)
+
+
+@router.put("/organizations/{organization_id}/model-token", response_model=ModelTokenResponse)
+def platform_save_model_token(
+    organization_id: UUID,
+    payload: ModelTokenSaveRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+) -> ModelTokenResponse:
+    _require_admin_visible_org(db, organization_id)
+    try:
+        return save_model_token_for_org(
+            db,
+            organization_id=organization_id,
+            actor_user_id=admin.id,
+            token=payload.token,
+        )
+    except ValueError as exc:
+        raise admin_error(
+            code="TOKEN_TEST_FAILED",
+            message=str(exc),
+            field="token",
+        ) from exc
+
+
+@router.post("/organizations/{organization_id}/model-token/test")
+def platform_test_model_token(
+    organization_id: UUID,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+) -> dict:
+    _require_admin_visible_org(db, organization_id)
+    try:
+        ok, message = test_model_token_for_org(db, organization_id=organization_id, actor_user_id=admin.id)
+    except LookupError:
+        raise admin_error(code="NOT_CONFIGURED", message="Configure a model token first.", field="token") from None
+    return {"success": ok, "message": message}
 
 
 @router.post("/organizations", response_model=AdminOrganizationResponse, status_code=status.HTTP_201_CREATED)

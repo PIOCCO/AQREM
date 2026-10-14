@@ -12,7 +12,6 @@ const NAV = [
   { to: "/org-admin/documents", label: "Documents" },
   { to: "/org-admin/access", label: "Access" },
   { to: "/org-admin/data-storage", label: "Settings" },
-  { to: "/org-admin/model-token", label: "Model token" },
   { to: "/org-admin/audit", label: "Audit log" },
   { to: "/org-admin/privacy", label: "Privacy" },
 ];

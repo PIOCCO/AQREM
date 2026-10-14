@@ -76,7 +76,6 @@ test.describe("admin console nav", () => {
             percent: 0,
             employee_link_enabled: true,
             storage_configured: true,
-            model_token_status: "ok",
           },
           seats: { used: 1, limit: 5, available: 4, is_full: false },
           employee_link: { url_path: "/login", enabled: true },

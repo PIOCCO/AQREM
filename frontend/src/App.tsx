@@ -34,7 +34,6 @@ import ClientAdminDataStoragePage from "./pages/ClientAdminDataStoragePage";
 import ClientAdminUsersPage from "./pages/ClientAdminUsersPage";
 import ClientAdminAccessPage from "./pages/ClientAdminAccessPage";
 import ClientAdminDocumentsPage from "./pages/ClientAdminDocumentsPage";
-import ClientAdminModelTokenPage from "./pages/ClientAdminModelTokenPage";
 import ClientAdminUsagePage from "./pages/ClientAdminUsagePage";
 import ClientAdminAuditPage from "./pages/ClientAdminAuditPage";
 import ClientAdminPrivacyPage from "./pages/ClientAdminPrivacyPage";
@@ -71,7 +70,6 @@ const orgAdminRouteTree = (
     <Route path="documents" element={<ClientAdminDocumentsPage />} />
     <Route path="access" element={<ClientAdminAccessPage />} />
     <Route path="data-storage" element={<ClientAdminDataStoragePage />} />
-    <Route path="model-token" element={<ClientAdminModelTokenPage />} />
     <Route path="users" element={<ClientAdminUsersPage />} />
     <Route path="usage" element={<ClientAdminUsagePage />} />
     <Route path="audit" element={<ClientAdminAuditPage />} />
