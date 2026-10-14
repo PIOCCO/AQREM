@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, Link } from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { LogoHomeLink } from "../brand/LogoHomeLink";
 import { useAuth } from "../../lib/authContext";
 import { roleDisplayLabel } from "../../lib/roleLabels";
+import { clearSession } from "../../lib/api";
 import { fetchOrgOverview } from "../../lib/orgAdminApi";
 
 const NAV = [
@@ -18,7 +19,13 @@ const NAV = [
 
 export default function ClientAdminShell() {
   const { user, session } = useAuth();
+  const navigate = useNavigate();
   const [incomplete, setIncomplete] = useState<number | null>(null);
+
+  function signOut() {
+    clearSession();
+    navigate("/login", { replace: true });
+  }
 
   useEffect(() => {
     if (!session) return;
@@ -73,11 +80,18 @@ export default function ClientAdminShell() {
             <span className="w-8 h-8 rounded-full bg-chat-surface-subtle flex items-center justify-center font-medium">
               {(user?.fullName ?? "A").slice(0, 2).toUpperCase()}
             </span>
-            <div>
-              <p className="font-medium">{user?.fullName}</p>
+            <div className="min-w-0 flex-1">
+              <p className="font-medium truncate">{user?.fullName}</p>
               <p className="text-chat-muted">{roleDisplayLabel(user?.role ?? null)}</p>
             </div>
           </div>
+          <button
+            type="button"
+            className="text-xs text-red-600 hover:underline text-left"
+            onClick={signOut}
+          >
+            Sign out
+          </button>
         </div>
       </aside>
       <main className="flex-1 min-w-0 overflow-y-auto">
