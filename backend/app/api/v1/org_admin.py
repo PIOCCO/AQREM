@@ -751,14 +751,9 @@ def admin_trigger_password_reset(
     tenant_db.commit()
 
 
-@router.get("/data-storage", response_model=TenantStorageResponse)
-def get_data_storage(
-    tenant: TenantContext = Depends(_require_org_admin_surface),
-    control_db: Session = Depends(get_db),
-) -> TenantStorageResponse:
-    from app.tenant_store.resolver import ensure_managed_config
+def _tenant_storage_response(cfg) -> TenantStorageResponse:
+    from app.services.setup_checklist import tenant_database_setup_complete
 
-    cfg = ensure_managed_config(control_db, tenant.organization_id)
     return TenantStorageResponse(
         storage_mode=cfg.storage_mode,
         connection_method=cfg.connection_method,
@@ -776,26 +771,43 @@ def get_data_storage(
         last_latency_ms=cfg.last_latency_ms,
         last_health_check_at=cfg.last_health_check_at.isoformat() if cfg.last_health_check_at else None,
         paused=cfg.paused,
+        setup_validated_at=cfg.setup_validated_at.isoformat() if cfg.setup_validated_at else None,
+        setup_complete=tenant_database_setup_complete(cfg),
     )
+
+
+@router.get("/data-storage", response_model=TenantStorageResponse)
+def get_data_storage(
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    control_db: Session = Depends(get_db),
+) -> TenantStorageResponse:
+    from app.tenant_store.resolver import ensure_managed_config
+
+    cfg = ensure_managed_config(control_db, tenant.organization_id)
+    return _tenant_storage_response(cfg)
 
 
 @router.post("/data-storage/preflight", response_model=PreflightReportResponse)
 def preflight_data_storage(
     payload: TenantStorageConfigureRequest,
     tenant: TenantContext = Depends(_require_org_admin_surface),
+    control_db: Session = Depends(get_db),
 ) -> PreflightReportResponse:
     from app.schemas.tenant_storage import PreflightCheckResponse
     from app.tenant_store.preflight import run_preflight
+    from app.tenant_store.setup_health import validate_managed_colocated
 
     if payload.storage_mode != "customer_postgres":
+        ok, summary, latency = validate_managed_colocated(control_db, tenant.organization_id)
         return PreflightReportResponse(
-            ok=True,
+            ok=ok,
+            latency_ms=latency,
             checks=[
                 PreflightCheckResponse(
                     id="managed",
-                    title="Managed storage",
-                    status="pass",
-                    detail="AQREM-managed storage uses the platform database. No customer connection test is required.",
+                    title="AQREM-managed PostgreSQL",
+                    status="pass" if ok else "fail",
+                    detail=summary,
                 )
             ],
         )
@@ -847,59 +859,93 @@ def configure_data_storage(
         ensure_managed_config,
     )
     from app.tenant_store.secrets import default_secret_store
+    from app.tenant_store.setup_health import validate_managed_colocated
 
     cfg = ensure_managed_config(control_db, tenant.organization_id)
     before_mode = cfg.storage_mode
-    if payload.storage_mode == MANAGED_COLOCATED:
-        cfg.storage_mode = MANAGED_COLOCATED
-        cfg.connection_method = "managed"
-        cfg.host = None
-        cfg.port = None
-        cfg.database_name = None
-        cfg.username = None
-        cfg.secret_reference = None
-        cfg.status = "active"
-    elif payload.storage_mode == CUSTOMER_POSTGRES:
-        secrets = default_secret_store()
-        ref = cfg.secret_reference or default_secret_reference(tenant.organization_id)
-        password = payload.password or secrets.get(ref)
-        if not password:
-            raise org_admin_error(code="PASSWORD_REQUIRED", message="Password is required for your database.", field="password")
-        report = run_preflight(
-            host=payload.host or "",
-            port=payload.port,
-            database_name=payload.database_name or "",
-            username=payload.username or "",
-            password=password,
-            ssl_mode=payload.ssl_mode,
-            connection_method=payload.connection_method,
-        )
-        if not report.ok:
-            raise org_admin_error(
-                code="PREFLIGHT_FAILED",
-                message="Preflight did not pass. Fix the issues listed in the preflight results and try again.",
+    now = datetime.now(UTC)
+
+    try:
+        if payload.storage_mode == MANAGED_COLOCATED:
+            ok, summary, latency = validate_managed_colocated(control_db, tenant.organization_id)
+            if not ok:
+                raise org_admin_error(
+                    code="MANAGED_VALIDATION_FAILED",
+                    message=summary or "AQREM-managed PostgreSQL could not be validated.",
+                )
+            from app.core.config import get_settings
+
+            settings = get_settings()
+            engine = tenant_pool_manager.get_engine(str(tenant.organization_id), settings.database_url)
+            migrate_tenant_engine(engine)
+            cfg.storage_mode = MANAGED_COLOCATED
+            cfg.connection_method = "managed"
+            cfg.host = None
+            cfg.port = None
+            cfg.database_name = None
+            cfg.username = None
+            cfg.secret_reference = None
+            cfg.status = "active"
+            cfg.last_health_check_at = now
+            cfg.last_health_status = "healthy"
+            cfg.last_health_summary = summary
+            cfg.last_latency_ms = latency
+            cfg.setup_validated_at = now
+        elif payload.storage_mode == CUSTOMER_POSTGRES:
+            secrets = default_secret_store()
+            ref = cfg.secret_reference or default_secret_reference(tenant.organization_id)
+            password = payload.password or secrets.get(ref)
+            if not password:
+                raise org_admin_error(
+                    code="PASSWORD_REQUIRED",
+                    message="Password is required for your database.",
+                    field="password",
+                )
+            report = run_preflight(
+                host=payload.host or "",
+                port=payload.port,
+                database_name=payload.database_name or "",
+                username=payload.username or "",
+                password=password,
+                ssl_mode=payload.ssl_mode,
+                connection_method=payload.connection_method,
             )
-        if payload.password:
-            secrets.put(ref, payload.password)
-        cfg.storage_mode = CUSTOMER_POSTGRES
-        cfg.connection_method = payload.connection_method
-        cfg.host = payload.host
-        cfg.port = payload.port
-        cfg.database_name = payload.database_name
-        cfg.schema_name = payload.schema_name
-        cfg.ssl_mode = payload.ssl_mode
-        cfg.username = payload.username
-        cfg.secret_reference = ref
-        cfg.status = "active"
-        cfg.last_health_check_at = datetime.now(UTC)
-        cfg.last_health_status = "healthy"
-        cfg.last_health_summary = "Preflight passed."
-        cfg.last_latency_ms = report.latency_ms
-        url = build_database_url(cfg, default_secret_store())
-        engine = tenant_pool_manager.get_engine(str(tenant.organization_id), url)
-        migrate_tenant_engine(engine)
-    else:
-        raise org_admin_error(code="INVALID_MODE", message="Choose managed or customer PostgreSQL.", field="storage_mode")
+            if not report.ok:
+                raise org_admin_error(
+                    code="PREFLIGHT_FAILED",
+                    message="Preflight did not pass. Fix the issues listed in the preflight results and try again.",
+                )
+            if payload.password:
+                secrets.put(ref, payload.password)
+            cfg.storage_mode = CUSTOMER_POSTGRES
+            cfg.connection_method = payload.connection_method
+            cfg.host = payload.host
+            cfg.port = payload.port
+            cfg.database_name = payload.database_name
+            cfg.schema_name = payload.schema_name
+            cfg.ssl_mode = payload.ssl_mode
+            cfg.username = payload.username
+            cfg.secret_reference = ref
+            cfg.status = "active"
+            cfg.last_health_check_at = now
+            cfg.last_health_status = "healthy"
+            cfg.last_health_summary = "Preflight passed."
+            cfg.last_latency_ms = report.latency_ms
+            url = build_database_url(cfg, default_secret_store())
+            engine = tenant_pool_manager.get_engine(str(tenant.organization_id), url)
+            migrate_tenant_engine(engine)
+            cfg.setup_validated_at = now
+        else:
+            raise org_admin_error(code="INVALID_MODE", message="Choose managed or customer PostgreSQL.", field="storage_mode")
+    except HTTPException:
+        control_db.rollback()
+        raise
+    except Exception as exc:
+        control_db.rollback()
+        raise org_admin_error(
+            code="STORAGE_CONFIGURE_FAILED",
+            message="Database configuration could not be saved. Your previous settings were kept.",
+        ) from exc
 
     control_db.flush()
     record_audit(
@@ -912,7 +958,7 @@ def configure_data_storage(
         metadata={"before_mode": before_mode, "after_mode": cfg.storage_mode, "connection_method": cfg.connection_method},
     )
     control_db.commit()
-    return get_data_storage(tenant, control_db)
+    return _tenant_storage_response(cfg)
 
 
 @router.post("/employee-link/copied", status_code=204)

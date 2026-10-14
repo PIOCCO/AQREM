@@ -18,6 +18,8 @@ class TenantStorageResponse(BaseModel):
     last_latency_ms: int | None = None
     last_health_check_at: str | None = None
     paused: bool = False
+    setup_validated_at: str | None = None
+    setup_complete: bool = False
 
 
 class TenantStorageConfigureRequest(BaseModel):

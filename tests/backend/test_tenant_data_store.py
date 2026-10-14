@@ -94,4 +94,5 @@ def test_org_admin_storage_get_requires_admin(client: TestClient, db_session: Se
     assert res.status_code == 200
     body = res.json()
     assert body["storage_mode"] == "managed_colocated"
+    assert body["setup_complete"] is False
     assert "password" not in body

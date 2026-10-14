@@ -27,6 +27,14 @@ def default_secret_reference(organization_id: UUID) -> str:
     return f"AQREM_TENANT_DB_SECRET_{organization_id.hex}"
 
 
+def get_tenant_store_config(control_db: Session, organization_id: UUID) -> TenantDataStoreConfig | None:
+    return (
+        control_db.query(TenantDataStoreConfig)
+        .filter(TenantDataStoreConfig.organization_id == organization_id)
+        .first()
+    )
+
+
 def ensure_managed_config(control_db: Session, organization_id: UUID) -> TenantDataStoreConfig:
     row = (
         control_db.query(TenantDataStoreConfig)

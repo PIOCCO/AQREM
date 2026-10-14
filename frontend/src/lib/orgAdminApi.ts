@@ -202,6 +202,8 @@ export type DataStorageConfig = {
   last_latency_ms: number | null;
   last_health_check_at: string | null;
   paused: boolean;
+  setup_validated_at: string | null;
+  setup_complete: boolean;
 };
 
 export type PreflightCheck = { id: string; title: string; status: string; detail: string };

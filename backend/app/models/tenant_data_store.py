@@ -39,6 +39,7 @@ class TenantDataStoreConfig(ControlBase):
     last_health_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     paused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    setup_validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     extra: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

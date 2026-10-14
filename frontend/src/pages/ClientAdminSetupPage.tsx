@@ -21,7 +21,7 @@ function StepIcon({ status }: { status: string }) {
 }
 
 const STEP_LINKS: Record<string, { to: string; label: string }> = {
-  postgres_database: { to: "/org-admin/data-storage", label: "Configure database" },
+  postgres_database: { to: "/org-admin/data-storage", label: "Manage" },
   documents: { to: "/org-admin/documents", label: "Upload documents" },
   access: { to: "/org-admin/users", label: "Set up access" },
   employee_link: { to: "/org-admin/users", label: "Configure access first" },
@@ -36,7 +36,7 @@ function SetupRow({ step }: { step: SetupStep }) {
         <p className="font-medium text-sm">{step.title}</p>
         <p className="text-sm text-chat-muted mt-0.5">{step.detail}</p>
       </div>
-      {link && step.status !== "complete" && step.status !== "locked" ? (
+      {link && (step.id === "postgres_database" || (step.status !== "complete" && step.status !== "locked")) ? (
         <Link to={link.to} className="text-sm text-[var(--chat-brand-mark)] self-center">
           {link.label}
         </Link>

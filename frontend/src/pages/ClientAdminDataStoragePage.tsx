@@ -111,8 +111,8 @@ export default function ClientAdminDataStoragePage() {
       setPassword("");
       setSuccess(
         location === "managed"
-          ? "Your company data is stored on AQREM-managed PostgreSQL."
-          : "Customer database connected. Credentials are stored in the secret vault only.",
+          ? "AQREM-managed PostgreSQL is active. The setup checklist will reflect this after you return to Overview."
+          : "Your PostgreSQL connection is validated and active. Credentials are stored in the secret vault only.",
       );
       await load();
     } catch (err) {
@@ -128,22 +128,32 @@ export default function ClientAdminDataStoragePage() {
 
   return (
     <div className="max-w-3xl mx-auto p-6 lg:p-10">
-      <h1 className="text-2xl font-semibold tracking-tight">Data storage</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">PostgreSQL database</h1>
       <p className="text-sm text-chat-muted mt-2">
-        Choose where your company&apos;s private data lives. The platform control database never stores your documents,
-        chunks, or credentials.
+        Choose where your tenant data is stored. Select an option below and save after validation succeeds. Credentials
+        are never returned to the browser.
       </p>
+
+      {status && !status.setup_complete ? (
+        <div className="admin-inline-alert border rounded-lg px-4 py-3 mt-4 text-sm" role="status">
+          No database mode is active yet. Pick AQREM-managed PostgreSQL or connect your own database, then save.
+        </div>
+      ) : null}
 
       {status ? (
         <div className="admin-card p-6 mt-6 grid gap-3 text-sm sm:grid-cols-2" aria-live="polite">
           <div>
-            <span className="text-chat-muted">Status</span>
-            <p className="font-medium capitalize">{status.status.replace(/_/g, " ")}</p>
+            <span className="text-chat-muted">Setup</span>
+            <p className="font-medium">{status.setup_complete ? "Configured" : "Not configured"}</p>
           </div>
           <div>
-            <span className="text-chat-muted">Mode</span>
+            <span className="text-chat-muted">Active mode</span>
             <p className="font-medium">
-              {status.storage_mode === "managed_colocated" ? "Managed by AQREM" : "Your PostgreSQL"}
+              {status.setup_complete
+                ? status.storage_mode === "managed_colocated"
+                  ? "AQREM-managed PostgreSQL"
+                  : "Your PostgreSQL"
+                : "None selected"}
             </p>
           </div>
           <div>
@@ -169,17 +179,23 @@ export default function ClientAdminDataStoragePage() {
 
       <form id={formId} className="admin-card p-6 mt-6 space-y-6" onSubmit={onSave}>
         <fieldset className="space-y-3">
-          <legend className="text-sm font-medium">Where should your data live?</legend>
+          <legend className="text-sm font-medium">Database option</legend>
           <label className="flex gap-3 items-start cursor-pointer">
             <input
               type="radio"
               name="location"
               checked={location === "managed"}
-              onChange={() => setLocation("managed")}
+              onChange={() => {
+                setLocation("managed");
+                setPreflight(null);
+                setSuccess(null);
+              }}
             />
             <span>
-              <span className="font-medium block">Managed by AQREM</span>
-              <span className="text-sm text-chat-muted">Default. Same region as the app, operated by AQREM.</span>
+              <span className="font-medium block">AQREM-managed PostgreSQL</span>
+              <span className="text-sm text-chat-muted">
+                Use AQREM-managed PostgreSQL for your tenant data. AQREM operates the database infrastructure.
+              </span>
             </span>
           </label>
           <label className="flex gap-3 items-start cursor-pointer">
@@ -187,13 +203,15 @@ export default function ClientAdminDataStoragePage() {
               type="radio"
               name="location"
               checked={location === "customer"}
-              onChange={() => setLocation("customer")}
+              onChange={() => {
+                setLocation("customer");
+                setPreflight(null);
+                setSuccess(null);
+              }}
             />
             <span>
-              <span className="font-medium block">My PostgreSQL</span>
-              <span className="text-sm text-chat-muted">
-                Azure, AWS, Google Cloud, another provider, or on-premises. Plain PostgreSQL with TLS.
-              </span>
+              <span className="font-medium block">My PostgreSQL database</span>
+              <span className="text-sm text-chat-muted">Connect your own PostgreSQL database with TLS.</span>
             </span>
           </label>
         </fieldset>
@@ -338,10 +356,36 @@ export default function ClientAdminDataStoragePage() {
             ) : null}
           </>
         ) : (
-          <p className="text-sm text-chat-muted">
-            No connection details are required. Your tenant tables live in AQREM-managed PostgreSQL with the same
-            security controls as the rest of the platform.
-          </p>
+          <div className="space-y-3">
+            <p className="text-sm text-chat-muted">
+              AQREM provisions and operates PostgreSQL for your organization. Saving runs a connectivity and schema check
+              before activating this mode.
+            </p>
+            <button
+              type="button"
+              className="admin-btn-secondary"
+              disabled={busy}
+              onClick={(ev) => void onPreflight(ev as unknown as FormEvent)}
+            >
+              Test AQREM-managed connection
+            </button>
+            {preflight ? (
+              <ul className="space-y-2 text-sm" aria-label="Managed validation results">
+                {preflight.checks.map((c) => (
+                  <li
+                    key={c.id}
+                    className={`rounded px-3 py-2 border ${
+                      c.status === "pass" ? "border-[var(--admin-status-active-bg)]" : "border-red-500/40"
+                    }`}
+                  >
+                    <span className="font-medium">{c.title}</span>
+                    <span className="text-chat-muted"> — {c.status}</span>
+                    <p className="mt-1 text-chat-muted">{c.detail}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         )}
 
         {error ? (
@@ -360,7 +404,7 @@ export default function ClientAdminDataStoragePage() {
 
         <div className="flex flex-wrap gap-3">
           <button type="submit" className="admin-btn-primary" disabled={busy}>
-            {busy ? "Saving…" : "Save storage settings"}
+            {busy ? "Saving…" : "Save and activate"}
           </button>
           <button type="button" className="admin-btn-secondary" disabled={busy} onClick={() => void load()}>
             Refresh status

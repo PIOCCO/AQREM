@@ -15,7 +15,7 @@ from app.models.organization import Organization
 from app.models.source import Source, SourceSyncJob
 from app.models.tenant_data_store import TenantDataStoreConfig
 from app.services.seat_usage import get_seat_usage
-from app.tenant_store.resolver import CUSTOMER_POSTGRES, MANAGED_COLOCATED, ensure_managed_config
+from app.tenant_store.resolver import CUSTOMER_POSTGRES, MANAGED_COLOCATED, get_tenant_store_config
 
 
 def _step(status: str, *, title: str, detail: str, step_id: str) -> dict:
@@ -34,7 +34,7 @@ def build_setup_checklist(
     storage_ok = bool(settings.azure_storage_connection_string or settings.local_upload_dir)
     env_ready = bool(org and org.is_active and storage_ok)
 
-    store_cfg = ensure_managed_config(ctrl, organization_id)
+    store_cfg = get_tenant_store_config(ctrl, organization_id)
     postgres_ok = _postgres_storage_ready(store_cfg)
 
     doc_total = db.query(ClientDocument).filter(ClientDocument.organization_id == organization_id).count()
@@ -129,29 +129,36 @@ def build_setup_checklist(
     }
 
 
-def _postgres_storage_ready(cfg: TenantDataStoreConfig) -> bool:
-    if cfg.paused or cfg.status != "active":
+def tenant_database_setup_complete(cfg: TenantDataStoreConfig | None) -> bool:
+    """True when org admin explicitly validated and saved a database configuration."""
+    return _postgres_storage_ready(cfg)
+
+
+def _postgres_storage_ready(cfg: TenantDataStoreConfig | None) -> bool:
+    if cfg is None or cfg.paused or cfg.status != "active":
+        return False
+    if cfg.setup_validated_at is None:
         return False
     if cfg.storage_mode == MANAGED_COLOCATED:
-        return True
+        return cfg.last_health_status == "healthy"
     if cfg.storage_mode == CUSTOMER_POSTGRES:
         return cfg.last_health_status == "healthy" and bool(cfg.secret_reference and cfg.host and cfg.database_name)
     return False
 
 
-def _postgres_detail(cfg: TenantDataStoreConfig, ok: bool) -> str:
-    if ok and cfg.storage_mode == MANAGED_COLOCATED:
+def _postgres_detail(cfg: TenantDataStoreConfig | None, ok: bool) -> str:
+    if ok and cfg and cfg.storage_mode == MANAGED_COLOCATED:
         return "Using AQREM-managed PostgreSQL for your tenant data."
-    if ok and cfg.storage_mode == CUSTOMER_POSTGRES:
+    if ok and cfg and cfg.storage_mode == CUSTOMER_POSTGRES:
         host = cfg.host or "your database"
         return f"Connected to {host} (validated)."
-    if cfg.storage_mode == CUSTOMER_POSTGRES and cfg.last_health_status == "failed":
-        return "Your PostgreSQL connection failed validation. Review Settings and run preflight again."
-    return "Choose AQREM-managed PostgreSQL or connect your own database in Settings."
+    if cfg and cfg.storage_mode == CUSTOMER_POSTGRES and cfg.last_health_status == "failed":
+        return "Your PostgreSQL connection failed validation. Open Manage and run preflight again."
+    return "Click Manage to choose AQREM-managed PostgreSQL or connect your own database."
 
 
-def _postgres_status_label(cfg: TenantDataStoreConfig, ok: bool) -> str:
-    if not ok:
+def _postgres_status_label(cfg: TenantDataStoreConfig | None, ok: bool) -> str:
+    if not ok or cfg is None:
         return "not_configured"
     if cfg.storage_mode == MANAGED_COLOCATED:
         return "managed"
