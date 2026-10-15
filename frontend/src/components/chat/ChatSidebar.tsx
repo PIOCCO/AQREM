@@ -189,12 +189,10 @@ function ConversationMenu({
   }
 
   return (
-    <div className="absolute right-1 top-1/2 z-10 -translate-y-1/2 shrink-0" ref={ref}>
+    <div className="ref-conv-item-actions" ref={ref}>
       <button
         type="button"
-        className={`chat-conv-menu-btn static translate-y-0 focus-visible:opacity-100 group-focus-within:opacity-100 ${
-          active ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-        }`}
+        className={`chat-conv-menu-btn ref-conv-menu-btn ${active ? "ref-conv-menu-btn-visible" : ""}`}
         aria-label="Conversation actions"
         onClick={(e) => {
           e.preventDefault();
@@ -385,7 +383,7 @@ export default function ChatSidebar({
           />
         </div>
 
-        <div className="chat-sidebar-expanded-only flex min-h-0 flex-1 flex-col">
+        <div className="chat-sidebar-expanded-only flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
             <div className="px-3 pb-2 space-y-2 shrink-0">
               <button type="button" className="ref-new-chat-btn" onClick={newChat}>
                 <IconPlus className="h-4 w-4" />
@@ -431,25 +429,33 @@ export default function ChatSidebar({
 
             <div className="mx-3 border-t border-chat-border" />
 
-            <nav className="ref-conv-scroll flex-1 overflow-y-auto px-2 py-3 space-y-4 min-h-0" aria-label="Chat history">
+            <nav
+              className="ref-conv-scroll flex-1 overflow-x-hidden overflow-y-auto px-2 py-3 space-y-4 min-h-0 min-w-0"
+              aria-label="Chat history"
+            >
               {groups.length === 0 ? (
                 <p className="px-2 text-xs text-chat-muted">No conversations yet</p>
               ) : (
                 groups.map((group) => (
-                  <div key={group.label}>
+                  <div key={group.label} className="min-w-0 max-w-full">
                     <p className="px-2 py-1 text-[11px] font-medium text-chat-muted">{group.label}</p>
-                    <ul className="min-w-0 space-y-0.5">
+                    <ul className="min-w-0 max-w-full space-y-0.5">
                       {group.items.map((c) => {
                         const active = c.id === activeConversationId;
                         return (
-                          <li key={c.id} className="group relative min-w-0">
+                          <li
+                            key={c.id}
+                            className="ref-conv-row group"
+                            data-active={active ? "true" : "false"}
+                          >
                             <NavLink
                               to={`/c/${c.id}`}
                               onClick={onCloseMobile}
-                              title={c.title}
-                              className={`ref-conv-item ${active ? "ref-conv-item-active" : ""}`}
+                              className={`ref-conv-item-link ${active ? "ref-conv-item-link-active" : ""}`}
                             >
-                              <span className="min-w-0 truncate">{c.title}</span>
+                              <Tooltip label={c.title}>
+                                <span className="ref-conv-item-title">{c.title}</span>
+                              </Tooltip>
                             </NavLink>
                             <ConversationMenu
                               conversationId={c.id}
@@ -464,7 +470,10 @@ export default function ChatSidebar({
                                 const wasActive = activeConversationId === id;
                                 remove(id);
                                 toast.push("Conversation deleted");
-                                if (wasActive) navigate("/", { replace: true });
+                                if (wasActive) {
+                                  navigate("/", { replace: true });
+                                  dispatchFocusComposer();
+                                }
                               }}
                             />
                           </li>

@@ -1106,6 +1106,7 @@
   .ref-conv-scroll {
     scrollbar-width: thin;
     scrollbar-color: var(--chat-border) transparent;
+    overflow-x: hidden;
   }
   .ref-conv-scroll::-webkit-scrollbar {
     width: 6px;
@@ -1144,11 +1145,79 @@
     @apply inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11px] font-medium text-chat-fg;
     background: var(--color-surface-raised);
   }
-  .ref-conv-item {
-    @apply flex w-full min-w-0 items-center overflow-hidden rounded-lg py-2 pl-3 pr-9 text-[14px] text-chat-fg transition-colors hover:bg-chat-hover;
+  .ref-conv-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 2.25rem;
+    align-items: stretch;
+    min-width: 0;
+    max-width: 100%;
+    border-radius: 0.5rem;
+    transition: background-color 0.15s ease;
   }
-  .ref-conv-item-active {
-    @apply bg-chat-hover font-medium;
+  .ref-conv-row:hover,
+  .ref-conv-row:focus-within,
+  .ref-conv-row[data-active="true"] {
+    background-color: var(--chat-hover);
+  }
+  .ref-conv-item-link {
+    @apply relative flex min-w-0 items-center overflow-hidden py-2 pl-3 pr-0.5 text-[14px] text-chat-fg outline-none;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .ref-conv-item-link:focus-visible {
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-accent) 55%, transparent);
+    border-radius: 0.5rem;
+  }
+  .ref-conv-item-link-active {
+    @apply font-medium;
+  }
+  .ref-conv-item-link .aq-tooltip-wrap {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .ref-conv-item-title {
+    @apply block min-w-0 truncate;
+    max-width: 100%;
+  }
+  .ref-conv-row:is(:hover, :focus-within, [data-active="true"]) .ref-conv-item-link::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 1.35rem;
+    pointer-events: none;
+    background: linear-gradient(to right, transparent, var(--chat-hover));
+  }
+  .ref-conv-item-actions {
+    @apply flex shrink-0 items-center justify-center;
+    width: 2.25rem;
+  }
+  .ref-conv-menu-btn {
+    @apply opacity-0 transition-opacity duration-150;
+  }
+  .ref-conv-row:hover .ref-conv-menu-btn,
+  .ref-conv-row:focus-within .ref-conv-menu-btn,
+  .ref-conv-menu-btn.ref-conv-menu-btn-visible,
+  .ref-conv-menu-btn:focus-visible {
+    @apply opacity-100;
+  }
+  @media (hover: none), (pointer: coarse) {
+    .ref-conv-menu-btn {
+      @apply opacity-100;
+    }
+    .ref-conv-row .ref-conv-item-link::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 1.35rem;
+      pointer-events: none;
+      background: linear-gradient(to right, transparent, var(--chat-sidebar));
+    }
   }
   .ref-user-avatar {
     @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-chat-fg;
