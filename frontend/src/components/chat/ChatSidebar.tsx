@@ -154,12 +154,14 @@ function SidebarUserFooter({
 function ConversationMenu({
   conversationId,
   title,
+  active,
   onRename,
   onDelete,
   onShare,
 }: {
   conversationId: string;
   title: string;
+  active?: boolean;
   onRename: (title: string) => void;
   onDelete: (conversationId: string) => void;
   onShare: () => void;
@@ -187,10 +189,12 @@ function ConversationMenu({
   }
 
   return (
-    <div className="relative shrink-0" ref={ref}>
+    <div className="absolute right-1 top-1/2 z-10 -translate-y-1/2 shrink-0" ref={ref}>
       <button
         type="button"
-        className="chat-conv-menu-btn opacity-0 group-hover:opacity-100 focus:opacity-100"
+        className={`chat-conv-menu-btn static translate-y-0 focus-visible:opacity-100 group-focus-within:opacity-100 ${
+          active ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        }`}
         aria-label="Conversation actions"
         onClick={(e) => {
           e.preventDefault();
@@ -434,21 +438,23 @@ export default function ChatSidebar({
                 groups.map((group) => (
                   <div key={group.label}>
                     <p className="px-2 py-1 text-[11px] font-medium text-chat-muted">{group.label}</p>
-                    <ul className="space-y-0.5">
+                    <ul className="min-w-0 space-y-0.5">
                       {group.items.map((c) => {
                         const active = c.id === activeConversationId;
                         return (
-                          <li key={c.id} className="group relative flex items-center">
+                          <li key={c.id} className="group relative min-w-0">
                             <NavLink
                               to={`/c/${c.id}`}
                               onClick={onCloseMobile}
-                              className={`ref-conv-item flex-1 ${active ? "ref-conv-item-active" : ""}`}
+                              title={c.title}
+                              className={`ref-conv-item ${active ? "ref-conv-item-active" : ""}`}
                             >
-                              <span className="truncate">{c.title}</span>
+                              <span className="min-w-0 truncate">{c.title}</span>
                             </NavLink>
                             <ConversationMenu
                               conversationId={c.id}
                               title={c.title}
+                              active={active}
                               onRename={(t) => rename(c.id, t)}
                               onShare={() => {
                                 const url = `${window.location.origin}/c/${c.id}`;

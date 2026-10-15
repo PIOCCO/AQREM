@@ -765,7 +765,7 @@
     @apply bg-chat-hover font-medium;
   }
   .chat-conv-menu-btn {
-    @apply absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-chat-muted hover:bg-chat-hover hover:text-chat-fg;
+    @apply inline-flex rounded p-1 text-chat-muted hover:bg-chat-hover hover:text-chat-fg focus-visible:ref-focus-ring;
   }
   .chat-workspace-toggle {
     @apply flex w-full items-center justify-between rounded-lg px-2 py-2 text-xs font-medium uppercase tracking-wide text-chat-muted hover:bg-chat-hover;
@@ -1145,7 +1145,7 @@
     background: var(--color-surface-raised);
   }
   .ref-conv-item {
-    @apply block rounded-lg px-3 py-2 text-[14px] text-chat-fg hover:bg-chat-hover transition-colors min-w-0;
+    @apply flex w-full min-w-0 items-center overflow-hidden rounded-lg py-2 pl-3 pr-9 text-[14px] text-chat-fg transition-colors hover:bg-chat-hover;
   }
   .ref-conv-item-active {
     @apply bg-chat-hover font-medium;
