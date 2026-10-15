@@ -166,17 +166,17 @@ services:
         condition: service_started
 
   web:
-    image: node:20-bookworm-slim
-    working_dir: /app
-    volumes:
-      - ./frontend:/app
-    environment:
-      # Do not bake VITE_API_BASE=127.0.0.1 — breaks Tailscale/remote browsers.
-      # Runtime apiBase.ts uses window.location.hostname:8000 when served on :5173.
-      VITE_PUBLIC_APP_URL: ${PUBLIC_BASE_URL:-http://127.0.0.1:5173}
-    command: sh -c "npm ci && npm run build && npm run preview -- --host 0.0.0.0 --port 5173"
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.web
+      args:
+        # V1 employee UI by default; set VITE_PRODUCT_V1=false in .env only for legacy UI.
+        VITE_PRODUCT_V1: ${VITE_PRODUCT_V1:-true}
+        VITE_BUILD_ID: ${VITE_BUILD_ID:-}
+        VITE_API_BASE: ${VITE_API_BASE:-}
+        VITE_PUBLIC_APP_URL: ${PUBLIC_BASE_URL:-http://127.0.0.1:5173}
     ports:
-      - "5173:5173"
+      - "5173:80"
     depends_on:
       - api
 

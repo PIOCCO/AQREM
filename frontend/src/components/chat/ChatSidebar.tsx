@@ -32,6 +32,7 @@ import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Tooltip } from "../ui/Tooltip";
 import { AdminConsoleLink } from "../nav/AdminConsoleLink";
 import { hasAdminConsoleAccess } from "../../lib/permissions";
+import { adminBuildMarker } from "../../lib/appBuildInfo";
 import { PRODUCT_V1 } from "../../lib/productV1";
 
 const legacyPrimaryNav = [
@@ -96,6 +97,11 @@ function SidebarUserFooter({
             <button type="button" className="fixed inset-0 z-40" aria-label="Close menu" onClick={() => setOpen(false)} />
             <div className="absolute bottom-full left-1/2 z-50 mb-2 w-44 -translate-x-1/2 rounded-lg border border-chat-border bg-chat-surface py-1 text-sm shadow-composer">
               {email ? <p className="px-3 py-2 text-xs text-chat-muted truncate border-b border-chat-border">{email}</p> : null}
+              {showAdminConsole ? (
+                <p className="px-3 py-2 text-[11px] text-chat-muted border-b border-chat-border font-mono" aria-label="UI build">
+                  {adminBuildMarker()}
+                </p>
+              ) : null}
               {!PRODUCT_V1 ? (
                 <Link to="/settings" className="chat-menu-item" onClick={() => setOpen(false)}>
                   Settings
@@ -121,7 +127,7 @@ function SidebarUserFooter({
         <span className="ref-user-avatar">{initials}</span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-chat-fg">{name}</p>
-          <p className="truncate text-xs text-chat-muted">{roleLabel}</p>
+          {!PRODUCT_V1 ? <p className="truncate text-xs text-chat-muted">{roleLabel}</p> : null}
         </div>
         <button
           type="button"
@@ -139,6 +145,11 @@ function SidebarUserFooter({
           <button type="button" className="fixed inset-0 z-40" aria-label="Close menu" onClick={() => setOpen(false)} />
           <div className="absolute bottom-full left-3 right-3 mb-1 z-50 rounded-lg border border-chat-border bg-chat-surface py-1 text-sm shadow-composer">
             {email ? <p className="px-3 py-2 text-xs text-chat-muted truncate border-b border-chat-border">{email}</p> : null}
+            {showAdminConsole ? (
+              <p className="px-3 py-2 text-[11px] text-chat-muted border-b border-chat-border font-mono" aria-label="UI build">
+                {adminBuildMarker()}
+              </p>
+            ) : null}
             {!PRODUCT_V1 ? (
               <Link to="/settings" className="chat-menu-item" onClick={() => setOpen(false)}>
                 Settings

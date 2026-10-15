@@ -170,6 +170,7 @@ build_frontend() {
     echo "ERROR: npm is not installed. Install Node 20+ and retry."
     exit 1
   fi
+  export VITE_PRODUCT_V1="${VITE_PRODUCT_V1:-true}"
   (cd "$FRONTEND" && npm install && npm run build)
 }
 

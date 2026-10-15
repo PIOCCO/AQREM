@@ -1,8 +1,14 @@
 /**
- * Version 1 product surface: org-wide private assistant + admin documents/members.
- * Set VITE_PRODUCT_V1=false to restore the full navigation and routes (legacy).
+ * Version 1 employee surface (default). Legacy UI only when build sets VITE_PRODUCT_V1=false.
+ * Also enforced at build time in vite.config.ts `define`.
  */
-export const PRODUCT_V1 = import.meta.env.VITE_PRODUCT_V1 !== "false";
+function readProductV1Flag(): boolean {
+  const raw = import.meta.env.VITE_PRODUCT_V1;
+  if (raw === undefined || raw === null || String(raw).trim() === "") return true;
+  return String(raw).toLowerCase() !== "false";
+}
+
+export const PRODUCT_V1 = readProductV1Flag();
 
 /** Workspace routes hidden in V1 (code remains; not linked in UI). */
 export const V1_HIDDEN_WORKSPACE_ROUTES = [

@@ -727,6 +727,7 @@
     transform: translateX(-100%);
     min-height: 0;
     min-width: 0;
+    overflow-x: hidden;
   }
   @media (min-width: 1024px) {
     .chat-sidebar {

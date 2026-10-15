@@ -21,6 +21,9 @@ function resolveBuildId(): string {
 
 const buildId = resolveBuildId();
 const buildTime = new Date().toISOString();
+/** Default V1; only explicit VITE_PRODUCT_V1=false selects legacy UI at build time. */
+const productV1Enabled = process.env.VITE_PRODUCT_V1 !== "false";
+const productV1Env = productV1Enabled ? "true" : "false";
 
 function buildInfoPlugin(): Plugin {
   return {
@@ -34,6 +37,7 @@ function buildInfoPlugin(): Plugin {
             built_at: buildTime,
             auth_surface: "AuthPageShell",
             login_route: "/login",
+            product_v1: productV1Enabled,
           },
           null,
           2,
@@ -49,6 +53,7 @@ export default defineConfig({
   define: {
     "import.meta.env.VITE_BUILD_ID": JSON.stringify(buildId),
     "import.meta.env.VITE_BUILD_TIME": JSON.stringify(buildTime),
+    "import.meta.env.VITE_PRODUCT_V1": JSON.stringify(productV1Env),
   },
   server: {
     host: true,
