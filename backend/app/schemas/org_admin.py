@@ -25,6 +25,14 @@ class DocumentRowResponse(BaseModel):
     content_type: str
     status: str
     index_progress: int
+    index_stage: str
+    processed_units: int
+    total_units: int | None
+    indexed_chunk_count: int
+    index_started_at: datetime | None
+    index_finished_at: datetime | None
+    index_progress_updated_at: datetime | None
+    queue_ahead: int | None = None
     failure_reason: str | None
     visibility_mode: str
     sensitivity_flag: bool
@@ -38,6 +46,8 @@ class DocumentListResponse(BaseModel):
     page: int
     page_size: int
     counts: dict[str, int]
+    worker_reachable: bool = True
+    queue_wait_warning: bool = False
 
 
 class MemberInviteRequest(BaseModel):

@@ -68,6 +68,21 @@ class Settings(BaseSettings):
     email_send_timeout_seconds: float = Field(default=15.0)
     email_send_max_retries: int = Field(default=2)
     email_send_retry_backoff_seconds: float = Field(default=0.5)
+    queue_wait_warn_seconds: int = Field(
+        default=60,
+        ge=10,
+        validation_alias=AliasChoices("queue_wait_warn_seconds", "QUEUE_WAIT_WARN_SECONDS"),
+    )
+    indexing_stale_seconds: int = Field(
+        default=120,
+        ge=30,
+        validation_alias=AliasChoices("indexing_stale_seconds", "INDEXING_STALE_SECONDS"),
+    )
+    indexing_max_seconds: int = Field(
+        default=900,
+        ge=60,
+        validation_alias=AliasChoices("indexing_max_seconds", "INDEXING_MAX_SECONDS"),
+    )
     verification_resend_cooldown_seconds: int = Field(
         default=15,
         ge=5,

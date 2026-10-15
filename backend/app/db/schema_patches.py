@@ -54,6 +54,15 @@ _ACL_PATCHES = (
     "ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS visibility_group_ids UUID[] NOT NULL DEFAULT '{}'",
     "ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS visibility_user_ids UUID[] NOT NULL DEFAULT '{}'",
     "UPDATE client_documents SET visibility_mode = 'admins_only', acl_reviewed = false WHERE visibility_mode IS NULL OR visibility_mode = 'unset'",
+    "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS index_stage VARCHAR(32) NOT NULL DEFAULT 'queued'",
+    "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS processed_units INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS total_units INTEGER",
+    "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS index_started_at TIMESTAMPTZ",
+    "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS index_finished_at TIMESTAMPTZ",
+    "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS index_progress_updated_at TIMESTAMPTZ",
+    "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS indexed_chunk_count INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS stall_retry_count INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE source_sync_jobs ADD COLUMN IF NOT EXISTS progress_updated_at TIMESTAMPTZ",
     "UPDATE evidence_items SET visibility_mode = 'admins_only' WHERE visibility_mode IS NULL OR visibility_mode = 'unset'",
 )
 

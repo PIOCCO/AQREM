@@ -111,6 +111,22 @@ services:
       model-gateway:
         condition: service_started
 
+  worker-beat:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.worker
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      LOCAL_PROD_STACK: "true"
+      DATABASE_URL: postgresql+psycopg://aqrem:aqrem@postgres:5432/aqrem
+      REDIS_URL: redis://redis:6379/0
+    command: ["celery", "-A", "app.celery_app", "beat", "--loglevel=info"]
+    depends_on:
+      redis:
+        condition: service_healthy
+
   worker:
     build:
       context: .

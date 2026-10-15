@@ -1,6 +1,8 @@
 import hashlib
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -51,12 +53,16 @@ def content_hash(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
+ProgressFn = Callable[[str, int, int | None], None]
+
+
 async def index_files(
     db: Session,
     *,
     source: Source,
     job: SourceSyncJob,
     files: list[FilePayload],
+    on_progress: ProgressFn | None = None,
 ) -> dict:
     db.refresh(source)
     path_spec = build_pathspec(db, source.organization_id, source.project_id)
@@ -69,7 +75,17 @@ async def index_files(
     source.status = SourceStatus.INDEXING.value
     db.flush()
 
+    def report(stage: str, processed: int, total: int | None) -> None:
+        job.progress_updated_at = datetime.now(UTC)
+        if on_progress:
+            on_progress(stage, processed, total)
+
+    report("parsing", 0, len(files) if files else None)
+    file_index = 0
+
     for file in files:
+        file_index += 1
+        report("parsing", file_index, len(files))
         rel = file.relative_path.replace("\\", "/")
         if should_ignore(path_spec, rel):
             skipped += 1
@@ -87,16 +103,20 @@ async def index_files(
 
         language = detect_language(rel)
         symbols = extract_symbols(text_content, language)
+        report("chunking", file_index, len(files))
         chunks = chunk_text(text_content)
         if not chunks:
             continue
 
         chunk_texts = [c.content for c in chunks]
+        report("embedding", 0, len(chunks))
         embeddings = await llm.embed(chunk_texts)
+        report("embedding", len(chunks), len(chunks))
         for vec in embeddings:
             if vec and len(vec) != expected_dim:
                 raise EmbeddingDimensionMismatchError(expected=expected_dim, actual=len(vec))
 
+        written = 0
         for chunk, embedding in zip(chunks, embeddings, strict=False):
             c_hash = content_hash(chunk.content)
             existing = (
@@ -196,6 +216,8 @@ async def index_files(
                 {"content": chunk.content, "id": str(item.id)},
             )
             indexed += 1
+            written += 1
+            report("writing", written, len(chunks))
 
     source.status = SourceStatus.READY.value
     job.status = SyncJobStatus.COMPLETED.value

@@ -89,20 +89,20 @@ def _require_org_admin_surface(request: Request, tenant: TenantContext = Depends
 
 
 def _sync_document_from_job(doc: ClientDocument, job: SourceSyncJob | None) -> None:
-    if job is None:
+    """Legacy fallback when worker has not yet written progress columns."""
+    if job is None or doc.index_stage in {"indexed", "failed", "empty"}:
         return
-    if job.status == SyncJobStatus.QUEUED.value and doc.status == "queued":
+    if doc.index_progress_updated_at is not None:
         return
-    if job.status == SyncJobStatus.RUNNING.value:
-        doc.status = "indexing"
-        doc.index_progress = min(95, doc.index_progress + 10 or 10)
-    elif job.status == SyncJobStatus.COMPLETED.value:
+    if job.status == SyncJobStatus.COMPLETED.value:
         doc.status = "indexed"
         doc.index_progress = 100
+        doc.index_stage = "indexed"
         doc.failure_reason = None
     elif job.status == SyncJobStatus.FAILED.value:
         doc.status = "failed"
-        doc.failure_reason = (job.stats or {}).get("error") or "Indexing failed"
+        doc.index_stage = "failed"
+        doc.failure_reason = job.error_message or "Indexing failed"
 
 
 def _ensure_document_source(db: Session, tenant: TenantContext) -> Source:
@@ -211,6 +211,16 @@ def list_documents(
         job = db.get(SourceSyncJob, doc.sync_job_id) if doc.sync_job_id else None
         _sync_document_from_job(doc, job)
     db.commit()
+    queued_jobs = (
+        db.query(SourceSyncJob)
+        .filter(
+            SourceSyncJob.organization_id == tenant.organization_id,
+            SourceSyncJob.status == SyncJobStatus.QUEUED.value,
+        )
+        .order_by(SourceSyncJob.created_at.asc())
+        .all()
+    )
+    queue_rank = {str(j.id): idx for idx, j in enumerate(queued_jobs)}
     org_docs = db.query(ClientDocument).filter(ClientDocument.organization_id == tenant.organization_id)
     counts = {
         "total": total,
@@ -219,8 +229,27 @@ def list_documents(
         "failed": org_docs.filter(ClientDocument.status == "failed").count(),
         "needs_visibility_review": org_docs.filter(ClientDocument.acl_reviewed.is_(False)).count(),
     }
-    return DocumentListResponse(
-        items=[
+    from app.core.broker_health import broker_is_available
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    worker_ok = broker_is_available()
+    queue_warn = False
+    now = datetime.now(UTC)
+    items: list[DocumentRowResponse] = []
+    for r in rows:
+        job = db.get(SourceSyncJob, r.sync_job_id) if r.sync_job_id else None
+        queue_ahead: int | None = None
+        if r.index_stage == "queued" and job is not None:
+            queue_ahead = queue_rank.get(str(job.id))
+        if (
+            job
+            and job.status == SyncJobStatus.QUEUED.value
+            and job.created_at
+            and (now - job.created_at).total_seconds() > settings.queue_wait_warn_seconds
+        ):
+            queue_warn = True
+        items.append(
             DocumentRowResponse(
                 id=r.id,
                 file_name=r.file_name,
@@ -228,18 +257,29 @@ def list_documents(
                 content_type=r.content_type,
                 status=r.status,
                 index_progress=r.index_progress,
+                index_stage=r.index_stage,
+                processed_units=r.processed_units,
+                total_units=r.total_units,
+                indexed_chunk_count=r.indexed_chunk_count,
+                index_started_at=r.index_started_at,
+                index_finished_at=r.index_finished_at,
+                index_progress_updated_at=r.index_progress_updated_at,
+                queue_ahead=queue_ahead,
                 failure_reason=r.failure_reason,
                 visibility_mode=r.visibility_mode,
                 sensitivity_flag=r.sensitivity_flag,
                 acl_reviewed=r.acl_reviewed,
                 created_at=r.created_at,
             )
-            for r in rows
-        ],
+        )
+    return DocumentListResponse(
+        items=items,
         total=total,
         page=page,
         page_size=page_size,
         counts=counts,
+        worker_reachable=worker_ok,
+        queue_wait_warning=queue_warn,
     )
 
 
@@ -372,6 +412,7 @@ async def upload_documents(
             size_bytes=len(data),
             blob_path=blob_path,
             status="queued",
+            index_stage="queued",
             index_progress=0,
             malware_scan_status=scan_status,
             content_hash=content_hash,
@@ -435,6 +476,23 @@ def remove_document(
     doc = db.get(ClientDocument, document_id)
     if doc is None or doc.organization_id != tenant.organization_id:
         raise org_admin_error(code="NOT_FOUND", message="Document not found.", status_code=404)
+    if doc.sync_job_id:
+        job = db.get(SourceSyncJob, doc.sync_job_id)
+        if job is not None:
+            db.delete(job)
+    if doc.blob_path:
+        try:
+            get_blob_storage().delete(doc.blob_path)
+        except Exception:
+            pass
+    from app.models.evidence import EvidenceItem
+
+    if doc.source_id:
+        db.query(EvidenceItem).filter(
+            EvidenceItem.organization_id == tenant.organization_id,
+            EvidenceItem.source_id == doc.source_id,
+            EvidenceItem.file_name == doc.file_name,
+        ).delete(synchronize_session=False)
     record_audit(
         db,
         organization_id=tenant.organization_id,
@@ -469,7 +527,22 @@ def retry_document(
     db.add(job)
     doc.sync_job_id = job.id
     doc.status = "indexing"
+    doc.index_stage = "queued"
+    doc.index_progress = 0
+    doc.processed_units = 0
+    doc.total_units = None
+    doc.index_started_at = None
+    doc.index_finished_at = None
+    doc.index_progress_updated_at = None
+    doc.indexed_chunk_count = 0
     doc.failure_reason = None
+    try:
+        from app.services.ingestion.enqueue import IngestionEnqueueError, enqueue_source_sync_for_job
+
+        enqueue_source_sync_for_job(db, job=job, organization_id=tenant.organization_id, document_ids=[doc.id])
+    except IngestionEnqueueError as exc:
+        db.commit()
+        raise org_admin_error(code=exc.code, message=exc.message, status_code=503) from exc
     db.commit()
     return {"job_id": str(job.id)}
 
