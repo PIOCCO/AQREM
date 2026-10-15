@@ -15,5 +15,8 @@ celery_app.conf.beat_schedule = {
         "schedule": 60.0,
     },
 }
-# Task modules live under /app/worker/app/tasks (second `app` package on PYTHONPATH).
-celery_app.autodiscover_tasks(["app.tasks"])
+celery_app.conf.include = ["app.tasks.ingestion", "app.tasks.maintenance"]
+
+# Import task modules so @celery_app.task registers before the worker consumes queues.
+import app.tasks.ingestion  # noqa: E402, F401
+import app.tasks.maintenance  # noqa: E402, F401
