@@ -120,8 +120,14 @@ services:
     environment:
       APP_ENV: production
       LOCAL_PROD_STACK: "true"
+      CONTAINER_ROLE: worker
       DATABASE_URL: postgresql+psycopg://aqrem:aqrem@postgres:5432/aqrem
       REDIS_URL: redis://redis:6379/0
+      # Same as worker — beat imports app.celery_app → production Settings requires gateway.
+      LLM_PROVIDER: gateway
+      GATEWAY_URL: http://model-gateway:8080
+      GATEWAY_API_KEY: local_dev_gateway_key_00000001
+      EMBEDDING_DIMENSIONS: "384"
     command: ["celery", "-A", "app.celery_app", "beat", "--loglevel=info"]
     depends_on:
       redis:
