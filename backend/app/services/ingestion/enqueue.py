@@ -33,12 +33,26 @@ def enqueue_source_sync_for_job(
         from worker.app.tasks.ingestion import enqueue_source_sync
 
         enqueue_source_sync(str(job.id), str(organization_id))
+    except ModuleNotFoundError as exc:
+        logger.exception(
+            "ingestion enqueue import failed org=%s job=%s",
+            organization_id,
+            job.id,
+        )
+        job.status = "failed"
+        job.error_message = (
+            "Could not load the indexing worker module. Rebuild api and worker images "
+            "(docker compose … up -d --build api worker)."
+        )
+        raise IngestionEnqueueError("WORKER_MODULE_UNAVAILABLE", job.error_message) from exc
     except Exception as exc:
         logger.warning(
-            "ingestion enqueue failed org=%s job=%s type=%s",
+            "ingestion enqueue failed org=%s job=%s type=%s detail=%s",
             organization_id,
             job.id,
             type(exc).__name__,
+            str(exc)[:500],
+            exc_info=logger.isEnabledFor(logging.DEBUG),
         )
         job.status = "failed"
         job.error_message = "Could not queue indexing job (worker or broker unavailable)."
