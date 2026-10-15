@@ -116,6 +116,9 @@ export async function removeDocument(session: AuthSession, documentId: string) {
     headers: headers(session),
   });
   if (!res.ok) throw new Error(await readApiError(res, "Remove failed"));
+  if (res.status !== 204) {
+    await res.json().catch(() => null);
+  }
 }
 
 export async function retryDocument(session: AuthSession, documentId: string) {

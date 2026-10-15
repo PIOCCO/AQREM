@@ -348,7 +348,22 @@ async def upload_documents(
             message=message,
             status_code=503,
         ) from exc
+    from app.services.ingestion.enqueue import IngestionEnqueueError, enqueue_source_sync_for_job
+
+    try:
+        from app.core.broker_health import assert_broker_available
+
+        assert_broker_available()
+    except RuntimeError as exc:
+        raise org_admin_error(
+            code="BROKER_UNAVAILABLE",
+            message=str(exc),
+            status_code=503,
+        ) from exc
+
     created: list[str] = []
+    uploaded_blob_paths: list[str] = []
+    pending_jobs: list[tuple[SourceSyncJob, UUID]] = []
     for upload in files:
         raw_name = upload.filename or "upload.bin"
         try:
@@ -394,6 +409,7 @@ async def upload_documents(
         blob_path = f"{tenant.organization_id}/{source.id}/{safe_name}"
         try:
             storage.upload_bytes(blob_path, data, upload.content_type or "application/octet-stream")
+            uploaded_blob_paths.append(blob_path)
         except OSError as exc:
             raise org_admin_error(
                 code="STORAGE_UNAVAILABLE",
@@ -433,7 +449,7 @@ async def upload_documents(
         db.add(job)
         db.flush()
         doc.sync_job_id = job.id
-        created.append(str(doc.id))
+        doc.status = "indexing"
         record_audit(
             db,
             organization_id=tenant.organization_id,
@@ -443,19 +459,26 @@ async def upload_documents(
             resource_id=str(doc.id),
             metadata={"size_bytes": len(data), "content_type": doc.content_type},
         )
-        doc.status = "indexing"
-        try:
-            from app.services.ingestion.enqueue import IngestionEnqueueError, enqueue_source_sync_for_job
+        pending_jobs.append((job, doc.id))
 
+    try:
+        for job, doc_id in pending_jobs:
             enqueue_source_sync_for_job(
                 db,
                 job=job,
                 organization_id=tenant.organization_id,
-                document_ids=[doc.id],
+                document_ids=[doc_id],
             )
-        except IngestionEnqueueError as exc:
-            db.commit()
-            raise org_admin_error(code=exc.code, message=exc.message, status_code=503) from exc
+            created.append(str(doc_id))
+    except IngestionEnqueueError as exc:
+        db.rollback()
+        for blob_path in uploaded_blob_paths:
+            try:
+                storage.delete(blob_path)
+            except Exception:
+                pass
+        raise org_admin_error(code=exc.code, message=exc.message, status_code=503) from exc
+
     ingest_org_telemetry(
         db,
         organization_id=tenant.organization_id,
@@ -466,12 +489,12 @@ async def upload_documents(
     return {"document_ids": created}
 
 
-@router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+@router.delete("/documents/{document_id}")
 def remove_document(
     document_id: UUID,
     tenant: TenantContext = Depends(_require_org_admin_surface),
     db: Session = Depends(get_tenant_db),
-) -> Response:
+) -> dict:
     assert_org_admin_action(tenant, action="delete", resource_type="document", resource_org_id=tenant.organization_id)
     doc = db.get(ClientDocument, document_id)
     if doc is None or doc.organization_id != tenant.organization_id:
@@ -502,9 +525,10 @@ def remove_document(
         resource_id=str(doc.id),
         metadata={"size_bytes": doc.size_bytes},
     )
+    doc_id = str(doc.id)
     db.delete(doc)
     db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+    return {"deleted": True, "document_id": doc_id}
 
 
 @router.post("/documents/{document_id}/retry")

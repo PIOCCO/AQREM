@@ -181,7 +181,7 @@ export default function ClientAdminDocumentsPage() {
     setUploading(true);
     try {
       await uploadDocuments(session, files, visibilityMode);
-      await load({ silent: true });
+      await load({ silent: true }).catch(() => null);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Upload failed";
       if (/broker|queue|worker|redis/i.test(msg)) {
@@ -301,8 +301,35 @@ export default function ClientAdminDocumentsPage() {
                       onClick={() => {
                         if (!session || !window.confirm(`Remove ${row.file_name}?`)) return;
                         removeDocument(session, row.id)
-                          .then(() => load())
-                          .catch((e) => setError(String(e)));
+                          .then(() => {
+                            setData((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    items: prev.items.filter((d) => d.id !== row.id),
+                                    counts: {
+                                      ...prev.counts,
+                                      total: Math.max(0, (prev.counts.total ?? 1) - 1),
+                                      failed:
+                                        row.status === "failed" || row.index_stage === "failed"
+                                          ? Math.max(0, (prev.counts.failed ?? 1) - 1)
+                                          : prev.counts.failed,
+                                    },
+                                  }
+                                : prev,
+                            );
+                            void load({ silent: true });
+                          })
+                          .catch((e) => {
+                            const msg = e instanceof Error ? e.message : "Remove failed";
+                            if (msg === "Failed to fetch") {
+                              setError(
+                                "Remove may have failed (network or CORS). Refresh the page to confirm the file list.",
+                              );
+                            } else {
+                              setError(msg);
+                            }
+                          });
                       }}
                     >
                       Remove

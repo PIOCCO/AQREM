@@ -42,11 +42,4 @@ def enqueue_source_sync_for_job(
         )
         job.status = "failed"
         job.error_message = "Could not queue indexing job (worker or broker unavailable)."
-        if document_ids:
-            for doc_id in document_ids:
-                doc = db.get(ClientDocument, doc_id)
-                if doc is None:
-                    continue
-                doc.status = "queue_failed"
-                doc.failure_reason = job.error_message
         raise IngestionEnqueueError("BROKER_UNAVAILABLE", job.error_message) from exc

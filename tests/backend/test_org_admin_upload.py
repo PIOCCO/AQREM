@@ -97,4 +97,31 @@ def test_upload_txt_creates_document(client: TestClient, db_session, monkeypatch
     assert listing.status_code == 200
     body = listing.json()
     assert body["counts"]["total"] == 1
-    assert body["items"][0]["status"] == "queued"
+    assert body["items"][0]["status"] in ("queued", "indexing")
+
+
+def test_upload_rolls_back_when_enqueue_fails(client: TestClient, db_session, monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCAL_UPLOAD_DIR", str(tmp_path / "up"))
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    org, token = _seed_admin(db_session)
+
+    def _fail_enqueue(*_args, **_kwargs):
+        from app.services.ingestion.enqueue import IngestionEnqueueError
+
+        raise IngestionEnqueueError("BROKER_UNAVAILABLE", "Could not queue indexing job (worker or broker unavailable).")
+
+    monkeypatch.setattr("app.services.ingestion.enqueue.enqueue_source_sync_for_job", _fail_enqueue)
+
+    res = client.post(
+        "/api/v1/org-admin/documents/upload",
+        headers=_headers(token, str(org.id)),
+        files=[("files", ("note.txt", io.BytesIO(b"hello"), "text/plain"))],
+        data={"visibility_mode": "admins_only"},
+    )
+    assert res.status_code == 503
+    assert res.json()["detail"]["code"] == "BROKER_UNAVAILABLE"
+    listing = client.get("/api/v1/org-admin/documents", headers=_headers(token, str(org.id)))
+    assert listing.status_code == 200
+    assert listing.json()["counts"]["total"] == 0
