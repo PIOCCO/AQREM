@@ -73,6 +73,7 @@ def run_source_sync(job_id: str, organization_id: str) -> dict:
         db = open_tenant_session(control, org_uuid)
         job = db.get(SourceSyncJob, UUID(job_id))
         if job is None:
+            logger.error("job_not_found job=%s org=%s (worker may have started before API commit)", job_id, organization_id)
             return {"error": "job_not_found"}
         doc = load_document_for_job(db, job.stats)
         if doc is not None:

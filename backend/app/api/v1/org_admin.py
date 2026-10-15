@@ -473,6 +473,8 @@ async def upload_documents(
         )
         pending_jobs.append((job, doc.id))
 
+    db.commit()
+
     try:
         for job, doc_id in pending_jobs:
             enqueue_source_sync_for_job(
@@ -483,12 +485,31 @@ async def upload_documents(
             )
             created.append(str(doc_id))
     except IngestionEnqueueError as exc:
-        db.rollback()
+        for _job, doc_id in pending_jobs:
+            failed_doc = db.get(ClientDocument, doc_id)
+            failed_job = db.get(SourceSyncJob, _job.id) if _job.id else None
+            if failed_job is not None:
+                failed_job.status = SyncJobStatus.FAILED.value
+                failed_job.error_message = exc.message
+            if failed_doc is not None:
+                failed_doc.status = "failed"
+                failed_doc.index_stage = "failed"
+                failed_doc.failure_reason = exc.message
+        db.commit()
         for blob_path in uploaded_blob_paths:
             try:
                 storage.delete(blob_path)
             except Exception:
                 pass
+        for _job, doc_id in pending_jobs:
+            failed_doc = db.get(ClientDocument, doc_id)
+            if failed_doc is not None:
+                db.delete(failed_doc)
+            if _job.id:
+                failed_job = db.get(SourceSyncJob, _job.id)
+                if failed_job is not None:
+                    db.delete(failed_job)
+        db.commit()
         raise org_admin_error(code=exc.code, message=exc.message, status_code=503) from exc
 
     ingest_org_telemetry(
@@ -572,14 +593,14 @@ def retry_document(
     doc.index_progress_updated_at = None
     doc.indexed_chunk_count = 0
     doc.failure_reason = None
+    db.flush()
+    db.commit()
     try:
         from app.services.ingestion.enqueue import IngestionEnqueueError, enqueue_source_sync_for_job
 
         enqueue_source_sync_for_job(db, job=job, organization_id=tenant.organization_id, document_ids=[doc.id])
     except IngestionEnqueueError as exc:
-        db.commit()
         raise org_admin_error(code=exc.code, message=exc.message, status_code=503) from exc
-    db.commit()
     return {"job_id": str(job.id)}
 
 
