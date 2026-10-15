@@ -1,11 +1,22 @@
 from azure.storage.blob import BlobServiceClient
 
+from app.services.storage.azure_client import resolve_blob_api_version
 from app.services.storage.base import BlobStorage
 
 
 class AzureBlobStorage(BlobStorage):
-    def __init__(self, connection_string: str, container: str) -> None:
-        self.client = BlobServiceClient.from_connection_string(connection_string)
+    def __init__(
+        self,
+        connection_string: str,
+        container: str,
+        *,
+        api_version: str | None = None,
+    ) -> None:
+        blob_api_version = resolve_blob_api_version(connection_string, api_version)
+        kwargs = {}
+        if blob_api_version:
+            kwargs["api_version"] = blob_api_version
+        self.client = BlobServiceClient.from_connection_string(connection_string, **kwargs)
         self.container = container
         self._container_client = self.client.get_container_client(container)
         if not self._container_client.exists():

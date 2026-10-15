@@ -34,3 +34,23 @@ def test_local_prod_lab_allows_empty_azure(monkeypatch):
         local_upload_dir="/data/uploads",
     )
     assert settings.use_azure_blob_storage is False
+
+
+def test_local_prod_factory_uses_disk_when_azurite_in_env(monkeypatch, tmp_path):
+    """LOCAL_PROD_STACK + LOCAL_UPLOAD_DIR must not call Azurite even if .env has a blob connection string."""
+    from app.core.config import get_settings
+    from app.services.storage.factory import clear_blob_storage_cache, get_blob_storage
+    from app.services.storage.local import LocalBlobStorage
+
+    monkeypatch.setenv("LOCAL_PROD_STACK", "true")
+    monkeypatch.setenv("LOCAL_UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setenv(
+        "AZURE_STORAGE_CONNECTION_STRING",
+        "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=x==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;",
+    )
+    get_settings.cache_clear()
+    clear_blob_storage_cache()
+    storage = get_blob_storage()
+    assert isinstance(storage, LocalBlobStorage)
+    get_settings.cache_clear()
+    clear_blob_storage_cache()

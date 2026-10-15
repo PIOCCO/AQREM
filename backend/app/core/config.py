@@ -108,6 +108,13 @@ class Settings(BaseSettings):
 
     azure_storage_connection_string: str | None = None
     azure_storage_container: str = "evidence"
+    azure_storage_blob_api_version: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "azure_storage_blob_api_version",
+            "AZURE_STORAGE_BLOB_API_VERSION",
+        ),
+    )
     local_upload_dir: str = "/tmp/aqrem/uploads"
 
     llm_provider: str = Field(default="mock", validation_alias=AliasChoices("llm_provider", "LLM_PROVIDER"))
