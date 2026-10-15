@@ -13,6 +13,7 @@ import {
   deleteConversation,
   findEmptyConversation,
   getConversation,
+  isEmptyConversation,
   listConversations,
   renameConversation,
   saveConversation,
@@ -92,8 +93,8 @@ export function ConversationProvider({ children }: { children: ReactNode }) {
 
   const upsert = useCallback(
     (conversation: ChatConversation) => {
-      // Do not resurrect conversations removed from storage (e.g. after delete).
-      if (!getConversation(conversation.id)) {
+      const existing = getConversation(conversation.id);
+      if (!existing && conversation.messages.length === 0 && isEmptyConversation(conversation)) {
         return conversation;
       }
       const saved = saveConversation(conversation);

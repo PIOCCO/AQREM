@@ -12,7 +12,7 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   anchorRef: React.RefObject<HTMLElement | null>;
-  /** Called when the user scrolls a scrollable ancestor (e.g. chat list). */
+  /** Scroll container for the chat list — closes menu on scroll. */
   scrollRootRef?: React.RefObject<HTMLElement | null>;
   align?: "start" | "end";
   children: ReactNode;
@@ -40,41 +40,49 @@ export function AnchoredMenu({
 
   const updatePosition = useCallback(() => {
     const anchor = anchorRef.current;
+    const menu = menuRef.current;
     if (!anchor) return;
     const rect = anchor.getBoundingClientRect();
     const width = Math.max(minWidth, rect.width);
     const left =
-      align === "end" ? Math.min(rect.right - width, window.innerWidth - width - 8) : Math.max(8, rect.left);
-    const menuHeight = menuRef.current?.offsetHeight ?? 120;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
-    const placeBelow = spaceBelow >= menuHeight + 8 || spaceBelow >= spaceAbove;
+      align === "end"
+        ? Math.min(Math.max(8, rect.right - width), window.innerWidth - width - 8)
+        : Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+    const menuHeight = menu?.offsetHeight ?? 0;
+    const gap = 4;
+    const spaceBelow = window.innerHeight - rect.bottom - gap;
+    const spaceAbove = rect.top - gap;
+    const estimated = menuHeight > 0 ? menuHeight : 120;
+    const placeBelow = spaceBelow >= estimated || spaceBelow >= spaceAbove;
     setPlacement(placeBelow ? "below" : "above");
-    if (placeBelow) {
-      setStyle({
-        position: "fixed",
-        top: rect.bottom + 4,
-        left,
-        width,
-        zIndex: 300,
-        visibility: "visible",
-      });
-    } else {
-      setStyle({
-        position: "fixed",
-        bottom: window.innerHeight - rect.top + 4,
-        left,
-        width,
-        zIndex: 300,
-        visibility: "visible",
-      });
-    }
+    const top = placeBelow
+      ? Math.min(rect.bottom + gap, window.innerHeight - 8)
+      : Math.max(gap, rect.top - (menuHeight || estimated) - gap);
+    setStyle({
+      position: "fixed",
+      top,
+      left,
+      width,
+      zIndex: 300,
+      visibility: "visible",
+    });
   }, [align, anchorRef, minWidth]);
 
   useLayoutEffect(() => {
     if (!open) return;
     updatePosition();
+    const id = requestAnimationFrame(() => updatePosition());
+    return () => cancelAnimationFrame(id);
   }, [open, updatePosition, children]);
+
+  useEffect(() => {
+    if (!open) return;
+    const menu = menuRef.current;
+    if (!menu || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => updatePosition());
+    ro.observe(menu);
+    return () => ro.disconnect();
+  }, [open, updatePosition]);
 
   useEffect(() => {
     if (!open) return;

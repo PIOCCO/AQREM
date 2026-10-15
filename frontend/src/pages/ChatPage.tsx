@@ -66,6 +66,7 @@ export default function ChatPage() {
   const lastQueryRef = useRef<string | null>(null);
   /** Avoid clearing conversation state while routing from `/` to `/c/:id` after first send. */
   const pendingRouteConvIdRef = useRef<string | null>(null);
+  const sendInFlightRef = useRef(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const { push: toast } = useToast();
   const [uploadSourceId, setUploadSourceId] = useState<string | null>(null);
@@ -90,6 +91,7 @@ export default function ChatPage() {
     }
     if (pendingRouteConvIdRef.current === conversationId) {
       pendingRouteConvIdRef.current = null;
+      return;
     }
     const conv = getConversation(conversationId);
     if (!conv) {
@@ -97,7 +99,12 @@ export default function ChatPage() {
       navigate("/", { replace: true });
       return;
     }
-    setConversation(conv);
+    setConversation((current) => {
+      if (current?.id === conversationId && current.messages.length >= conv.messages.length) {
+        return current;
+      }
+      return conv;
+    });
     if (!PRODUCT_V1 && conv.projectId && conv.projectId !== projectId) {
       setProjectId(conv.projectId);
     }
@@ -173,9 +180,7 @@ export default function ChatPage() {
   const persist = useCallback(
     (next: ChatConversation) => {
       const saved = upsert(next);
-      if (getConversation(next.id)) {
-        setConversation(saved);
-      }
+      setConversation(saved);
       return saved;
     },
     [upsert],
@@ -296,75 +301,79 @@ export default function ChatPage() {
   }
 
   async function onSend() {
-    if (!session || loading) return;
+    if (!session || loading || sendInFlightRef.current) return;
 
     const text = input.trim();
     const hasPendingFiles = attachments.some((a) => a.status === "pending");
     if (!text && !hasPendingFiles) return;
 
-    let conv =
-      activeConversation ??
-      (conversationId ? getConversation(conversationId) : null);
-    if (!conv) {
-      conv = createNew(PRODUCT_V1 ? null : projectId);
-      upsert(conv);
-      pendingRouteConvIdRef.current = conv.id;
-      navigate(`/c/${conv.id}`, { replace: true });
-      setConversation(conv);
-    }
-
-    const attachmentMeta = formatAttachmentMeta(attachments.filter((a) => a.status !== "error"));
-    const userContent = text || "(Attached files)";
-    const userMsg: ChatMessage = {
-      id: newUuid(),
-      role: "user",
-      content: userContent,
-      createdAt: new Date().toISOString(),
-      meta: attachmentMeta.length ? { attachments: attachmentMeta } : {},
-    };
-
-    conv = {
-      ...conv,
-      title: text ? conversationTitleAfterUserMessage(conv.title, text) : conv.title,
-      messages: [...conv.messages, userMsg],
-    };
-    conv = persist(conv);
-    setInput("");
-    setAttachments([]);
-    const focusComposer = () => composerRef.current?.focus();
-    requestAnimationFrame(focusComposer);
-    window.setTimeout(focusComposer, 0);
-
-    let uploadNote: string | undefined;
-    if (hasPendingFiles) {
-      try {
-        uploadNote = await uploadAttachments();
-      } catch {
-        return;
+    sendInFlightRef.current = true;
+    try {
+      let conv =
+        activeConversation ??
+        (conversationId ? getConversation(conversationId) : null);
+      if (!conv) {
+        conv = createNew(PRODUCT_V1 ? null : projectId);
       }
-      if (uploadNote) {
-        const withNote = persist({
-          ...conv,
-          messages: conv.messages.map((m) =>
-            m.id === userMsg.id ? { ...m, meta: { ...m.meta, uploadNote } } : m,
-          ),
-        });
-        conv = withNote;
-      }
-    }
 
-    if (text) {
-      setLoading(true);
-      await streamReply(text, conv);
-    } else if (uploadNote) {
-      const assistantMsg: ChatMessage = {
+      const attachmentMeta = formatAttachmentMeta(attachments.filter((a) => a.status !== "error"));
+      const userContent = text || "(Attached files)";
+      const userMsg: ChatMessage = {
         id: newUuid(),
-        role: "assistant",
-        content: uploadNote,
+        role: "user",
+        content: userContent,
         createdAt: new Date().toISOString(),
-        meta: { isDraft: true },
+        meta: attachmentMeta.length ? { attachments: attachmentMeta } : {},
       };
-      persist({ ...conv, messages: [...conv.messages, assistantMsg] });
+
+      conv = {
+        ...conv,
+        title: text ? conversationTitleAfterUserMessage(conv.title, text) : conv.title,
+        messages: [...conv.messages, userMsg],
+      };
+      conv = persist(conv);
+      pendingRouteConvIdRef.current = conv.id;
+      if (conversationId !== conv.id) {
+        navigate(`/c/${conv.id}`, { replace: true });
+      }
+      setInput("");
+      setAttachments([]);
+      const focusComposer = () => composerRef.current?.focus();
+      requestAnimationFrame(focusComposer);
+      window.setTimeout(focusComposer, 0);
+
+      let uploadNote: string | undefined;
+      if (hasPendingFiles) {
+        try {
+          uploadNote = await uploadAttachments();
+        } catch {
+          return;
+        }
+        if (uploadNote) {
+          conv = persist({
+            ...conv,
+            messages: conv.messages.map((m) =>
+              m.id === userMsg.id ? { ...m, meta: { ...m.meta, uploadNote } } : m,
+            ),
+          });
+        }
+      }
+
+      if (text) {
+        setLoading(true);
+        await streamReply(text, conv);
+      } else if (uploadNote) {
+        const assistantMsg: ChatMessage = {
+          id: newUuid(),
+          role: "assistant",
+          content: uploadNote,
+          createdAt: new Date().toISOString(),
+          meta: { isDraft: true },
+        };
+        persist({ ...conv, messages: [...conv.messages, assistantMsg] });
+      }
+    } finally {
+      sendInFlightRef.current = false;
     }
   }
 
@@ -425,9 +434,9 @@ export default function ChatPage() {
   }
 
   const headerTitle = activeConversation?.title ?? "New chat";
+  const messageCount = activeConversation?.messages.length ?? 0;
   const showWelcome =
-    !activeConversation ||
-    (activeConversation.messages.length === 0 && !streamingText && !retrievalStatus && !loading);
+    messageCount === 0 && !streamingText && !retrievalStatus && !loading;
 
   async function onRegenerate(userQuery: string) {
     if (!activeConversation || loading) return;

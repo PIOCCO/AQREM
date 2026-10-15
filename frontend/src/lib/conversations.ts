@@ -149,7 +149,11 @@ export function saveConversation(conversation: ChatConversation) {
   const all = readAll();
   const idx = all.findIndex((c) => c.id === conversation.id);
   if (idx < 0) {
-    // Avoid resurrecting conversations removed from storage (e.g. after delete).
+    // Insert new rows; skip resurrecting deleted empty shells.
+    if (conversation.messages.length > 0 || !isEmptyConversation(conversation)) {
+      all.unshift(next);
+      writeAll(all);
+    }
     return next;
   }
   all[idx] = next;
