@@ -33,7 +33,7 @@ class AnswerLibraryService:
         scope = EvidenceScope.PROJECT.value if project_id else EvidenceScope.ORGANIZATION.value
 
         text_value = answer.approved_text or answer.draft_text
-        embedding = (await get_llm_provider().embed([question.normalized_text]))[0]
+        embedding = (await get_llm_provider(organization_id).embed([question.normalized_text]))[0]
 
         entry = (
             self.db.query(AnswerLibraryEntry)
@@ -110,7 +110,7 @@ class AnswerLibraryService:
         project_id: UUID | None,
         limit: int = 5,
     ) -> list[tuple[AnswerLibraryEntry, float]]:
-        embedding = (await get_llm_provider().embed([normalized_question]))[0]
+        embedding = (await get_llm_provider(organization_id).embed([normalized_question]))[0]
         embedding_literal = "[" + ",".join(str(x) for x in embedding) + "]"
 
         scope_filter = "organization_id = :org_id AND status = 'approved'"

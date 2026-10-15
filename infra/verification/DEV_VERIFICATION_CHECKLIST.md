@@ -26,7 +26,19 @@ rg -i 'administrator_password":|random_password\.tenant_db' terraform.tfstate &&
 
 ---
 
-## 2. k6 gateway load (realistic + 5× streaming)
+## 2. Gateway contract smoke (aliases + auth)
+
+```bash
+export GATEWAY_URL=https://<client-gateway-host>
+export GATEWAY_API_KEY='gw_...'
+./infra/verification/scripts/verify_gateway_contract.sh
+```
+
+**Expected:** PASS for health, embeddings-default, chat-default, and 401 for wrong key.
+
+---
+
+## 3. k6 gateway load (realistic + 5× streaming)
 
 ```bash
 cd infra/model-gateway

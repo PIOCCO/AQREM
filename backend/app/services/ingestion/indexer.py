@@ -15,6 +15,8 @@ from app.services.ingestion.parsers import parse_bytes
 from app.services.ingestion.strength import classify_evidence_strength
 from app.services.access_control.document_acl import resolve_document_acl
 from app.services.library.invalidate import mark_evidence_changed
+from app.core.config import get_settings
+from app.services.llm.errors import EmbeddingDimensionMismatchError
 from app.services.llm.factory import get_llm_provider
 
 
@@ -58,7 +60,8 @@ async def index_files(
 ) -> dict:
     db.refresh(source)
     path_spec = build_pathspec(db, source.organization_id, source.project_id)
-    llm = get_llm_provider()
+    llm = get_llm_provider(source.organization_id)
+    expected_dim = get_settings().embedding_dimensions
     indexed = 0
     skipped = 0
     updated = 0
@@ -90,6 +93,9 @@ async def index_files(
 
         chunk_texts = [c.content for c in chunks]
         embeddings = await llm.embed(chunk_texts)
+        for vec in embeddings:
+            if vec and len(vec) != expected_dim:
+                raise EmbeddingDimensionMismatchError(expected=expected_dim, actual=len(vec))
 
         for chunk, embedding in zip(chunks, embeddings, strict=False):
             c_hash = content_hash(chunk.content)

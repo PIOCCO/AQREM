@@ -14,6 +14,10 @@ class ClientSecretStore(ABC):
         """Persist secret; return vault reference only."""
 
     @abstractmethod
+    def read_model_token(self, organization_id: UUID) -> str | None:
+        """Return gateway API key for the organization, if configured."""
+
+    @abstractmethod
     def delete_model_token(self, organization_id: UUID) -> None:
         pass
 
@@ -28,21 +32,53 @@ class MemoryClientSecretStore(ClientSecretStore):
     _store: dict[str, str] = {}
 
     def write_model_token(self, organization_id: UUID, token_value: str) -> str:
-        key = f"{organization_id}:azure-openai"
+        key = f"{organization_id}:gateway"
         self._store[key] = token_value
-        return f"kv://lab/{organization_id}/azure-openai"
+        legacy = f"{organization_id}:azure-openai"
+        self._store.pop(legacy, None)
+        return f"kv://lab/{organization_id}/gateway"
+
+    def read_model_token(self, organization_id: UUID) -> str | None:
+        key = f"{organization_id}:gateway"
+        if key in self._store:
+            return self._store[key]
+        legacy = f"{organization_id}:azure-openai"
+        return self._store.get(legacy)
 
     def delete_model_token(self, organization_id: UUID) -> None:
+        self._store.pop(f"{organization_id}:gateway", None)
         self._store.pop(f"{organization_id}:azure-openai", None)
 
     def test_model_token(self, organization_id: UUID) -> tuple[bool, str]:
-        if f"{organization_id}:azure-openai" not in self._store:
+        token = self.read_model_token(organization_id)
+        if token is None:
             return False, "No model token is configured for this organization."
+        settings = get_settings()
+        if not (settings.gateway_url or "").strip():
+            return False, "Model gateway URL is not configured on this deployment."
+        try:
+            import httpx
+
+            url = settings.gateway_url.rstrip("/") + "/health/live"
+            resp = httpx.get(
+                url,
+                headers={"Authorization": f"Bearer {token.strip()}"},
+                timeout=10.0,
+            )
+            if resp.status_code == 401:
+                return False, "The model token was rejected by the gateway."
+            if resp.status_code >= 500:
+                return False, "The model gateway is temporarily unavailable."
+        except Exception:
+            return False, "Could not reach the model gateway. Check the URL and network."
         return True, "Connection test succeeded."
 
 
 class AzureKeyVaultClientSecretStore(ClientSecretStore):
     """Production adapter — uses managed identity (not available in local lab)."""
+
+    def read_model_token(self, organization_id: UUID) -> str | None:
+        raise RuntimeError("Azure Key Vault is not configured.")
 
     def write_model_token(self, organization_id: UUID, token_value: str) -> str:
         raise RuntimeError(

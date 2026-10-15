@@ -705,6 +705,54 @@ export async function askChat(
   return res.json();
 }
 
+export type ChatStreamEvent =
+  | { type: "token"; text: string }
+  | { type: "meta"; [key: string]: unknown }
+  | { type: "error"; message: string; code?: string; retryable?: boolean };
+
+export async function askChatStream(
+  session: AuthSession,
+  payload: { query: string; project_id?: string | null },
+  handlers: {
+    onEvent: (event: ChatStreamEvent) => void;
+    signal?: AbortSignal;
+  },
+): Promise<void> {
+  const res = await authedFetch(session, `${apiBase()}/api/v1/chat/ask/stream`, {
+    method: "POST",
+    body: JSON.stringify({
+      query: payload.query,
+      project_id: payload.project_id ?? null,
+    }),
+    signal: handlers.signal,
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Chat request failed"));
+  if (!res.body) throw new Error("Chat stream unavailable");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? "";
+    for (const part of parts) {
+      const line = part
+        .split("\n")
+        .find((l) => l.startsWith("data:"));
+      if (!line) continue;
+      const data = line.slice(5).trim();
+      if (data === "[DONE]") return;
+      try {
+        handlers.onEvent(JSON.parse(data) as ChatStreamEvent);
+      } catch {
+        /* ignore malformed chunks */
+      }
+    }
+  }
+}
+
 export async function previewRetrieval(
   session: AuthSession,
   payload: { query: string; project_id?: string | null; source_id?: string; limit?: number },

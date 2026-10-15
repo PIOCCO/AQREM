@@ -92,5 +92,5 @@ def test_budget_enforced_during_outage_with_stale_cache(settings: Settings) -> N
     limits_mod._engine.mark_db_down()
     time.sleep(2.5)
     client = {"client_id": "acme"}
-    allowed, _ = check_and_consume(settings, client, requests=1, tokens=10)
+    allowed, _, _ = check_and_consume(settings, client, requests=1, tokens=10)
     assert allowed is False

@@ -74,17 +74,18 @@ def check_and_consume(
     *,
     requests: int = 1,
     tokens: int = 0,
-) -> tuple[bool, int | None]:
+) -> tuple[bool, int | None, str | None]:
+    """Return (allowed, retry_after_seconds, limit_code). limit_code: monthly_budget | rate_limit | db_unavailable."""
     client_id = client["client_id"]
     if _engine.get_limits(client_id) is None:
         hydrate_client_limits(settings, client_id)
 
     if not _engine.check_monthly_budget(client_id, tokens):
-        return False, 3600
+        return False, 3600, "monthly_budget"
 
     ok, retry = _engine.check_local(client_id, requests=requests, tokens=tokens)
     if not ok:
-        return False, retry
+        return False, retry, "rate_limit"
 
     try:
         window = _minute_window()
@@ -106,9 +107,9 @@ def check_and_consume(
         mark_db_down()
         _engine.mark_db_down()
         if _engine.db_fail_open_allowed():
-            return True, None
-        return False, 30
-    return True, None
+            return True, None, None
+        return False, 30, "db_unavailable"
+    return True, None, None
 
 
 def record_usage(settings: Settings, client_id: str, prompt_tokens: int, completion_tokens: int) -> None:

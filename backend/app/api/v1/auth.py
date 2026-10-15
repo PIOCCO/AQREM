@@ -1,7 +1,7 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -289,13 +289,13 @@ def forgot_password(
     return {"message": PASSWORD_RESET_GENERIC_MESSAGE}
 
 
-@router.post("/reset-password", status_code=204)
+@router.post("/reset-password", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 @limiter.limit("10/minute")
 def reset_password(
     request: Request,
     payload: ResetPasswordRequest,
     db: Session = Depends(get_db),
-) -> None:
+) -> Response:
     try:
         reset_password_with_token(db, token=payload.token, new_password=payload.new_password)
     except ValueError as exc:
@@ -306,12 +306,13 @@ def reset_password(
     db.commit()
 
 
-@router.post("/change-password", status_code=204)
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def change_password(
     payload: ChangePasswordRequest,
     user: User = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
-) -> None:
+) -> Response:
     if not user.hashed_password or not verify_password(payload.current_password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     user.hashed_password = hash_password(payload.new_password)
@@ -319,6 +320,7 @@ def change_password(
     db.commit()
 
 
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 @router.get("/me", response_model=UserResponse)
 def me(
     user: User = Depends(get_authenticated_user),

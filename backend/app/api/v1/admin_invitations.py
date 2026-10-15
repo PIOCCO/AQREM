@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -431,26 +431,27 @@ def _delete_admin_invitation_impl(
     db.commit()
 
 
-@router.delete("/organizations/{organization_id}/invitations/admin/{invitation_id}", status_code=204)
+@router.delete("/organizations/{organization_id}/invitations/admin/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def delete_admin_invitation_row(
     organization_id: UUID,
     invitation_id: UUID,
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("invitation:revoke")),
-) -> None:
+) -> Response:
     _delete_admin_invitation_impl(db, organization_id=organization_id, invitation_id=invitation_id, admin=admin)
 
 
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 @router.post(
     "/organizations/{organization_id}/invitations/admin/{invitation_id}/delete",
-    status_code=204,
+    status_code=status.HTTP_204_NO_CONTENT, response_class=Response,
 )
 def delete_admin_invitation_row_post(
     organization_id: UUID,
     invitation_id: UUID,
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("invitation:revoke")),
-) -> None:
+) -> Response:
     _delete_admin_invitation_impl(db, organization_id=organization_id, invitation_id=invitation_id, admin=admin)
 
 
@@ -495,26 +496,28 @@ def _delete_employee_link_impl(
     db.commit()
 
 
-@router.delete("/organizations/{organization_id}/employee-link/{link_id}", status_code=204)
+@router.delete("/organizations/{organization_id}/employee-link/{link_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def delete_employee_link_row(
     organization_id: UUID,
     link_id: UUID,
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("invitation:revoke")),
-) -> None:
+) -> Response:
     _delete_employee_link_impl(db, organization_id=organization_id, link_id=link_id, admin=admin)
 
 
-@router.post("/organizations/{organization_id}/employee-link/{link_id}/delete", status_code=204)
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+@router.post("/organizations/{organization_id}/employee-link/{link_id}/delete", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def delete_employee_link_row_post(
     organization_id: UUID,
     link_id: UUID,
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("invitation:revoke")),
-) -> None:
+) -> Response:
     _delete_employee_link_impl(db, organization_id=organization_id, link_id=link_id, admin=admin)
 
 
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 @router.get("/organizations/{organization_id}/employee-link", response_model=EmployeeLinkSummary)
 def get_employee_link_summary(
     organization_id: UUID,
@@ -618,13 +621,13 @@ def rotate_link(
     )
 
 
-@router.post("/organizations/{organization_id}/employee-link/{link_id}/pause", status_code=204)
+@router.post("/organizations/{organization_id}/employee-link/{link_id}/pause", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def pause_link(
     organization_id: UUID,
     link_id: UUID,
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("invitation:revoke")),
-) -> None:
+) -> Response:
     _visible_org(db, organization_id)
     link = db.get(EmployeeJoinLink, link_id)
     if link is None or link.organization_id != organization_id:
@@ -633,13 +636,14 @@ def pause_link(
     db.commit()
 
 
-@router.post("/organizations/{organization_id}/employee-link/{link_id}/resume", status_code=204)
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+@router.post("/organizations/{organization_id}/employee-link/{link_id}/resume", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def resume_link(
     organization_id: UUID,
     link_id: UUID,
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("invitation:create_employee_link")),
-) -> None:
+) -> Response:
     _visible_org(db, organization_id)
     link = db.get(EmployeeJoinLink, link_id)
     if link is None or link.organization_id != organization_id:
@@ -648,16 +652,18 @@ def resume_link(
     db.commit()
 
 
-@router.post("/organizations/{organization_id}/employee-link/{link_id}/disable", status_code=204)
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+@router.post("/organizations/{organization_id}/employee-link/{link_id}/disable", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def disable_link(
     organization_id: UUID,
     link_id: UUID,
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("invitation:revoke")),
-) -> None:
+) -> Response:
     _visible_org(db, organization_id)
     link = db.get(EmployeeJoinLink, link_id)
     if link is None or link.organization_id != organization_id:
         raise admin_error(code="NOT_FOUND", message="Link not found", status_code=404)
     set_link_status(db, admin_user_id=admin.id, link=link, status=LINK_DISABLED)
     db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

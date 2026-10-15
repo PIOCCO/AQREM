@@ -71,11 +71,20 @@ async def gateway_post(
         raise HTTPException(status_code=413, detail="Request too large")
 
     client = _client_from_header(authorization, x_gateway_key)
-    allowed, retry = check_and_consume(settings, client, requests=1, tokens=0)
+    allowed, retry, limit_code = check_and_consume(settings, client, requests=1, tokens=0)
     if not allowed:
+        if limit_code == "monthly_budget":
+            message = "Monthly token budget exceeded for this client."
+            code = "monthly_token_budget_exceeded"
+        elif limit_code == "db_unavailable":
+            message = "Gateway limits temporarily unavailable. Try again shortly."
+            code = "gateway_limits_unavailable"
+        else:
+            message = "Rate limit exceeded. Try again shortly."
+            code = "rate_limit_exceeded"
         return JSONResponse(
             status_code=429,
-            content={"message": "Rate limit or budget exceeded"},
+            content={"message": message, "code": code},
             headers={"Retry-After": str(retry or 60)},
         )
 

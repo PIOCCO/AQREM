@@ -76,6 +76,26 @@ class Settings(BaseSettings):
     local_upload_dir: str = "/tmp/aqrem/uploads"
 
     llm_provider: str = Field(default="mock", validation_alias=AliasChoices("llm_provider", "LLM_PROVIDER"))
+    gateway_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("gateway_url", "GATEWAY_URL"),
+    )
+    gateway_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("gateway_api_key", "GATEWAY_API_KEY"),
+    )
+    gateway_chat_alias: str = Field(
+        default="chat-default",
+        validation_alias=AliasChoices("gateway_chat_alias", "GATEWAY_CHAT_ALIAS"),
+    )
+    gateway_embeddings_alias: str = Field(
+        default="embeddings-default",
+        validation_alias=AliasChoices("gateway_embeddings_alias", "GATEWAY_EMBEDDINGS_ALIAS"),
+    )
+    gateway_timeout_seconds: float = Field(
+        default=120.0,
+        validation_alias=AliasChoices("gateway_timeout_seconds", "GATEWAY_TIMEOUT_SECONDS"),
+    )
     azure_openai_endpoint: str | None = Field(
         default=None,
         validation_alias=AliasChoices("azure_openai_endpoint", "AZURE_OPENAI_ENDPOINT"),
@@ -189,6 +209,15 @@ class Settings(BaseSettings):
                     raise ValueError(
                         "Production requires complete Azure OpenAI settings when LLM_PROVIDER=azure. "
                         f"Missing: {', '.join(status.missing)}"
+                    )
+            if self.llm_provider.lower().strip() == "gateway":
+                from app.core.gateway_config import inspect_gateway
+
+                gw = inspect_gateway(self)
+                if not (self.gateway_url or "").strip():
+                    raise ValueError(
+                        "Production requires GATEWAY_URL when LLM_PROVIDER=gateway. "
+                        f"Missing: {', '.join(gw.missing)}"
                     )
         return self
 

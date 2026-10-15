@@ -1,4 +1,7 @@
+import asyncio
+import json
 import time
+from collections.abc import AsyncIterator
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -10,13 +13,19 @@ from app.schemas.evidence import EvidenceItemSummaryResponse
 from app.services.chat.intent import build_conversational_answer, classify_chat_intent
 from app.services.chat.messages import format_insufficient_evidence_message
 from app.services.library.service import AnswerLibraryService
-from app.services.llm.guardrails import clamp_question, sanitize_evidence_content
+from app.core.config import get_settings
+from app.services.llm.errors import ModelServiceError
+from app.services.llm.factory import get_llm_provider
+from app.services.llm.gateway import GatewayLLMProvider, evidence_ids_mentioned
+from app.services.llm.guardrails import clamp_question, sanitize_evidence_content, wrap_evidence_for_prompt
+from app.services.llm.prompts import CHAT_STREAM_SYSTEM
+from app.services.rag.grounding import evidence_blocks, generate_grounded_answer, selected_evidence_ids
+from app.services.retrieval.service import RetrievalService
 from app.services.rag.behavior import BehaviorResult
 from app.core.roles import Role
 from app.core.tenant import TenantContext
 from app.models.organization import OrganizationMembership
 from app.services.access_control.context import UserAccessContext, build_access_context
-from app.services.rag.grounding import generate_grounded_answer, selected_evidence_ids
 
 
 def _behavior_payload(behavior: BehaviorResult) -> dict:
@@ -227,4 +236,126 @@ class ChatAskService:
             "sources_searched": sources_searched,
             "query_time_ms": query_time_ms,
             **_behavior_payload(behavior),
+        }
+
+    async def ask_stream(
+        self,
+        *,
+        organization_id: UUID,
+        query: str,
+        project_id: UUID | None,
+        user_id: UUID | None = None,
+        access: UserAccessContext | None = None,
+        cancel_event: asyncio.Event | None = None,
+    ) -> AsyncIterator[dict]:
+        """Yield stream events: token, meta, or error."""
+        safe_query = clamp_question(query)
+        access = self._resolve_access(
+            organization_id=organization_id, user_id=user_id, access=access
+        )
+        project_name = _project_label(self.db, project_id)
+        sources_searched = _count_project_sources(self.db, organization_id, project_id)
+
+        async def _stream_text(text: str, meta: dict) -> AsyncIterator[dict]:
+            for ch in text:
+                if cancel_event and cancel_event.is_set():
+                    return
+                yield {"type": "token", "text": ch}
+            yield {"type": "meta", **meta}
+
+        intent = classify_chat_intent(safe_query)
+        if intent:
+            text = build_conversational_answer(intent)
+            async for ev in _stream_text(
+                text,
+                {
+                    "conversational": True,
+                    "outcome": "conversational",
+                    "intent": intent,
+                    "citations": [],
+                    "is_draft": False,
+                },
+            ):
+                yield ev
+            return
+
+        settings = get_settings()
+        llm = get_llm_provider(organization_id)
+        if not isinstance(llm, GatewayLLMProvider):
+            result = await self.ask(
+                organization_id=organization_id,
+                query=safe_query,
+                project_id=project_id,
+                user_id=user_id,
+                access=access,
+            )
+            async for ev in _stream_text(
+                result["answer"],
+                {
+                    "conversational": result.get("conversational", False),
+                    "outcome": result.get("outcome"),
+                    "citations": [c.model_dump() for c in result.get("citations", [])],
+                    "is_draft": result.get("is_draft", True),
+                    "evidence_sufficiency": result.get("evidence_sufficiency"),
+                },
+            ):
+                yield ev
+            return
+
+        items = await RetrievalService(self.db).retrieve(
+            organization_id=organization_id,
+            query=safe_query,
+            project_id=project_id,
+            limit=min(8, settings.llm_max_retrieval_results),
+            access=access,
+        )
+        items = [i for i in items if i.organization_id == organization_id]
+        if not items:
+            text = format_insufficient_evidence_message(
+                project_name=project_name,
+                sources_searched=sources_searched,
+            )
+            async for ev in _stream_text(
+                text,
+                {
+                    "conversational": False,
+                    "outcome": AnswerOutcome.INSUFFICIENT_EVIDENCE.value,
+                    "citations": [],
+                    "is_draft": True,
+                    "evidence_sufficiency": "insufficient",
+                },
+            ):
+                yield ev
+            return
+
+        blocks = wrap_evidence_for_prompt(evidence_blocks(items))
+        allowed = {str(i.id) for i in items}
+        user_payload = json.dumps({"question": safe_query, "evidence": blocks})
+        messages = [
+            {"role": "system", "content": CHAT_STREAM_SYSTEM},
+            {"role": "user", "content": user_payload},
+        ]
+        buffer = ""
+        try:
+            async for token in llm.stream_chat_tokens(messages=messages, cancel_event=cancel_event):
+                buffer += token
+                yield {"type": "token", "text": token}
+        except ModelServiceError as exc:
+            yield {"type": "error", "code": exc.code, "message": exc.user_message, "retryable": exc.retryable}
+            return
+
+        mentioned = evidence_ids_mentioned(buffer, allowed)
+        selected = {UUID(x) for x in mentioned}
+        if not selected:
+            selected = {items[0].id}
+        citations = self._build_citations(items, selected)
+        yield {
+            "type": "meta",
+            "conversational": False,
+            "outcome": AnswerOutcome.ANSWERED.value,
+            "citations": [c.model_dump(mode="json") for c in citations],
+            "is_draft": True,
+            "evidence_sufficiency": "sufficient",
+            "project_name": project_name,
+            "sources_searched": sources_searched,
         }
