@@ -390,6 +390,12 @@ async def upload_documents(
         scan_status, scan_reason = scan_upload_content(data)
         if scan_status == "infected":
             raise org_admin_error(code="MALWARE_DETECTED", message=scan_reason or "File rejected.", field="file")
+        if scan_status == "failed":
+            raise org_admin_error(
+                code="EMPTY_FILE",
+                message=scan_reason or "File is empty.",
+                field="file",
+            )
         content_hash = hashlib.sha256(data).hexdigest()
         duplicate = (
             db.query(ClientDocument)

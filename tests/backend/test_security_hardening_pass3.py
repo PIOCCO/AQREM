@@ -24,6 +24,7 @@ def test_create_source_config_strips_inline_tokens(monkeypatch):
 
 def test_safe_blob_filename_rejects_traversal():
     assert safe_blob_filename("report.pdf") == "report.pdf"
+    assert safe_blob_filename("Annual Report 2024.pdf") == "Annual_Report_2024.pdf"
     with pytest.raises(ValueError):
         safe_blob_filename("../../etc/passwd")
     with pytest.raises(ValueError):

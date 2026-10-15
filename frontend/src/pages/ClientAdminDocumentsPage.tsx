@@ -5,6 +5,14 @@ import { fetchDocuments, removeDocument, retryDocument, uploadDocuments } from "
 const ALLOWED_HINT = "PDF, Markdown, plain text, and .tar.gz archives";
 const MAX_MB = 50;
 
+function formatFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "—";
+  if (bytes === 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 type DocRow = {
   id: string;
   file_name: string;
@@ -196,6 +204,14 @@ export default function ClientAdminDocumentsPage() {
         );
       } else if (code === "STORAGE_UNAVAILABLE" || /storage|LOCAL_UPLOAD_DIR/i.test(msg)) {
         setError(msg);
+      } else if (code === "DUPLICATE_FILE") {
+        setError("This file was already uploaded (same content). Remove the existing copy or change the file.");
+      } else if (code === "INVALID_FILENAME") {
+        setError("That file name is not allowed. Use letters, numbers, dots, dashes, and underscores.");
+      } else if (code === "TYPE_NOT_ALLOWED") {
+        setError(msg);
+      } else if (code === "EMPTY_FILE") {
+        setError("The file is empty (0 bytes). Choose a non-empty file.");
       } else if (msg === "Failed to fetch") {
         setError(
           "Upload failed (network or CORS). Set PUBLIC_BASE_URL and CORS for your browser origin, and finish Data storage setup.",
@@ -284,7 +300,7 @@ export default function ClientAdminDocumentsPage() {
                 <tr key={row.id} className="border-b border-chat-border last:border-0">
                   <td className="p-3">
                     <p className="font-medium">{row.file_name}</p>
-                    <p className="text-xs text-chat-muted">{(row.size_bytes / 1024).toFixed(1)} KB</p>
+                    <p className="text-xs text-chat-muted">{formatFileSize(row.size_bytes)}</p>
                     {row.failure_reason ? (
                       <p className="text-xs text-red-700 mt-1" role="alert">
                         {row.failure_reason}

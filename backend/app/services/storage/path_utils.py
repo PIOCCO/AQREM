@@ -10,14 +10,28 @@ _SAFE_FILENAME = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
 def safe_blob_filename(filename: str) -> str:
-    """Basename only; reject path traversal in upload names."""
+    """Basename only; reject path traversal; normalize spaces and unsafe characters."""
     name = (filename or "upload.bin").replace("\\", "/")
     if ".." in name or "\0" in name:
         raise ValueError("Invalid upload filename")
     base = PurePosixPath(name).name
-    if not base or not _SAFE_FILENAME.match(base):
+    if not base or base in (".", ".."):
         raise ValueError("Invalid upload filename")
-    return base
+    if _SAFE_FILENAME.match(base):
+        return base
+    path = PurePosixPath(base)
+    suffix = "".join(path.suffixes)
+    stem = path.name[: -len(suffix)] if suffix else path.name
+    safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem).strip("._-")
+    safe_suffix = re.sub(r"[^A-Za-z0-9._-]+", "", suffix)
+    if not safe_stem:
+        safe_stem = "upload"
+    sanitized = f"{safe_stem}{safe_suffix}"
+    if not _SAFE_FILENAME.match(sanitized):
+        sanitized = re.sub(r"[^A-Za-z0-9._-]+", "_", base).strip("._-") or "upload.bin"
+    if not sanitized or sanitized in (".", ".."):
+        raise ValueError("Invalid upload filename")
+    return sanitized
 
 
 def resolve_under_root(root: Path, blob_path: str) -> Path:
