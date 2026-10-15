@@ -6,9 +6,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { PRODUCT_V1 } from "./productV1";
 import {
   createConversation,
-  createEphemeralConversation,
   dedupeEmptyConversations,
   deleteConversation,
   findEmptyConversation,
@@ -43,19 +43,31 @@ export function ConversationProvider({ children }: { children: ReactNode }) {
 
   const createNew = useCallback(
     (projectId: string | null = null) => {
-      if (projectId == null) {
-        return createEphemeralConversation();
+      const effectiveProjectId = PRODUCT_V1 ? null : projectId;
+      if (!PRODUCT_V1 && effectiveProjectId != null) {
+        const existing = findEmptyConversation();
+        if (existing) {
+          if (existing.projectId !== effectiveProjectId) {
+            saveConversation({ ...existing, projectId: effectiveProjectId });
+            refresh();
+            return getConversation(existing.id) ?? existing;
+          }
+          return existing;
+        }
+        const conv = createConversation(effectiveProjectId);
+        refresh();
+        return conv;
       }
       const existing = findEmptyConversation();
       if (existing) {
-        if (existing.projectId !== projectId) {
-          saveConversation({ ...existing, projectId });
+        if (existing.projectId != null) {
+          saveConversation({ ...existing, projectId: null });
           refresh();
           return getConversation(existing.id) ?? existing;
         }
         return existing;
       }
-      const conv = createConversation(projectId);
+      const conv = createConversation(null);
       refresh();
       return conv;
     },
@@ -80,9 +92,6 @@ export function ConversationProvider({ children }: { children: ReactNode }) {
 
   const upsert = useCallback(
     (conversation: ChatConversation) => {
-      if (conversation.ephemeral) {
-        return saveConversation(conversation);
-      }
       // Do not resurrect conversations removed from storage (e.g. after delete).
       if (!getConversation(conversation.id)) {
         return conversation;

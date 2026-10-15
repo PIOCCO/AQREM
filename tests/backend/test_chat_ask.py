@@ -224,7 +224,7 @@ async def test_chat_ask_with_chunks_but_no_access_not_no_indexed(client: TestCli
     assert res.status_code == 200, res.text
     body = res.json()
     assert "No documents are indexed yet" not in body["answer"]
-    assert "relevant information" in body["answer"].lower()
+    assert "company documents" in body["answer"].lower()
 
 
 @pytest.mark.asyncio

@@ -12,6 +12,7 @@ import {
 import MarkdownContent from "./MarkdownContent";
 import MessageMetaPanel from "./SourceCitations";
 import ChatMainColumn from "./ChatMainColumn";
+import { PRODUCT_V1 } from "../../lib/productV1";
 
 type Props = {
   messages: ChatMessage[];
@@ -66,6 +67,7 @@ function AssistantMessage({
   }, [message.content]);
 
   const needsReview =
+    !PRODUCT_V1 &&
     message.meta?.isDraft &&
     !message.meta.fromLibrary &&
     !message.meta.insufficientEvidence &&
@@ -73,6 +75,7 @@ function AssistantMessage({
     !message.meta.error;
 
   const showReviewQueue =
+    !PRODUCT_V1 &&
     !message.meta?.insufficientEvidence &&
     !message.meta?.conversational &&
     Boolean(message.meta?.needsReview || message.meta?.isDraft);

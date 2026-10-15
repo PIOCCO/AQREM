@@ -32,8 +32,9 @@ import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Tooltip } from "../ui/Tooltip";
 import { AdminConsoleLink } from "../nav/AdminConsoleLink";
 import { hasAdminConsoleAccess } from "../../lib/permissions";
+import { PRODUCT_V1 } from "../../lib/productV1";
 
-const primaryNav = [
+const legacyPrimaryNav = [
   { to: "/projects", label: "Projects", Icon: IconFolder },
   { to: "/sources", label: "Sources", Icon: IconDatabase },
   { to: "/evidence", label: "Evidence", Icon: IconFileText },
@@ -43,6 +44,8 @@ const primaryNav = [
   { to: "/audit", label: "Activity", Icon: IconActivity },
   { to: "/settings", label: "Settings", Icon: IconSettings },
 ];
+
+const primaryNav = PRODUCT_V1 ? [] : legacyPrimaryNav;
 
 type Props = {
   activeConversationId?: string;
@@ -93,9 +96,11 @@ function SidebarUserFooter({
             <button type="button" className="fixed inset-0 z-40" aria-label="Close menu" onClick={() => setOpen(false)} />
             <div className="absolute bottom-full left-1/2 z-50 mb-2 w-44 -translate-x-1/2 rounded-lg border border-chat-border bg-chat-surface py-1 text-sm shadow-composer">
               {email ? <p className="px-3 py-2 text-xs text-chat-muted truncate border-b border-chat-border">{email}</p> : null}
-              <Link to="/settings" className="chat-menu-item" onClick={() => setOpen(false)}>
-                Settings
-              </Link>
+              {!PRODUCT_V1 ? (
+                <Link to="/settings" className="chat-menu-item" onClick={() => setOpen(false)}>
+                  Settings
+                </Link>
+              ) : null}
               {showAdminConsole ? <AdminConsoleLink variant="menu" onNavigate={() => setOpen(false)} /> : null}
               <button type="button" className="chat-menu-item w-full text-left" onClick={() => { toggle(); setOpen(false); }}>
                 Theme: {resolved === "dark" ? "Dark" : "Light"}
@@ -134,9 +139,11 @@ function SidebarUserFooter({
           <button type="button" className="fixed inset-0 z-40" aria-label="Close menu" onClick={() => setOpen(false)} />
           <div className="absolute bottom-full left-3 right-3 mb-1 z-50 rounded-lg border border-chat-border bg-chat-surface py-1 text-sm shadow-composer">
             {email ? <p className="px-3 py-2 text-xs text-chat-muted truncate border-b border-chat-border">{email}</p> : null}
-            <Link to="/settings" className="chat-menu-item" onClick={() => setOpen(false)}>
-              Settings
-            </Link>
+            {!PRODUCT_V1 ? (
+              <Link to="/settings" className="chat-menu-item" onClick={() => setOpen(false)}>
+                Settings
+              </Link>
+            ) : null}
             {showAdminConsole ? <AdminConsoleLink variant="menu" onNavigate={() => setOpen(false)} /> : null}
             <button type="button" className="chat-menu-item w-full text-left" onClick={() => { toggle(); setOpen(false); }}>
               Theme: {resolved === "dark" ? "Dark" : "Light"}
@@ -265,7 +272,7 @@ export default function ChatSidebar({
   const [reviewCount, setReviewCount] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session || PRODUCT_V1) return;
     fetchReviewQueue(session, { project_id: projectId ?? undefined, limit: 1, offset: 0 })
       .then((data: { total?: number }) => setReviewCount(typeof data.total === "number" ? data.total : null))
       .catch(() => setReviewCount(null));
@@ -406,28 +413,30 @@ export default function ChatSidebar({
               </div>
             </div>
 
-            <nav className="px-2 pb-3 space-y-0.5" aria-label="Workspace">
-              {primaryNav.map(({ to, label, Icon, badge }, index) => (
-                <span key={label} className="contents">
-                  {index === primaryNav.length - 1 && showAdminConsole ? (
-                    <AdminConsoleLink variant="sidebar" onNavigate={onCloseMobile} />
-                  ) : null}
-                  <NavLink
-                    to={to}
-                    onClick={onCloseMobile}
-                    className={({ isActive }) => `ref-nav-item ${isActive ? "ref-nav-item-active" : ""}`}
-                  >
-                    <Icon className="h-[18px] w-[18px] shrink-0 opacity-80" />
-                    <span className="flex-1 truncate">{label}</span>
-                    {badge && reviewCount != null && reviewCount > 0 ? (
-                      <span className="ref-nav-badge">{reviewCount > 99 ? "99+" : reviewCount}</span>
+            {primaryNav.length > 0 ? (
+              <nav className="px-2 pb-3 space-y-0.5" aria-label="Workspace">
+                {primaryNav.map(({ to, label, Icon, badge }, index) => (
+                  <span key={label} className="contents">
+                    {index === primaryNav.length - 1 && showAdminConsole ? (
+                      <AdminConsoleLink variant="sidebar" onNavigate={onCloseMobile} />
                     ) : null}
-                  </NavLink>
-                </span>
-              ))}
-            </nav>
+                    <NavLink
+                      to={to}
+                      onClick={onCloseMobile}
+                      className={({ isActive }) => `ref-nav-item ${isActive ? "ref-nav-item-active" : ""}`}
+                    >
+                      <Icon className="h-[18px] w-[18px] shrink-0 opacity-80" />
+                      <span className="flex-1 truncate">{label}</span>
+                      {badge && reviewCount != null && reviewCount > 0 ? (
+                        <span className="ref-nav-badge">{reviewCount > 99 ? "99+" : reviewCount}</span>
+                      ) : null}
+                    </NavLink>
+                  </span>
+                ))}
+              </nav>
+            ) : null}
 
-            <div className="mx-3 border-t border-chat-border" />
+            {primaryNav.length > 0 ? <div className="mx-3 border-t border-chat-border" /> : null}
 
             <nav
               className="ref-conv-scroll flex-1 overflow-x-hidden overflow-y-auto px-2 py-3 space-y-4 min-h-0 min-w-0"

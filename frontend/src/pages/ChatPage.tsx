@@ -7,8 +7,8 @@ import ChatComposerDock from "../components/chat/ChatComposerDock";
 import ChatMainColumn from "../components/chat/ChatMainColumn";
 import ChatConversationHeader from "../components/chat/ChatConversationHeader";
 import ChatEmptyState from "../components/chat/ChatEmptyState";
-import UnsavedChatNotice from "../components/chat/UnsavedChatNotice";
 import ScopePicker from "../components/chat/ScopePicker";
+import { PRODUCT_V1 } from "../lib/productV1";
 import MessageList from "../components/chat/MessageList";
 import { IconSidebar } from "../components/icons/Icons";
 import { fetchSources, uploadSourceFiles } from "../lib/api";
@@ -92,7 +92,7 @@ export default function ChatPage() {
       return;
     }
     setConversation(conv);
-    if (conv.projectId && conv.projectId !== projectId) {
+    if (!PRODUCT_V1 && conv.projectId && conv.projectId !== projectId) {
       setProjectId(conv.projectId);
     }
   }, [conversationId, navigate, projectId, setProjectId]);
@@ -120,7 +120,7 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    if (!session) {
+    if (!session || PRODUCT_V1) {
       setUploadSourceId(null);
       setSourcesCount(null);
       return;
@@ -178,7 +178,7 @@ export default function ChatPage() {
     [conversation, persist, projects, setProjectId, toast],
   );
 
-  const scopePicker = (
+  const scopePicker = PRODUCT_V1 ? null : (
     <ScopePicker
       projects={projects.map((p) => ({
         id: p.id,
@@ -237,14 +237,9 @@ export default function ChatPage() {
 
     setLoading(true);
     setStreamingText(null);
-    const scopeProjectId = conv.projectId ?? projectId ?? null;
+    const scopeProjectId = PRODUCT_V1 ? null : conv.projectId ?? projectId ?? null;
     if (!classifyChatIntent(text)) {
-      if (scopeProjectId) {
-        const n = sourcesCount ?? 0;
-        setRetrievalStatus(`Searching ${n} source${n === 1 ? "" : "s"}…`);
-      } else {
-        setRetrievalStatus("Searching company documents…");
-      }
+      setRetrievalStatus(PRODUCT_V1 ? "Searching company documents…" : scopeProjectId ? `Searching ${sourcesCount ?? 0} source${(sourcesCount ?? 0) === 1 ? "" : "s"}…` : "Searching company documents…");
     } else {
       setRetrievalStatus(null);
     }
@@ -289,7 +284,7 @@ export default function ChatPage() {
     if (!session) return;
     let conv = conversation ?? (conversationId ? getConversation(conversationId) : null);
     if (!conv) {
-      conv = createNew(projectId);
+      conv = createNew(PRODUCT_V1 ? null : projectId);
       setConversation(conv);
       if (!conversationId) navigate(`/c/${conv.id}`, { replace: true });
     }
@@ -372,8 +367,6 @@ export default function ChatPage() {
   const name = greetingName(user?.fullName, user?.email);
   const atHome = !conversationId;
 
-  const unsavedNotice = <UnsavedChatNotice visible={!projectId} />;
-
   const composer = (
     <ChatComposer
       ref={composerRef}
@@ -414,7 +407,7 @@ export default function ChatPage() {
             <ChatEmptyState name={name} projectName={projectName} onPickPrompt={setInput} />
           </ChatMainColumn>
         </div>
-        <ChatComposerDock scopePicker={scopePicker} notice={unsavedNotice}>
+        <ChatComposerDock scopePicker={scopePicker ?? undefined}>
           {composer}
         </ChatComposerDock>
       </div>
@@ -445,7 +438,7 @@ export default function ChatPage() {
               <ChatEmptyState name={name} projectName={projectName} onPickPrompt={setInput} />
             </ChatMainColumn>
           </div>
-          <ChatComposerDock scopePicker={scopePicker} notice={unsavedNotice}>
+          <ChatComposerDock scopePicker={scopePicker ?? undefined}>
             {composer}
           </ChatComposerDock>
         </>
@@ -459,7 +452,7 @@ export default function ChatPage() {
             onRetry={onRetry}
             onFeedback={onFeedback}
           />
-          <ChatComposerDock scopePicker={scopePicker} notice={unsavedNotice}>
+          <ChatComposerDock scopePicker={scopePicker ?? undefined}>
             {composer}
           </ChatComposerDock>
         </>

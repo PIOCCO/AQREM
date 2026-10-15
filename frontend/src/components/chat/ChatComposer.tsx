@@ -15,6 +15,7 @@ import {
   scrollTextareaCaretIntoView,
 } from "../../lib/composerGrow";
 import { Tooltip } from "../ui/Tooltip";
+import { PRODUCT_V1, V1_COMPOSER_DISCLAIMER } from "../../lib/productV1";
 
 export type PendingAttachment = {
   id: string;
@@ -35,6 +36,7 @@ type Props = {
   onPickFiles: (files: FileList | null) => void;
   onRemoveAttachment: (id: string) => void;
   uploadDisabledReason?: string | null;
+  hideAttachments?: boolean;
   conversationKey?: string | null;
 };
 
@@ -53,6 +55,7 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
     onPickFiles,
     onRemoveAttachment,
     uploadDisabledReason,
+    hideAttachments = PRODUCT_V1,
     conversationKey,
   },
   forwardedRef,
@@ -230,26 +233,30 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
         ) : null}
 
         <div className="chat-composer-row">
-          <input
-            ref={fileRef}
-            type="file"
-            multiple
-            className="sr-only"
-            aria-label="Attach documents"
-            onChange={onFileChange}
-            disabled={Boolean(uploadDisabledReason) || disabled}
-          />
-          <Tooltip label={attachTitle}>
-            <button
-              type="button"
-              className="chat-composer-attach-btn shrink-0"
-              onClick={() => fileRef.current?.click()}
-              disabled={Boolean(uploadDisabledReason) || disabled}
-              aria-label="Attach documents"
-            >
-              <IconPlus className="h-5 w-5" />
-            </button>
-          </Tooltip>
+          {!hideAttachments ? (
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                className="sr-only"
+                aria-label="Attach documents"
+                onChange={onFileChange}
+                disabled={Boolean(uploadDisabledReason) || disabled}
+              />
+              <Tooltip label={attachTitle}>
+                <button
+                  type="button"
+                  className="chat-composer-attach-btn shrink-0"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={Boolean(uploadDisabledReason) || disabled}
+                  aria-label="Attach documents"
+                >
+                  <IconPlus className="h-5 w-5" />
+                </button>
+              </Tooltip>
+            </>
+          ) : null}
           <textarea
             ref={textareaRef}
             rows={1}
@@ -292,7 +299,7 @@ const ChatComposer = forwardRef<HTMLTextAreaElement, Props>(function ChatCompose
         </div>
       </div>
       <p className="ref-composer-disclaimer">
-        AQREM can make mistakes. Verify important answers against the source evidence.
+        {PRODUCT_V1 ? V1_COMPOSER_DISCLAIMER : "AQREM can make mistakes. Verify important answers against the source evidence."}
       </p>
     </div>
   );

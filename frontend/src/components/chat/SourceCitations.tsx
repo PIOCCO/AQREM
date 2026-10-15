@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { ChatCitation, ChatMessageMeta } from "../../lib/conversations";
 import { IconChevronDown, IconSource } from "../icons/Icons";
 import InsufficientEvidencePanel from "./InsufficientEvidencePanel";
+import { PRODUCT_V1 } from "../../lib/productV1";
 
 const HIGHLIGHT_TERMS = [
   "AES-256",
@@ -41,11 +42,19 @@ function SourcePill({ citation }: { citation: ChatCitation }) {
     citation.lineStart != null
       ? `p. ${citation.lineStart}${citation.lineEnd && citation.lineEnd !== citation.lineStart ? `–${citation.lineEnd}` : ""}`
       : null;
-  return (
-    <Link to={`/evidence/${citation.evidenceId}`} className="ref-source-pill">
+  const inner = (
+    <>
       <IconSource className="h-3.5 w-3.5 shrink-0 opacity-70" />
       <span className="truncate max-w-[14rem]">{label}</span>
       {page ? <span className="text-chat-muted shrink-0">{page}</span> : null}
+    </>
+  );
+  if (PRODUCT_V1) {
+    return <span className="ref-source-pill">{inner}</span>;
+  }
+  return (
+    <Link to={`/evidence/${citation.evidenceId}`} className="ref-source-pill">
+      {inner}
     </Link>
   );
 }
@@ -65,9 +74,11 @@ function EvidencePreview({ citation }: { citation: ChatCitation }) {
           <p className="text-[13px] leading-relaxed text-chat-fg whitespace-pre-wrap">
             {highlightExcerpt(citation.excerpt)}
           </p>
-          <Link to={`/evidence/${citation.evidenceId}`} className="text-xs text-chat-accent hover:underline mt-2 inline-block">
-            Open full evidence
-          </Link>
+          {!PRODUCT_V1 ? (
+            <Link to={`/evidence/${citation.evidenceId}`} className="text-xs text-chat-accent hover:underline mt-2 inline-block">
+              Open full evidence
+            </Link>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -100,22 +111,24 @@ export default function MessageMetaPanel({
   };
 
   const badges: string[] = [];
-  if (meta.fromLibrary && meta.libraryStatus === "approved") badges.push("Approved");
-  else if (meta.outcome && outcomeLabels[meta.outcome]) badges.push(outcomeLabels[meta.outcome]);
-  if (meta.needsReview && !badges.includes("Needs review")) badges.push("Needs review");
+  if (!PRODUCT_V1) {
+    if (meta.fromLibrary && meta.libraryStatus === "approved") badges.push("Approved");
+    else if (meta.outcome && outcomeLabels[meta.outcome]) badges.push(outcomeLabels[meta.outcome]);
+    if (meta.needsReview && !badges.includes("Needs review")) badges.push("Needs review");
+  }
 
   const citations = meta.citations ?? [];
 
   return (
     <div className="mt-4 space-y-3">
-      {badges.length > 0 ? (
+      {!PRODUCT_V1 && badges.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {badges.map((b) => (
             <span key={b} className="ref-badge-muted">
               {b}
             </span>
           ))}
-          {meta.fromLibrary && meta.libraryEntryId ? (
+          {!PRODUCT_V1 && meta.fromLibrary && meta.libraryEntryId ? (
             <Link to={`/answer-library/${meta.libraryEntryId}`} className="text-xs text-chat-accent hover:underline">
               View library entry
             </Link>
@@ -133,7 +146,7 @@ export default function MessageMetaPanel({
               <SourcePill key={c.evidenceId} citation={c} />
             ))}
           </div>
-          {citations[0] ? <EvidencePreview citation={citations[0]} /> : null}
+          {!PRODUCT_V1 && citations[0] ? <EvidencePreview citation={citations[0]} /> : null}
         </>
       ) : null}
 

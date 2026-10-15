@@ -52,6 +52,7 @@ import ChangePasswordPage from "./pages/ChangePasswordPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import RouteErrorBoundary from "./components/ui/RouteErrorBoundary";
+import { PRODUCT_V1 } from "./lib/productV1";
 
 function PublicTheme({ children }: { children: ReactNode }) {
   return <ThemeProvider>{children}</ThemeProvider>;
@@ -64,7 +65,7 @@ function AdminLegacyRedirect() {
   return <Navigate to={target} replace />;
 }
 
-const orgAdminRouteTree = (
+const orgAdminRouteTreeFull = (
   <>
     <Route index element={<ClientAdminSetupPage />} />
     <Route path="documents" element={<ClientAdminDocumentsPage />} />
@@ -76,6 +77,17 @@ const orgAdminRouteTree = (
     <Route path="privacy" element={<ClientAdminPrivacyPage />} />
   </>
 );
+
+const orgAdminRouteTreeV1 = (
+  <>
+    <Route index element={<Navigate to="documents" replace />} />
+    <Route path="documents" element={<ClientAdminDocumentsPage />} />
+    <Route path="users" element={<ClientAdminUsersPage />} />
+    <Route path="*" element={<Navigate to="documents" replace />} />
+  </>
+);
+
+const orgAdminRouteTree = PRODUCT_V1 ? orgAdminRouteTreeV1 : orgAdminRouteTreeFull;
 
 function OrgAdminRouteShell() {
   return (
@@ -104,25 +116,29 @@ function AuthenticatedApp() {
                 <Route path="chat" element={<ChatPage />} />
                 <Route path="c/:conversationId" element={<ChatPage />} />
                 <Route path="share/:shareToken" element={<ShareConversationPage />} />
-                <Route path="dashboard" element={<DashboardPage />} />
-                <Route path="projects" element={<ProjectsPage />} />
-                <Route path="projects/:projectId" element={<ProjectDetailPage />} />
-                <Route path="sources" element={<SourcesPage />} />
-                <Route path="evidence" element={<EvidencePage />} />
-                <Route path="evidence/:evidenceId" element={<EvidenceDetailPage />} />
-                <Route path="questionnaires" element={<QuestionnairesPage />} />
-                <Route path="questionnaires/:questionnaireId" element={<QuestionnaireDetailPage />} />
-                <Route
-                  path="questionnaires/:questionnaireId/questions/:questionId/review"
-                  element={<QuestionReviewPage />}
-                />
-                <Route path="review-queue" element={<ReviewQueuePage />} />
-                <Route path="answer-library" element={<AnswerLibraryPage />} />
-                <Route path="answer-library/:entryId" element={<AnswerLibraryDetailPage />} />
-                <Route path="stale-answers" element={<StaleAnswersPage />} />
-                <Route path="stale-answers/:answerId" element={<StaleAnswerDetailPage />} />
-                <Route path="audit" element={<AuditLogPage />} />
-                <Route path="settings" element={<SettingsPage />} />
+                {PRODUCT_V1 ? null : (
+                  <>
+                    <Route path="dashboard" element={<DashboardPage />} />
+                    <Route path="projects" element={<ProjectsPage />} />
+                    <Route path="projects/:projectId" element={<ProjectDetailPage />} />
+                    <Route path="sources" element={<SourcesPage />} />
+                    <Route path="evidence" element={<EvidencePage />} />
+                    <Route path="evidence/:evidenceId" element={<EvidenceDetailPage />} />
+                    <Route path="questionnaires" element={<QuestionnairesPage />} />
+                    <Route path="questionnaires/:questionnaireId" element={<QuestionnaireDetailPage />} />
+                    <Route
+                      path="questionnaires/:questionnaireId/questions/:questionId/review"
+                      element={<QuestionReviewPage />}
+                    />
+                    <Route path="review-queue" element={<ReviewQueuePage />} />
+                    <Route path="answer-library" element={<AnswerLibraryPage />} />
+                    <Route path="answer-library/:entryId" element={<AnswerLibraryDetailPage />} />
+                    <Route path="stale-answers" element={<StaleAnswersPage />} />
+                    <Route path="stale-answers/:answerId" element={<StaleAnswerDetailPage />} />
+                    <Route path="audit" element={<AuditLogPage />} />
+                    <Route path="settings" element={<SettingsPage />} />
+                  </>
+                )}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
               </Routes>

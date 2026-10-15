@@ -52,4 +52,6 @@ def test_no_indexed_documents_message():
 
 def test_empty_retrieval_message_uses_chunk_count():
     assert "indexed" in format_empty_retrieval_message(org_chunk_count=0).lower()
-    assert format_empty_retrieval_message(org_chunk_count=3) == format_no_relevant_information_message()
+    msg = format_empty_retrieval_message(org_chunk_count=3)
+    assert "company documents" in msg.lower()
+    assert msg == format_no_relevant_information_message()

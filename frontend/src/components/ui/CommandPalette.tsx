@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { PRODUCT_V1 } from "../../lib/productV1";
 
 type Command = { id: string; label: string; hint?: string; run: () => void };
 
@@ -9,7 +10,7 @@ type Props = {
   extraCommands?: Command[];
 };
 
-const NAV: Omit<Command, "run">[] = [
+const NAV_FULL: Omit<Command, "run">[] = [
   { id: "chat", label: "New chat", hint: "Home" },
   { id: "projects", label: "Projects" },
   { id: "evidence", label: "Evidence" },
@@ -19,6 +20,8 @@ const NAV: Omit<Command, "run">[] = [
   { id: "activity", label: "Activity" },
   { id: "settings", label: "Settings" },
 ];
+
+const NAV = PRODUCT_V1 ? NAV_FULL.filter((c) => c.id === "chat") : NAV_FULL;
 
 export default function CommandPalette({ open, onClose, extraCommands = [] }: Props) {
   const navigate = useNavigate();

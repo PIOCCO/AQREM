@@ -1,4 +1,9 @@
+import { PRODUCT_V1, V1_EMPLOYEE_NOT_FOUND_MESSAGE } from "./productV1";
+
 export function formatNoEvidenceMessage(projectName: string | null | undefined, sourcesSearched: number): string {
+  if (PRODUCT_V1) {
+    return V1_EMPLOYEE_NOT_FOUND_MESSAGE;
+  }
   const scopedToProject = Boolean(projectName?.trim());
   const label = scopedToProject ? projectName!.trim() : "your organization";
   const n = Math.max(0, sourcesSearched);
