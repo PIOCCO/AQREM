@@ -56,7 +56,7 @@ class RetrievalService:
         settings = get_settings()
         limit = min(max(limit, 1), settings.llm_max_retrieval_results)
         safe_query = clamp_question(query)
-        llm = get_llm_provider()
+        llm = get_llm_provider(organization_id)
         query_embedding = (await llm.embed([safe_query]))[0]
         embedding_literal = "[" + ",".join(str(x) for x in query_embedding) + "]"
 

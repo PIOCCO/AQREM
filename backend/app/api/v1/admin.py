@@ -2,7 +2,7 @@ import secrets
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.admin_errors import admin_error
@@ -545,13 +545,13 @@ def resend_user_invitation(
     )
 
 
-@router.post("/organizations/{organization_id}/invitations/{invitation_id}/revoke", status_code=204)
+@router.post("/organizations/{organization_id}/invitations/{invitation_id}/revoke", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def revoke_user_invitation(
     organization_id: UUID,
     invitation_id: UUID,
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("invitation:revoke")),
-) -> None:
+) -> Response:
     _require_admin_visible_org(db, organization_id)
     invitation = db.get(UserInvitation, invitation_id)
     if invitation is None or invitation.organization_id != organization_id:
@@ -560,16 +560,17 @@ def revoke_user_invitation(
     db.commit()
 
 
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 @router.post(
     "/organizations/{organization_id}/invitation-history/{record_id}/delete",
-    status_code=204,
+    status_code=status.HTTP_204_NO_CONTENT, response_class=Response,
 )
 def delete_invitation_history_record(
     organization_id: UUID,
     record_id: UUID,
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("invitation:revoke")),
-) -> None:
+) -> Response:
     """Remove a history row whether it is an org-admin invite or employee join link."""
     _require_admin_visible_org(db, organization_id)
     invitation = db.get(UserInvitation, record_id)
@@ -656,14 +657,14 @@ def patch_member_role(
     )
 
 
-@router.post("/organizations/{organization_id}/members/{membership_id}/deactivate", status_code=204)
+@router.post("/organizations/{organization_id}/members/{membership_id}/deactivate", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def deactivate_member(
     organization_id: UUID,
     membership_id: UUID,
     payload: DeactivateMemberRequest,
     db: Session = Depends(get_db),
     admin: User = Depends(require_platform_permission("org_member:deactivate")),
-) -> None:
+) -> Response:
     _require_admin_visible_org(db, organization_id)
     membership = db.get(OrganizationMembership, membership_id)
     if membership is None or membership.organization_id != organization_id:
@@ -692,6 +693,7 @@ def deactivate_member(
     db.commit()
 
 
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 @router.get("/organizations/{organization_id}/audit", response_model=AdminAuditListResponse)
 def list_org_audit(
     organization_id: UUID,
@@ -834,13 +836,13 @@ def update_staff_role(
     )
 
 
-@router.delete("/platform-staff/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/platform-staff/{user_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def delete_platform_staff(
     user_id: UUID,
     payload: PlatformStaffRemoveRequest,
     db: Session = Depends(get_db),
     admin: User = Depends(require_super_admin),
-) -> None:
+) -> Response:
     target = db.get(User, user_id)
     if target is None or resolve_platform_role(target) is None:
         raise admin_error(code="NOT_FOUND", message="Platform staff member not found", status_code=404)

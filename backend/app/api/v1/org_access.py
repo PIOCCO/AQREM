@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import Response, APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -123,13 +123,13 @@ def create_group(
     return AccessGroupResponse(id=group.id, name=group.name, slug=group.slug, is_system=False, member_count=0)
 
 
-@router.post("/groups/{group_id}/members", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/groups/{group_id}/members", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def add_group_members(
     group_id: UUID,
     payload: AccessGroupMembersRequest,
     tenant: TenantContext = Depends(_require_org_admin_surface),
     db: Session = Depends(get_tenant_db),
-) -> None:
+) -> Response:
     group = db.get(AccessGroup, group_id)
     if group is None or group.organization_id != tenant.organization_id:
         raise org_admin_error(code="NOT_FOUND", message="Group not found.", status_code=404)
@@ -160,13 +160,13 @@ def add_group_members(
     db.commit()
 
 
-@router.delete("/groups/{group_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/groups/{group_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def remove_group_member(
     group_id: UUID,
     user_id: UUID,
     tenant: TenantContext = Depends(_require_org_admin_surface),
     db: Session = Depends(get_tenant_db),
-) -> None:
+) -> Response:
     row = (
         db.query(AccessGroupMembership)
         .filter(
@@ -191,13 +191,13 @@ def remove_group_member(
     db.commit()
 
 
-@router.patch("/documents/{document_id}/visibility", status_code=status.HTTP_204_NO_CONTENT)
+@router.patch("/documents/{document_id}/visibility", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def set_document_visibility(
     document_id: UUID,
     payload: DocumentVisibilityRequest,
     tenant: TenantContext = Depends(_require_org_admin_surface),
     db: Session = Depends(get_tenant_db),
-) -> None:
+) -> Response:
     _validate_visibility(payload)
     doc = db.get(ClientDocument, document_id)
     if doc is None or doc.organization_id != tenant.organization_id:
@@ -220,12 +220,12 @@ def set_document_visibility(
     db.commit()
 
 
-@router.post("/documents/visibility/bulk", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/documents/visibility/bulk", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def bulk_document_visibility(
     payload: BulkDocumentVisibilityRequest,
     tenant: TenantContext = Depends(_require_org_admin_surface),
     db: Session = Depends(get_tenant_db),
-) -> None:
+) -> Response:
     _validate_visibility(payload)
     for doc_id in payload.document_ids:
         doc = db.get(ClientDocument, doc_id)

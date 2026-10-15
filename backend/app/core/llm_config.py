@@ -77,4 +77,16 @@ def llm_provider_summary(settings: Settings) -> dict[str, str | bool]:
             "chat_deployment": settings.azure_openai_chat_deployment,
             "embedding_deployment": settings.azure_openai_embedding_deployment,
         }
+    if provider == "gateway":
+        from app.core.gateway_config import inspect_gateway
+
+        status = inspect_gateway(settings)
+        return {
+            "provider": "gateway",
+            "configured": status.configured,
+            "auth_mode": "api_key",
+            "endpoint": status.gateway_host or "",
+            "chat_alias": settings.gateway_chat_alias,
+            "embedding_alias": settings.gateway_embeddings_alias,
+        }
     return {"provider": provider, "configured": True, "auth_mode": "n/a"}

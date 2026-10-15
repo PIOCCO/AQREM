@@ -1,4 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+import asyncio
+import json
+
+from fastapi import Response, APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.audit.service import record_audit
@@ -40,6 +44,39 @@ async def ask_chat(
         access=access,
     )
     return ChatAskResponse(**result)
+
+
+@router.post("/ask/stream")
+@limiter.limit(RETRIEVAL_PREVIEW_LIMIT)
+async def ask_chat_stream(
+    request: Request,
+    payload: ChatAskRequest,
+    tenant: TenantContext = Depends(get_tenant_context),
+    access: UserAccessContext = Depends(get_user_access),
+    db: Session = Depends(get_tenant_db),
+) -> StreamingResponse:
+    cancel = asyncio.Event()
+    service = ChatAskService(db)
+
+    async def event_gen():
+        try:
+            async for event in service.ask_stream(
+                organization_id=tenant.organization_id,
+                query=payload.query,
+                project_id=payload.project_id,
+                user_id=tenant.user_id,
+                access=access,
+                cancel_event=cancel,
+            ):
+                if await request.is_disconnected():
+                    cancel.set()
+                    break
+                yield f"data: {json.dumps(event, default=str)}\n\n"
+        finally:
+            cancel.set()
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(event_gen(), media_type="text/event-stream")
 
 
 @router.post("/shares", response_model=CreateChatShareResponse, status_code=status.HTTP_201_CREATED)
@@ -101,7 +138,7 @@ async def get_chat_share(
     )
 
 
-@router.delete("/shares/{token}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/shares/{token}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def revoke_chat_share(
     token: str,
     tenant: TenantContext = Depends(get_tenant_context),

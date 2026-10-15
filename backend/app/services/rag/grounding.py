@@ -12,6 +12,7 @@ from app.models.enums import AnswerOutcome
 from app.models.evidence import EvidenceItem
 from app.services.llm.guardrails import sanitize_evidence_content
 from app.services.llm.base import AnswerRequest, StructuredAnswer
+from app.services.llm.errors import ModelServiceError
 from app.services.llm.factory import get_llm_provider
 from app.services.llm.guardrails import (
     clamp_question,
@@ -183,10 +184,34 @@ async def generate_grounded_answer(
 
     blocks = wrap_evidence_for_prompt(evidence_blocks(items))
     allowed_ids = {str(i.id) for i in items}
-    llm = get_llm_provider()
-    structured = await llm.generate_answer(
-        AnswerRequest(question=safe_query, evidence_blocks=blocks),
-    )
+    llm = get_llm_provider(organization_id)
+    try:
+        structured = await llm.generate_answer(
+            AnswerRequest(question=safe_query, evidence_blocks=blocks),
+        )
+    except ModelServiceError as exc:
+        structured = StructuredAnswer(
+            answer=exc.user_message,
+            confidence="low",
+            evidence_ids=[],
+            reasoning_summary="Model request failed.",
+            evidence_sufficiency="insufficient",
+        )
+        behavior = classify_behavior(
+            question=safe_query,
+            evidence_items=items,
+            llm_sufficiency="insufficient",
+            retrieval_error=exc.code,
+        )
+        return GroundedAnswer(
+            question=safe_query,
+            structured=structured,
+            behavior=behavior,
+            evidence_items=items,
+            selected_ids=set(),
+            composed_answer=exc.user_message,
+            retrieval_error=exc.code,
+        )
     structured = validate_structured_answer(structured, allowed_evidence_ids=allowed_ids)
 
     behavior = classify_behavior(

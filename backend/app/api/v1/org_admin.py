@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import hashlib
 from datetime import UTC, datetime, timedelta
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.audit.service import record_audit
@@ -232,11 +233,12 @@ def list_documents(
 @limiter.limit("20/minute")
 async def upload_documents(
     request: Request,
+    *,
     tenant: TenantContext = Depends(_require_org_admin_surface),
     db: Session = Depends(get_tenant_db),
-    files: list[UploadFile] = File(...),
-    visibility_mode: str = Form(...),
-    visibility_group_ids: str | None = Form(default=None),
+    files: Annotated[list[UploadFile], File()],
+    visibility_mode: Annotated[str, Form()],
+    visibility_group_ids: Annotated[str | None, Form()] = None,
 ) -> dict:
     assert_org_admin_action(tenant, action="write", resource_type="document", resource_org_id=tenant.organization_id)
     ensure_default_access_groups(db, tenant.organization_id)
@@ -357,12 +359,12 @@ async def upload_documents(
     return {"document_ids": created}
 
 
-@router.delete("/documents/{document_id}", status_code=204)
+@router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def remove_document(
     document_id: UUID,
     tenant: TenantContext = Depends(_require_org_admin_surface),
     db: Session = Depends(get_tenant_db),
-) -> None:
+) -> Response:
     assert_org_admin_action(tenant, action="delete", resource_type="document", resource_org_id=tenant.organization_id)
     doc = db.get(ClientDocument, document_id)
     if doc is None or doc.organization_id != tenant.organization_id:
@@ -378,6 +380,7 @@ def remove_document(
     )
     db.delete(doc)
     db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 
 
 @router.post("/documents/{document_id}/retry")
@@ -641,12 +644,12 @@ def invite_member(
     }
 
 
-@router.post("/members/{membership_id}/deactivate", status_code=204)
+@router.post("/members/{membership_id}/deactivate", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def deactivate_org_member(
     membership_id: UUID,
     tenant: TenantContext = Depends(_require_org_admin_surface),
     db: Session = Depends(get_tenant_db),
-) -> None:
+) -> Response:
     assert_org_admin_action(tenant, action="write", resource_type="member", resource_org_id=tenant.organization_id)
     membership = db.get(OrganizationMembership, membership_id)
     if membership is None or membership.organization_id != tenant.organization_id:
@@ -676,6 +679,7 @@ def deactivate_org_member(
             ) from exc
         raise org_admin_error(code=code, message=code.replace("_", " ").capitalize()) from exc
     db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 
 
 @router.get("/usage", response_model=UsageSummaryResponse)
@@ -787,13 +791,13 @@ def update_chat_sharing(
     return {"enabled": org.chat_shares_enabled, "default_ttl_days": org.chat_share_ttl_days}
 
 
-@router.post("/members/{membership_id}/password-reset", status_code=204)
+@router.post("/members/{membership_id}/password-reset", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def admin_trigger_password_reset(
     membership_id: UUID,
     tenant: TenantContext = Depends(_require_org_admin_surface),
     control_db: Session = Depends(get_db),
     tenant_db: Session = Depends(get_tenant_db),
-) -> None:
+) -> Response:
     from app.services.auth.password_reset import request_password_reset
 
     membership = control_db.get(OrganizationMembership, membership_id)
@@ -816,6 +820,7 @@ def admin_trigger_password_reset(
     tenant_db.commit()
 
 
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 @router.get("/data-storage", response_model=TenantStorageResponse)
 def get_data_storage(
     tenant: TenantContext = Depends(_require_org_admin_surface),
@@ -980,11 +985,11 @@ def configure_data_storage(
     return get_data_storage(tenant, control_db)
 
 
-@router.post("/employee-link/copied", status_code=204)
+@router.post("/employee-link/copied", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def employee_link_copied(
     tenant: TenantContext = Depends(_require_org_admin_surface),
     db: Session = Depends(get_tenant_db),
-) -> None:
+) -> Response:
     checklist = build_setup_checklist(db, organization_id=tenant.organization_id)
     if not checklist.get("employee_link_enabled"):
         raise org_admin_error(
@@ -1002,6 +1007,7 @@ def employee_link_copied(
     db.commit()
 
 
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 @router.get("/employee-join/pending")
 def list_pending_joins(
     tenant: TenantContext = Depends(_require_org_admin_surface),
@@ -1029,12 +1035,12 @@ def list_pending_joins(
     ]
 
 
-@router.post("/employee-join/pending/{pending_id}/approve", status_code=204)
+@router.post("/employee-join/pending/{pending_id}/approve", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def approve_pending(
     pending_id: UUID,
     tenant: TenantContext = Depends(_require_org_admin_surface),
     control_db: Session = Depends(get_db),
-) -> None:
+) -> Response:
     from app.services.invitations.employee_join import approve_pending_join
 
     try:
@@ -1049,12 +1055,13 @@ def approve_pending(
     control_db.commit()
 
 
-@router.post("/employee-join/pending/{pending_id}/reject", status_code=204)
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+@router.post("/employee-join/pending/{pending_id}/reject", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def reject_pending(
     pending_id: UUID,
     tenant: TenantContext = Depends(_require_org_admin_surface),
     control_db: Session = Depends(get_db),
-) -> None:
+) -> Response:
     from app.services.invitations.employee_join import reject_pending_join
 
     try:
@@ -1067,3 +1074,4 @@ def reject_pending(
     except ValueError as exc:
         raise org_admin_error(code="NOT_FOUND", message=str(exc)) from exc
     control_db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

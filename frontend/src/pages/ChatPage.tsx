@@ -12,7 +12,7 @@ import MessageList from "../components/chat/MessageList";
 import { IconSidebar } from "../components/icons/Icons";
 import { fetchSources, uploadSourceFiles } from "../lib/api";
 import { useAuth } from "../lib/authContext";
-import { generateAssistantReply } from "../lib/chatAssistant";
+import { streamAssistantReply } from "../lib/chatAssistantStream";
 import { classifyChatIntent } from "../lib/chatIntent";
 import { conversationTitleAfterUserMessage } from "../lib/chatTitle";
 import {
@@ -239,23 +239,13 @@ export default function ChatPage() {
     }
 
     try {
-      const reply = await generateAssistantReply(session, text, conv.projectId, ac.signal, {
-        projectName,
-        sourcesCount: sourcesCount ?? 0,
-      });
-      if (ac.signal.aborted) return;
-
       setRetrievalStatus(null);
       setStreamingText("");
-
-      const chars = reply.content.split("");
-      let built = "";
-      for (let i = 0; i < chars.length; i++) {
-        if (ac.signal.aborted) return;
-        built += chars[i];
-        setStreamingText(built);
-        if (i % 3 === 0) await new Promise((r) => setTimeout(r, 8));
-      }
+      const reply = await streamAssistantReply(session, text, conv.projectId, {
+        signal: ac.signal,
+        onToken: (built) => setStreamingText(built),
+      });
+      if (ac.signal.aborted) return;
 
       const assistantMsg: ChatMessage = {
         id: newUuid(),

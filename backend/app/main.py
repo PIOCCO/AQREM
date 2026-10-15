@@ -14,7 +14,10 @@ from sqlalchemy import text
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
+from app.core.container_config import validate_container_startup
+from app.core.gateway_config import inspect_gateway
 from app.core.llm_config import inspect_azure_openai, llm_provider_summary
+from app.services.llm.errors import ModelServiceError
 from app.core.rate_limit import limiter
 from app.core.security_middleware import SecurityHeadersMiddleware
 from app.db.control_base import ControlBase
@@ -30,6 +33,7 @@ logger = logging.getLogger("aqrem")
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     settings = get_settings()
+    validate_container_startup(os.environ.get("CONTAINER_ROLE", ""), settings)
     summary = llm_provider_summary(settings)
     logger.info(
         "LLM provider=%s configured=%s auth=%s",
@@ -43,6 +47,13 @@ async def lifespan(_: FastAPI):
             logger.error(
                 "Azure OpenAI incomplete configuration; missing: %s",
                 ", ".join(az.missing),
+            )
+    if settings.llm_provider.lower().strip() == "gateway":
+        gw = inspect_gateway(settings)
+        if not gw.configured:
+            logger.error(
+                "Model gateway incomplete configuration; missing: %s",
+                ", ".join(gw.missing),
             )
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
@@ -99,6 +110,18 @@ def create_app() -> FastAPI:
         message = "; ".join(parts) if parts else "Request validation failed"
         return JSONResponse(status_code=422, content={"message": message, "detail": exc.errors()})
 
+    @app.exception_handler(ModelServiceError)
+    async def model_service_error_handler(_: Request, exc: ModelServiceError) -> JSONResponse:
+        status_code = exc.status_code or 503
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "message": exc.user_message,
+                "code": exc.code,
+                "retryable": exc.retryable,
+            },
+        )
+
     @app.exception_handler(HTTPException)
     async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:
         detail = exc.detail
@@ -141,7 +164,8 @@ def create_app() -> FastAPI:
             db_error = type(exc).__name__
 
         llm = llm_provider_summary(settings)
-        llm_ready = llm.get("provider") != "azure" or bool(llm.get("configured"))
+        provider = str(llm.get("provider") or "")
+        llm_ready = provider not in {"azure", "gateway"} or bool(llm.get("configured"))
 
         status = "ok" if db_ok and llm_ready else "degraded"
         payload: dict[str, object] = {
