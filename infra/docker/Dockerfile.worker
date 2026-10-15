@@ -19,7 +19,7 @@ RUN chmod +x /docker-entrypoint.sh
 
 ENV PYTHONPATH=/app/backend:/app/worker:/app
 
-WORKDIR /app/worker
+WORKDIR /app/backend
 USER root
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "-Q", "ingestion,default"]

@@ -30,9 +30,13 @@ def enqueue_source_sync_for_job(
 ) -> None:
     assert_broker_available()
     try:
-        from worker.app.tasks.ingestion import enqueue_source_sync
+        from app.celery_app import celery_app
 
-        enqueue_source_sync(str(job.id), str(organization_id))
+        celery_app.send_task(
+            "worker.app.tasks.ingestion.run_source_sync",
+            args=[str(job.id), str(organization_id)],
+            queue="ingestion",
+        )
     except ModuleNotFoundError as exc:
         logger.exception(
             "ingestion enqueue import failed org=%s job=%s",

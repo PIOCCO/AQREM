@@ -99,7 +99,10 @@ function DocumentProgressCell({ row, tick }: { row: DocRow; tick: number }) {
   return (
     <div className="space-y-1" aria-live="polite">
       <div className="flex flex-wrap items-center gap-2">
-        <span>{label}</span>
+        <span>
+          {label}
+          {active && row.index_progress > 0 ? ` · ${row.index_progress}%` : null}
+        </span>
         {active && row.index_started_at ? (
           <span className="text-xs text-chat-muted">Indexing for {formatElapsed(row.index_started_at)}</span>
         ) : null}
@@ -300,7 +303,10 @@ export default function ClientAdminDocumentsPage() {
                 <tr key={row.id} className="border-b border-chat-border last:border-0">
                   <td className="p-3">
                     <p className="font-medium">{row.file_name}</p>
-                    <p className="text-xs text-chat-muted">{formatFileSize(row.size_bytes)}</p>
+                    <p className="text-xs text-chat-muted">
+                      {formatFileSize(row.size_bytes)}
+                      {row.size_bytes === 0 ? " (empty file — remove and upload again)" : null}
+                    </p>
                     {row.failure_reason ? (
                       <p className="text-xs text-red-700 mt-1" role="alert">
                         {row.failure_reason}

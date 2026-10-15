@@ -9,7 +9,7 @@ from app.models.enums import EvidenceScope, SourceType, SyncJobStatus
 from app.models.organization import Organization
 from app.models.project import Project
 from app.models.source import Source, SourceSyncJob
-from worker.app.tasks.ingestion import (
+from app.tasks.ingestion import (
     _validate_blob_paths_for_org,
     run_source_sync,
 )
@@ -18,8 +18,8 @@ from worker.app.tasks.ingestion import (
 @pytest.fixture()
 def worker_db(db_session: Session, monkeypatch):
     """Run worker task against the same DB transaction as API tests."""
-    monkeypatch.setattr("worker.app.tasks.ingestion.SessionLocal", lambda: db_session)
-    monkeypatch.setattr("worker.app.tasks.ingestion.open_tenant_session", lambda _control, _org_id: db_session)
+    monkeypatch.setattr("app.tasks.ingestion.SessionLocal", lambda: db_session)
+    monkeypatch.setattr("app.tasks.ingestion.open_tenant_session", lambda _control, _org_id: db_session)
     monkeypatch.setattr(db_session, "close", lambda: None)
     return db_session
 
