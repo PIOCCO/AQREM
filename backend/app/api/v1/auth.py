@@ -156,13 +156,16 @@ def accept_invite_send_verification(
         if code == "EMAIL_MISMATCH":
             raise HTTPException(status_code=400, detail={"message": "Email does not match this invitation."}) from exc
         if code == "RATE_LIMIT":
+            from app.core.config import get_settings
+
+            cooldown = int(get_settings().verification_resend_cooldown_seconds)
             raise HTTPException(
                 status_code=429,
                 detail={
-                    "message": "Please wait at least 60 seconds before requesting another code.",
-                    "retry_after_seconds": 60,
+                    "message": f"Please wait at least {cooldown} seconds before requesting another code.",
+                    "retry_after_seconds": cooldown,
                 },
-                headers={"Retry-After": "60"},
+                headers={"Retry-After": str(cooldown)},
             ) from exc
         if code == "VERIFICATION_NOT_REQUIRED":
             return AcceptInvitationSendVerificationResponse(verification_required=False, email_delivered=None)

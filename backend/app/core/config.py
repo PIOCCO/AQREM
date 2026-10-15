@@ -63,6 +63,16 @@ class Settings(BaseSettings):
     email_send_timeout_seconds: float = Field(default=15.0)
     email_send_max_retries: int = Field(default=2)
     email_send_retry_backoff_seconds: float = Field(default=0.5)
+    verification_resend_cooldown_seconds: int = Field(
+        default=15,
+        ge=5,
+        le=300,
+        validation_alias=AliasChoices(
+            "verification_resend_cooldown_seconds",
+            "VERIFICATION_RESEND_COOLDOWN_SECONDS",
+        ),
+        description="Minimum seconds between invitation verification code emails.",
+    )
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     serve_frontend: bool = False

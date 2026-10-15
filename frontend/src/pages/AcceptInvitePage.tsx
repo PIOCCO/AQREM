@@ -13,6 +13,9 @@ import { isPlatformSessionToken, resolveOrganizationIdForSession, resolvePostAut
 import { previewAcceptInvitation } from "../lib/joinApi";
 import { roleLabel } from "../lib/roleLabels";
 
+/** Matches backend default VERIFICATION_RESEND_COOLDOWN_SECONDS (15). */
+const DEFAULT_RESEND_COOLDOWN_SEC = 15;
+
 function readToken(searchParams: URLSearchParams, routeToken?: string): string {
   const fromQuery = searchParams.get("token")?.trim();
   if (fromQuery) return fromQuery;
@@ -108,7 +111,7 @@ export default function AcceptInvitePage() {
     try {
       const res = await sendAcceptInvitationVerification({ token, email: preview.email });
       setCodeSent(true);
-      setResendCooldownSec(60);
+      setResendCooldownSec(DEFAULT_RESEND_COOLDOWN_SEC);
       if (res.dev_verification_code) {
         setVerificationCode(res.dev_verification_code);
       } else {
@@ -117,8 +120,14 @@ export default function AcceptInvitePage() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Could not send a verification code.";
       setError(msg);
-      if (/wait|429|too many/i.test(msg)) {
-        setResendCooldownSec(60);
+      const retry =
+        err && typeof err === "object" && "retryAfterSeconds" in err
+          ? (err as { retryAfterSeconds?: number }).retryAfterSeconds
+          : undefined;
+      if (retry && retry > 0) {
+        setResendCooldownSec(retry);
+      } else if (/wait|429|too many/i.test(msg)) {
+        setResendCooldownSec(DEFAULT_RESEND_COOLDOWN_SEC);
       }
     } finally {
       setSendingCode(false);

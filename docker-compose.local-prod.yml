@@ -73,6 +73,8 @@ services:
     build:
       context: .
       dockerfile: infra/docker/Dockerfile.api
+    env_file:
+      - .env
     volumes:
       - ./infra/dev:/app/infra/dev:ro
       - ./scripts:/app/scripts:ro
@@ -110,6 +112,8 @@ services:
     build:
       context: .
       dockerfile: infra/docker/Dockerfile.worker
+    env_file:
+      - .env
     volumes:
       - ./infra/dev:/app/infra/dev:ro
     environment:

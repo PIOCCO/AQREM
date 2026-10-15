@@ -13,8 +13,13 @@ from app.services.invitations.tokens import hash_token
 
 VERIFICATION_TTL = timedelta(minutes=10)
 MAX_VERIFY_ATTEMPTS = 5
-MIN_SECONDS_BETWEEN_SENDS = 60
 MAX_SENDS_PER_HOUR = 5
+
+
+def verification_resend_cooldown_seconds() -> int:
+    from app.core.config import get_settings
+
+    return int(get_settings().verification_resend_cooldown_seconds)
 
 
 def generate_six_digit_code() -> str:
@@ -43,7 +48,7 @@ def assert_can_send_verification_email(
         sent = last_sent_at
         if sent.tzinfo is None:
             sent = sent.replace(tzinfo=timezone.utc)
-        if (now - sent).total_seconds() < MIN_SECONDS_BETWEEN_SENDS:
+        if (now - sent).total_seconds() < verification_resend_cooldown_seconds():
             raise ValueError("RATE_LIMIT_SEND")
     hour_ago = now - timedelta(hours=1)
     count = (

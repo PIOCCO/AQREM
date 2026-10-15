@@ -261,7 +261,9 @@ def resend_admin_invitation(
     if last is not None:
         if last.tzinfo is None:
             last = last.replace(tzinfo=timezone.utc)
-        if (now - last).total_seconds() < 60:
+        from app.services.email.verification_policy import verification_resend_cooldown_seconds
+
+        if (now - last).total_seconds() < verification_resend_cooldown_seconds():
             raise ValueError("RESEND_RATE_LIMIT")
     if not invitation.token_ciphertext:
         raise ValueError("LINK_UNAVAILABLE")

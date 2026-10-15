@@ -174,13 +174,23 @@ export async function resetPasswordWithToken(token: string, newPassword: string)
   if (!res.ok) throw new Error(await readApiError(res, "This reset link is invalid or expired"));
 }
 
+export type SendVerificationError = Error & { retryAfterSeconds?: number };
+
 export async function sendAcceptInvitationVerification(payload: { token: string; email: string }) {
   const res = await fetch(`${apiBase()}/api/v1/auth/accept-invitation/send-verification`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(await readApiError(res, "Could not send verification code"));
+  if (!res.ok) {
+    const retryHeader = res.headers.get("Retry-After");
+    const parsedHeader = retryHeader ? Number.parseInt(retryHeader, 10) : NaN;
+    const err = new Error(await readApiError(res, "Could not send verification code")) as SendVerificationError;
+    if (Number.isFinite(parsedHeader) && parsedHeader > 0) {
+      err.retryAfterSeconds = parsedHeader;
+    }
+    throw err;
+  }
   return res.json() as Promise<{ verification_required: boolean; dev_verification_code?: string | null }>;
 }
 
