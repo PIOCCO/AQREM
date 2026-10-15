@@ -89,20 +89,26 @@ def _require_org_admin_surface(request: Request, tenant: TenantContext = Depends
 
 
 def _sync_document_from_job(doc: ClientDocument, job: SourceSyncJob | None) -> None:
-    """Legacy fallback when worker has not yet written progress columns."""
-    if job is None or doc.index_stage in {"indexed", "failed", "empty"}:
+    """Align document row with sync job when worker or UI state diverges."""
+    if job is None:
+        return
+    if doc.index_stage in {"indexed", "failed", "empty"} and doc.status in {"indexed", "failed"}:
+        return
+    if job.status == SyncJobStatus.COMPLETED.value:
+        if doc.status != "indexed" or doc.index_stage != "indexed":
+            doc.status = "indexed"
+            doc.index_progress = 100
+            doc.index_stage = "indexed"
+            doc.failure_reason = None
+        return
+    if job.status == SyncJobStatus.FAILED.value:
+        if doc.status != "failed" or doc.index_stage != "failed":
+            doc.status = "failed"
+            doc.index_stage = "failed"
+            doc.failure_reason = job.error_message or "Indexing failed"
         return
     if doc.index_progress_updated_at is not None:
         return
-    if job.status == SyncJobStatus.COMPLETED.value:
-        doc.status = "indexed"
-        doc.index_progress = 100
-        doc.index_stage = "indexed"
-        doc.failure_reason = None
-    elif job.status == SyncJobStatus.FAILED.value:
-        doc.status = "failed"
-        doc.index_stage = "failed"
-        doc.failure_reason = job.error_message or "Indexing failed"
 
 
 def _ensure_document_source(db: Session, tenant: TenantContext) -> Source:

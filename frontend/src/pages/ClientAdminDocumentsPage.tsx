@@ -79,7 +79,9 @@ function stageLabel(row: DocRow): string {
 }
 
 function isActiveRow(row: DocRow): boolean {
-  return ["queued", "uploading", "indexing"].includes(row.status) && !["indexed", "failed"].includes(row.index_stage);
+  const terminal = ["indexed", "failed", "empty"];
+  if (terminal.includes(row.index_stage)) return false;
+  return ["queued", "uploading", "indexing"].includes(row.status);
 }
 
 function formatElapsed(startIso: string | null): string {
@@ -171,14 +173,15 @@ export default function ClientAdminDocumentsPage() {
   }, [load]);
 
   const indexingCount = data?.counts?.indexing ?? 0;
+  const activeOnPage = data?.items.some(isActiveRow) ?? false;
 
   useEffect(() => {
-    if (!session || indexingCount <= 0) return;
+    if (!session || (indexingCount <= 0 && !activeOnPage)) return;
     const id = window.setInterval(() => {
       void load({ silent: true });
     }, 1500);
     return () => window.clearInterval(id);
-  }, [session, indexingCount, load]);
+  }, [session, indexingCount, activeOnPage, load]);
 
   useEffect(() => {
     if (indexingCount <= 0) return;
