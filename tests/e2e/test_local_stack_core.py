@@ -6,9 +6,7 @@ Requires: postgres, redis, worker, gateway, fake azure upstream.
 
 from __future__ import annotations
 
-import asyncio
-import time
-from uuid import uuid4
+import os
 
 import httpx
 import pytest
@@ -33,8 +31,14 @@ async def test_health_and_version(api_base: str):
         assert body.get("llm_provider") == "gateway"
 
 
+def _gateway_health_url() -> str:
+    """In compose exec, use service DNS; on host use published port (8088)."""
+    base = (os.environ.get("GATEWAY_URL") or "http://model-gateway:8080").rstrip("/")
+    return f"{base}/health/live"
+
+
 @pytest.mark.asyncio
-async def test_gateway_smoke_from_host():
+async def test_gateway_smoke():
     async with httpx.AsyncClient(timeout=30.0) as client:
-        r = await client.get("http://127.0.0.1:8088/health/live")
+        r = await client.get(_gateway_health_url())
         assert r.status_code == 200

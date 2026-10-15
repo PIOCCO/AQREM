@@ -15,6 +15,7 @@ docker compose exec -T api env LLM_PROVIDER=gateway \
   python /app/scripts/verify_model_integration.py
 
 echo "=== Core flow pytest ==="
-docker compose exec -T api pytest /app/tests/e2e/test_local_stack_core.py -q
+docker compose exec -T api env GATEWAY_URL=http://model-gateway:8080 \
+  pytest /app/tests/e2e/test_local_stack_core.py -q
 
 echo "SMOKED PASS"
