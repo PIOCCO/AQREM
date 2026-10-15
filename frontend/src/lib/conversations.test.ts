@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createConversation,
+  createEphemeralConversation,
   dedupeEmptyConversations,
   deleteConversation,
   findEmptyConversation,
@@ -72,6 +73,19 @@ describe("conversations storage", () => {
     dedupeEmptyConversations();
     expect(listConversations().filter((c) => c.title === "New chat" && c.messages.length === 0).length).toBe(1);
     expect(findEmptyConversation()).not.toBeNull();
+  });
+
+  it("ephemeral conversations stay out of sidebar storage", () => {
+    const ephemeral = createEphemeralConversation();
+    ephemeral.messages.push({
+      id: "m1",
+      role: "user",
+      content: "hello",
+      createdAt: new Date().toISOString(),
+    });
+    saveConversation(ephemeral);
+    expect(listConversations()).toHaveLength(0);
+    expect(getConversation(ephemeral.id)?.messages).toHaveLength(1);
   });
 
   it("delete leaves sibling conversations intact", () => {

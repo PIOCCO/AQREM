@@ -1,7 +1,7 @@
 """Chat intent routing before retrieval."""
 
 from app.services.chat.intent import classify_chat_intent, build_conversational_answer
-from app.services.chat.messages import format_insufficient_evidence_message
+from app.services.chat.messages import format_insufficient_evidence_message, format_no_indexed_documents_message
 
 
 def test_greeting_intent():
@@ -31,3 +31,15 @@ def test_insufficient_evidence_message_template():
     assert "Acme GRC" in msg
     assert "3 sources searched" in msg
     assert "authorized" not in msg.lower()
+
+
+def test_insufficient_evidence_message_org_wide():
+    msg = format_insufficient_evidence_message(project_name=None, sources_searched=2)
+    assert "your organization" in msg
+    assert "2 sources searched" in msg
+
+
+def test_no_indexed_documents_message():
+    msg = format_no_indexed_documents_message()
+    assert "indexed" in msg.lower()
+    assert "admin" in msg.lower()

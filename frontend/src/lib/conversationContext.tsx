@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   createConversation,
+  createEphemeralConversation,
   dedupeEmptyConversations,
   deleteConversation,
   findEmptyConversation,
@@ -42,9 +43,12 @@ export function ConversationProvider({ children }: { children: ReactNode }) {
 
   const createNew = useCallback(
     (projectId: string | null = null) => {
+      if (projectId == null) {
+        return createEphemeralConversation();
+      }
       const existing = findEmptyConversation();
       if (existing) {
-        if (projectId != null && existing.projectId !== projectId) {
+        if (existing.projectId !== projectId) {
           saveConversation({ ...existing, projectId });
           refresh();
           return getConversation(existing.id) ?? existing;
@@ -76,6 +80,9 @@ export function ConversationProvider({ children }: { children: ReactNode }) {
 
   const upsert = useCallback(
     (conversation: ChatConversation) => {
+      if (conversation.ephemeral) {
+        return saveConversation(conversation);
+      }
       // Do not resurrect conversations removed from storage (e.g. after delete).
       if (!getConversation(conversation.id)) {
         return conversation;

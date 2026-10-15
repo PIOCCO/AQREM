@@ -4,14 +4,20 @@ import time
 from collections.abc import AsyncIterator
 from uuid import UUID
 
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
-from app.models.enums import AnswerOutcome
+from app.models.enums import AnswerOutcome, EvidenceScope
+from app.models.evidence import EvidenceItem
 from app.models.project import Project
 from app.models.source import Source
 from app.schemas.evidence import EvidenceItemSummaryResponse
 from app.services.chat.intent import build_conversational_answer, classify_chat_intent
-from app.services.chat.messages import format_insufficient_evidence_message
+from app.services.access_control.policy import evidence_acl_filter
+from app.services.chat.messages import (
+    format_insufficient_evidence_message,
+    format_no_indexed_documents_message,
+)
 from app.services.library.service import AnswerLibraryService
 from app.core.config import get_settings
 from app.services.llm.errors import ModelServiceError
@@ -53,6 +59,51 @@ def _count_project_sources(db: Session, organization_id: UUID, project_id: UUID 
     if project_id is not None:
         q = q.filter(Source.project_id == project_id)
     return q.count()
+
+
+def _has_accessible_evidence(
+    db: Session,
+    *,
+    organization_id: UUID,
+    project_id: UUID | None,
+    access: UserAccessContext | None,
+) -> bool:
+    q = db.query(EvidenceItem.id).filter(EvidenceItem.organization_id == organization_id)
+    if project_id is not None:
+        q = q.filter(
+            or_(
+                EvidenceItem.project_id == project_id,
+                and_(
+                    EvidenceItem.project_id.is_(None),
+                    EvidenceItem.scope == EvidenceScope.ORGANIZATION.value,
+                ),
+            )
+        )
+    if access is not None:
+        q = evidence_acl_filter(q, access, EvidenceItem)
+    return q.limit(1).first() is not None
+
+
+def _no_indexed_payload(*, project_name: str | None, sources_searched: int) -> dict:
+    return {
+        "answer": format_no_indexed_documents_message(),
+        "confidence": "low",
+        "evidence_sufficiency": "insufficient",
+        "reasoning_summary": None,
+        "is_draft": False,
+        "from_library": False,
+        "library_entry_id": None,
+        "citations": [],
+        "outcome": AnswerOutcome.INSUFFICIENT_EVIDENCE.value,
+        "conversational": False,
+        "missing_information": [],
+        "next_steps": [],
+        "needs_review": False,
+        "conflicts": [],
+        "project_name": project_name,
+        "sources_searched": sources_searched,
+        "query_time_ms": 0,
+    }
 
 
 class ChatAskService:
@@ -164,6 +215,14 @@ class ChatAskService:
                 "sources_searched": sources_searched,
                 "query_time_ms": 0,
             }
+
+        if not _has_accessible_evidence(
+            self.db,
+            organization_id=organization_id,
+            project_id=project_id,
+            access=access,
+        ):
+            return {"query": safe_query, **_no_indexed_payload(project_name=project_name, sources_searched=sources_searched)}
 
         library = AnswerLibraryService(self.db)
         entries = library.search_entries(
@@ -302,6 +361,28 @@ class ChatAskService:
                 yield ev
             return
 
+        if not _has_accessible_evidence(
+            self.db,
+            organization_id=organization_id,
+            project_id=project_id,
+            access=access,
+        ):
+            payload = _no_indexed_payload(project_name=project_name, sources_searched=sources_searched)
+            async for ev in _stream_text(
+                payload["answer"],
+                {
+                    "conversational": False,
+                    "outcome": payload["outcome"],
+                    "citations": [],
+                    "is_draft": payload["is_draft"],
+                    "evidence_sufficiency": payload["evidence_sufficiency"],
+                    "project_name": project_name,
+                    "sources_searched": sources_searched,
+                },
+            ):
+                yield ev
+            return
+
         items = await RetrievalService(self.db).retrieve(
             organization_id=organization_id,
             query=safe_query,
@@ -323,6 +404,8 @@ class ChatAskService:
                     "citations": [],
                     "is_draft": True,
                     "evidence_sufficiency": "insufficient",
+                    "project_name": project_name,
+                    "sources_searched": sources_searched,
                 },
             ):
                 yield ev

@@ -29,16 +29,12 @@ export function classifyChatIntent(query: string): ChatIntent | null {
   return null;
 }
 
-export function buildConversationalReply(intent: ChatIntent, opts?: { hasProjects?: boolean }): string {
-  const noProject =
-    opts?.hasProjects === false
-      ? " Create a project first (Projects in the sidebar) to connect your documents."
-      : "";
+export function buildConversationalReply(intent: ChatIntent): string {
   if (intent === "greeting") {
-    return `Hello! I can help you find answers in your project sources and work through questionnaires.${noProject}`;
+    return "Hello! I can help you find answers in your company documents and work through questionnaires.";
   }
   if (intent === "thanks") {
-    return `You're welcome. Ask anytime if you need another answer from your sources.${noProject}`;
+    return "You're welcome. Ask anytime if you need another answer from your indexed sources.";
   }
-  return `I search your active project sources, cite evidence, and help with questionnaires and review.${noProject}`;
+  return "I search your organization's indexed documents, cite evidence, and help with questionnaires and review.";
 }

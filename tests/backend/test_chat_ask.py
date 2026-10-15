@@ -71,6 +71,82 @@ async def test_chat_ask_returns_evidence_backed_answer(client: TestClient, db_se
         assert len(body["citations"]) >= 1
 
 
+@pytest.mark.asyncio
+async def test_chat_ask_org_wide_without_project_id(client: TestClient, db_session, demo_repo_path: str):
+    org = Organization(name="Org Wide Chat", slug="org-wide-chat")
+    db_session.add(org)
+    db_session.flush()
+    user = User(email="orgwide@acme.example", hashed_password=hash_password("password"), full_name="Org Wide")
+    db_session.add(user)
+    db_session.flush()
+    db_session.add(
+        OrganizationMembership(organization_id=org.id, user_id=user.id, role=Role.EDITOR.value),
+    )
+    project = Project(organization_id=org.id, name="Platform")
+    db_session.add(project)
+    db_session.flush()
+    source = Source(
+        organization_id=org.id,
+        project_id=project.id,
+        name="Demo",
+        source_type=SourceType.FOLDER_ARCHIVE.value,
+        scope=EvidenceScope.PROJECT.value,
+    )
+    mark_source_visible_to_all_staff(source)
+    db_session.add(source)
+    db_session.flush()
+    job = SourceSyncJob(organization_id=org.id, source_id=source.id, status=SyncJobStatus.RUNNING.value)
+    db_session.add(job)
+    db_session.flush()
+
+    root = Path(demo_repo_path)
+    files = [
+        FilePayload(relative_path=str(p.relative_to(root)), data=p.read_bytes())
+        for p in root.rglob("*")
+        if p.is_file()
+    ]
+    await index_files(db_session, source=source, job=job, files=files)
+    db_session.flush()
+
+    token = create_access_token(str(user.id), {"organization_id": str(org.id), "role": Role.EDITOR.value})
+    res = client.post(
+        "/api/v1/chat/ask",
+        headers=_auth_headers(token, str(org.id)),
+        json={"query": "Do you encrypt customer data at rest?"},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["query"]
+    assert body["answer"]
+    assert "don't have a project" not in body["answer"].lower()
+    assert body.get("conversational") is not True
+
+
+@pytest.mark.asyncio
+async def test_chat_ask_no_indexed_documents(client: TestClient, db_session):
+    org = Organization(name="Empty Org", slug="empty-org-chat")
+    db_session.add(org)
+    db_session.flush()
+    user = User(email="empty@acme.example", hashed_password=hash_password("password"), full_name="Empty")
+    db_session.add(user)
+    db_session.flush()
+    db_session.add(
+        OrganizationMembership(organization_id=org.id, user_id=user.id, role=Role.EDITOR.value),
+    )
+    db_session.flush()
+
+    token = create_access_token(str(user.id), {"organization_id": str(org.id), "role": Role.EDITOR.value})
+    res = client.post(
+        "/api/v1/chat/ask",
+        headers=_auth_headers(token, str(org.id)),
+        json={"query": "What is our password policy?"},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert "indexed" in body["answer"].lower()
+    assert body.get("conversational") is not True
+
+
 def test_chat_ask_requires_auth(client: TestClient):
     res = client.post("/api/v1/chat/ask", json={"query": "hello"})
     assert res.status_code == 401

@@ -1,11 +1,18 @@
 """User-facing chat message templates."""
 
 
+def format_no_indexed_documents_message() -> str:
+    return "No documents are indexed yet. Ask your admin to upload sources."
+
+
 def format_insufficient_evidence_message(*, project_name: str | None, sources_searched: int) -> str:
-    label = project_name.strip() if project_name and project_name.strip() else "this project"
+    scoped_to_project = bool(project_name and project_name.strip())
+    label = project_name.strip() if scoped_to_project else "your organization"
     n = max(0, int(sources_searched))
     source_phrase = f"{n} source{'s' if n != 1 else ''} searched"
-    return (
-        f"I couldn't find evidence for that in **{label}** ({source_phrase}). "
+    tail = (
         "Try rephrasing, or add the document that covers it."
+        if scoped_to_project
+        else "Try rephrasing, or ask your admin to add the document that covers it."
     )
+    return f"I couldn't find evidence for that in **{label}** ({source_phrase}). {tail}"

@@ -7,6 +7,7 @@ import ChatComposerDock from "../components/chat/ChatComposerDock";
 import ChatMainColumn from "../components/chat/ChatMainColumn";
 import ChatConversationHeader from "../components/chat/ChatConversationHeader";
 import ChatEmptyState from "../components/chat/ChatEmptyState";
+import UnsavedChatNotice from "../components/chat/UnsavedChatNotice";
 import ScopePicker from "../components/chat/ScopePicker";
 import MessageList from "../components/chat/MessageList";
 import { IconSidebar } from "../components/icons/Icons";
@@ -119,21 +120,26 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    if (!session || !projectId) {
+    if (!session) {
       setUploadSourceId(null);
       setSourcesCount(null);
       return;
     }
     setUploadSourceLoading(true);
-    fetchSources(session, projectId)
+    fetchSources(session, projectId ?? undefined)
       .then((rows) => {
         const list = Array.isArray(rows) ? rows : [];
-        setSourcesCount(list.filter((s: { project_id?: string }) => s.project_id === projectId).length);
-        const match = list.find(
-          (s: { project_id?: string; source_type: string; id: string }) =>
-            s.project_id === projectId && UPLOAD_SOURCE_TYPES.has(s.source_type),
-        );
-        setUploadSourceId(match?.id ?? list.find((s: { project_id?: string }) => s.project_id === projectId)?.id ?? null);
+        if (projectId) {
+          setSourcesCount(list.filter((s: { project_id?: string }) => s.project_id === projectId).length);
+          const match = list.find(
+            (s: { project_id?: string; source_type: string; id: string }) =>
+              s.project_id === projectId && UPLOAD_SOURCE_TYPES.has(s.source_type),
+          );
+          setUploadSourceId(match?.id ?? list.find((s: { project_id?: string }) => s.project_id === projectId)?.id ?? null);
+        } else {
+          setSourcesCount(list.length);
+          setUploadSourceId(null);
+        }
       })
       .catch(() => {
         setUploadSourceId(null);
@@ -231,17 +237,21 @@ export default function ChatPage() {
 
     setLoading(true);
     setStreamingText(null);
+    const scopeProjectId = conv.projectId ?? projectId ?? null;
     if (!classifyChatIntent(text)) {
-      const n = sourcesCount ?? 0;
-      setRetrievalStatus(`Searching ${n} source${n === 1 ? "" : "s"}…`);
+      if (scopeProjectId) {
+        const n = sourcesCount ?? 0;
+        setRetrievalStatus(`Searching ${n} source${n === 1 ? "" : "s"}…`);
+      } else {
+        setRetrievalStatus("Searching company documents…");
+      }
     } else {
       setRetrievalStatus(null);
     }
 
     try {
-      setRetrievalStatus(null);
       setStreamingText("");
-      const reply = await streamAssistantReply(session, text, conv.projectId, {
+      const reply = await streamAssistantReply(session, text, scopeProjectId, {
         signal: ac.signal,
         onToken: (built) => setStreamingText(built),
       });
@@ -362,6 +372,8 @@ export default function ChatPage() {
   const name = greetingName(user?.fullName, user?.email);
   const atHome = !conversationId;
 
+  const unsavedNotice = <UnsavedChatNotice visible={!projectId} />;
+
   const composer = (
     <ChatComposer
       ref={composerRef}
@@ -402,7 +414,9 @@ export default function ChatPage() {
             <ChatEmptyState name={name} projectName={projectName} onPickPrompt={setInput} />
           </ChatMainColumn>
         </div>
-        <ChatComposerDock scopePicker={scopePicker}>{composer}</ChatComposerDock>
+        <ChatComposerDock scopePicker={scopePicker} notice={unsavedNotice}>
+          {composer}
+        </ChatComposerDock>
       </div>
     );
   }
@@ -431,7 +445,9 @@ export default function ChatPage() {
               <ChatEmptyState name={name} projectName={projectName} onPickPrompt={setInput} />
             </ChatMainColumn>
           </div>
-          <ChatComposerDock scopePicker={scopePicker}>{composer}</ChatComposerDock>
+          <ChatComposerDock scopePicker={scopePicker} notice={unsavedNotice}>
+            {composer}
+          </ChatComposerDock>
         </>
       ) : (
         <>
@@ -443,7 +459,9 @@ export default function ChatPage() {
             onRetry={onRetry}
             onFeedback={onFeedback}
           />
-          <ChatComposerDock scopePicker={scopePicker}>{composer}</ChatComposerDock>
+          <ChatComposerDock scopePicker={scopePicker} notice={unsavedNotice}>
+            {composer}
+          </ChatComposerDock>
         </>
       )}
     </div>

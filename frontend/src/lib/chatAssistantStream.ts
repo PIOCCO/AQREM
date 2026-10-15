@@ -43,7 +43,7 @@ export async function streamAssistantReply(
 
   const intent = classifyChatIntent(trimmed);
   if (intent) {
-    const content = buildConversationalReply(intent, { hasProjects: Boolean(projectId) });
+    const content = buildConversationalReply(intent);
     handlers.onToken(content);
     return {
       content,
@@ -52,19 +52,12 @@ export async function streamAssistantReply(
     };
   }
 
-  if (!projectId) {
-    const content =
-      "You don't have a project selected yet. Create a project to connect sources, then ask questions about your documents.";
-    handlers.onToken(content);
-    return { content, meta: { conversational: true, isDraft: false }, skippedRetrieval: true };
-  }
-
   let content = "";
   let meta: ChatMessageMeta = { isDraft: true, userQuery: trimmed };
 
   await askChatStream(
     session,
-    { query: trimmed, project_id: projectId },
+    { query: trimmed, project_id: projectId ?? null },
     {
       signal: handlers.signal,
       onEvent: (event: ChatStreamEvent) => {

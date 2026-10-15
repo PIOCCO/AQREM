@@ -44,7 +44,7 @@ def build_conversational_answer(intent: str) -> str:
     starters = "\n".join(f"- {s}" for s in STARTER_PROMPTS[:3])
     if intent == "greeting":
         return (
-            "Hello! I'm here to help you find answers in your project sources and work through questionnaires.\n\n"
+            "Hello! I'm here to help you find answers in your company documents and work through questionnaires.\n\n"
             f"**Try one of these:**\n{starters}"
         )
     if intent == "thanks":
@@ -53,6 +53,6 @@ def build_conversational_answer(intent: str) -> str:
             f"**Try one of these:**\n{starters}"
         )
     return (
-        "I search your active project sources, cite evidence, and help with questionnaires and review workflows.\n\n"
+        "I search your organization's indexed documents, cite evidence, and help with questionnaires and review workflows.\n\n"
         f"**Try one of these:**\n{starters}"
     )

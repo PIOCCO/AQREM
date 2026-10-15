@@ -55,9 +55,8 @@ export async function generateAssistantReply(
 
   const intent = classifyChatIntent(trimmed);
   if (intent) {
-    const hasProjects = Boolean(projectId);
     return {
-      content: buildConversationalReply(intent, { hasProjects }),
+      content: buildConversationalReply(intent),
       meta: {
         conversational: true,
         isDraft: false,
@@ -68,17 +67,8 @@ export async function generateAssistantReply(
     };
   }
 
-  if (!projectId) {
-    return {
-      content:
-        "You don't have a project selected yet. Create a project to connect sources, then ask questions about your documents.",
-      meta: { conversational: true, isDraft: false },
-      skippedRetrieval: true,
-    };
-  }
-
   try {
-    const data = await askChat(session, { query: trimmed, project_id: projectId });
+    const data = await askChat(session, { query: trimmed, project_id: projectId ?? null });
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
     const citations = mapCitations((data.citations ?? []) as CitationPayload[]);

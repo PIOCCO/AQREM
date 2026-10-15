@@ -56,9 +56,13 @@ export type ChatConversation = {
   messages: ChatMessage[];
   createdAt: string;
   updatedAt: string;
+  /** Session-only chat when no project is selected (not in sidebar / localStorage). */
+  ephemeral?: boolean;
 };
 
 const STORAGE_KEY = "aqrem_chat_conversations_v1";
+
+const ephemeralSessions = new Map<string, ChatConversation>();
 
 function readAll(): ChatConversation[] {
   try {
@@ -80,7 +84,11 @@ export function listConversations(): ChatConversation[] {
 }
 
 export function getConversation(id: string): ChatConversation | null {
-  return readAll().find((c) => c.id === id) ?? null;
+  return ephemeralSessions.get(id) ?? readAll().find((c) => c.id === id) ?? null;
+}
+
+export function isEphemeralConversation(c: ChatConversation): boolean {
+  return Boolean(c.ephemeral);
 }
 
 export function isEmptyConversation(c: ChatConversation): boolean {
@@ -100,6 +108,21 @@ export function dedupeEmptyConversations(): void {
   writeAll(all.filter((c) => !isEmptyConversation(c) || c.id === keepId));
 }
 
+export function createEphemeralConversation(): ChatConversation {
+  const now = new Date().toISOString();
+  const conv: ChatConversation = {
+    id: newUuid(),
+    title: "New chat",
+    projectId: null,
+    messages: [],
+    createdAt: now,
+    updatedAt: now,
+    ephemeral: true,
+  };
+  ephemeralSessions.set(conv.id, conv);
+  return conv;
+}
+
 export function createConversation(projectId: string | null = null): ChatConversation {
   const now = new Date().toISOString();
   const conv: ChatConversation = {
@@ -109,6 +132,7 @@ export function createConversation(projectId: string | null = null): ChatConvers
     messages: [],
     createdAt: now,
     updatedAt: now,
+    ephemeral: false,
   };
   const all = readAll();
   all.unshift(conv);
@@ -117,9 +141,13 @@ export function createConversation(projectId: string | null = null): ChatConvers
 }
 
 export function saveConversation(conversation: ChatConversation) {
+  const next = { ...conversation, updatedAt: new Date().toISOString() };
+  if (conversation.ephemeral) {
+    ephemeralSessions.set(conversation.id, next);
+    return next;
+  }
   const all = readAll();
   const idx = all.findIndex((c) => c.id === conversation.id);
-  const next = { ...conversation, updatedAt: new Date().toISOString() };
   if (idx < 0) {
     // Avoid resurrecting conversations removed from storage (e.g. after delete).
     return next;
@@ -130,6 +158,7 @@ export function saveConversation(conversation: ChatConversation) {
 }
 
 export function deleteConversation(id: string) {
+  ephemeralSessions.delete(id);
   writeAll(readAll().filter((c) => c.id !== id));
 }
 
