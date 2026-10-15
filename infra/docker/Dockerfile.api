@@ -13,10 +13,13 @@ RUN pip install --no-cache-dir -e /app/backend[dev]
 
 COPY backend /app/backend
 COPY worker /app/worker
+COPY infra/docker/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 ENV PYTHONPATH=/app/backend:/app/worker
 ENV APP_ENV=production
 
 WORKDIR /app/backend
-USER aqrem
+USER root
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
