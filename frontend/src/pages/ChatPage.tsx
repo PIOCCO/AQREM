@@ -64,6 +64,8 @@ export default function ChatPage() {
   const [retrievalStatus, setRetrievalStatus] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const lastQueryRef = useRef<string | null>(null);
+  /** Avoid clearing conversation state while routing from `/` to `/c/:id` after first send. */
+  const pendingRouteConvIdRef = useRef<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const { push: toast } = useToast();
   const [uploadSourceId, setUploadSourceId] = useState<string | null>(null);
@@ -82,8 +84,12 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!conversationId) {
+      if (pendingRouteConvIdRef.current) return;
       setConversation(null);
       return;
+    }
+    if (pendingRouteConvIdRef.current === conversationId) {
+      pendingRouteConvIdRef.current = null;
     }
     const conv = getConversation(conversationId);
     if (!conv) {
@@ -96,6 +102,15 @@ export default function ChatPage() {
       setProjectId(conv.projectId);
     }
   }, [conversationId, navigate, projectId, setProjectId]);
+
+  /** Prefer in-memory state when URL has caught up to a conversation we just created. */
+  const activeConversation = useMemo(() => {
+    if (conversationId) {
+      if (conversation?.id === conversationId) return conversation;
+      return getConversation(conversationId) ?? conversation;
+    }
+    return conversation;
+  }, [conversation, conversationId]);
 
   useEffect(() => {
     return () => {
@@ -281,22 +296,21 @@ export default function ChatPage() {
   }
 
   async function onSend() {
-    if (!session) return;
-    let conv = conversation ?? (conversationId ? getConversation(conversationId) : null);
-    if (!conv) {
-      conv = createNew(PRODUCT_V1 ? null : projectId);
-      setConversation(conv);
-      if (!conversationId) navigate(`/c/${conv.id}`, { replace: true });
-    }
+    if (!session || loading) return;
+
     const text = input.trim();
     const hasPendingFiles = attachments.some((a) => a.status === "pending");
     if (!text && !hasPendingFiles) return;
 
-    let uploadNote: string | undefined;
-    try {
-      uploadNote = await uploadAttachments();
-    } catch {
-      return;
+    let conv =
+      activeConversation ??
+      (conversationId ? getConversation(conversationId) : null);
+    if (!conv) {
+      conv = createNew(PRODUCT_V1 ? null : projectId);
+      upsert(conv);
+      pendingRouteConvIdRef.current = conv.id;
+      navigate(`/c/${conv.id}`, { replace: true });
+      setConversation(conv);
     }
 
     const attachmentMeta = formatAttachmentMeta(attachments.filter((a) => a.status !== "error"));
@@ -306,10 +320,7 @@ export default function ChatPage() {
       role: "user",
       content: userContent,
       createdAt: new Date().toISOString(),
-      meta: {
-        ...(uploadNote ? { uploadNote } : {}),
-        ...(attachmentMeta.length ? { attachments: attachmentMeta } : {}),
-      },
+      meta: attachmentMeta.length ? { attachments: attachmentMeta } : {},
     };
 
     conv = {
@@ -324,8 +335,28 @@ export default function ChatPage() {
     requestAnimationFrame(focusComposer);
     window.setTimeout(focusComposer, 0);
 
-    if (text) await streamReply(text, conv);
-    else if (uploadNote) {
+    let uploadNote: string | undefined;
+    if (hasPendingFiles) {
+      try {
+        uploadNote = await uploadAttachments();
+      } catch {
+        return;
+      }
+      if (uploadNote) {
+        const withNote = persist({
+          ...conv,
+          messages: conv.messages.map((m) =>
+            m.id === userMsg.id ? { ...m, meta: { ...m.meta, uploadNote } } : m,
+          ),
+        });
+        conv = withNote;
+      }
+    }
+
+    if (text) {
+      setLoading(true);
+      await streamReply(text, conv);
+    } else if (uploadNote) {
       const assistantMsg: ChatMessage = {
         id: newUuid(),
         role: "assistant",
@@ -345,27 +376,27 @@ export default function ChatPage() {
   }
 
   function onFeedback(messageId: string, feedback: "good" | "bad") {
-    if (!conversation) return;
-    const messages = conversation.messages.map((m) =>
+    if (!activeConversation) return;
+    const messages = activeConversation.messages.map((m) =>
       m.id === messageId ? { ...m, meta: { ...m.meta, feedback } } : m,
     );
-    persist({ ...conversation, messages });
+    persist({ ...activeConversation, messages });
     toast(feedback === "good" ? "Thanks for the feedback" : "Feedback recorded — we'll use this to improve answers");
   }
 
   function onRetry() {
     const q = lastQueryRef.current;
-    if (!conversation || !q) return;
-    const trimmed = conversation.messages;
+    const convNow = activeConversation;
+    if (!convNow || !q) return;
+    const trimmed = convNow.messages;
     const withoutError = trimmed[trimmed.length - 1]?.meta?.error ? trimmed.slice(0, -1) : trimmed;
-    const conv = persist({ ...conversation, messages: withoutError });
+    const conv = persist({ ...convNow, messages: withoutError });
     void streamReply(q, conv);
   }
 
   if (!session) return null;
 
   const name = greetingName(user?.fullName, user?.email);
-  const atHome = !conversationId;
 
   const composer = (
     <ChatComposer
@@ -376,7 +407,7 @@ export default function ChatPage() {
       onStop={onStop}
       streaming={loading && streamingText != null}
       loading={loading}
-      disabled={false}
+      disabled={loading}
       attachments={attachments}
       onPickFiles={onPickFiles}
       onRemoveAttachment={onRemoveAttachment}
@@ -385,7 +416,7 @@ export default function ChatPage() {
     />
   );
 
-  if (conversationId && !conversation) {
+  if (conversationId && !activeConversation) {
     return (
       <div className="chat-view bg-chat-main flex items-center justify-center min-h-[40vh]">
         <LoadingState label="Loading conversation…" />
@@ -393,45 +424,27 @@ export default function ChatPage() {
     );
   }
 
-  if (atHome) {
-    return (
-      <div className="chat-view bg-chat-main">
-        <ChatConversationHeader
-          conversationTitle="New chat"
-          onOpenSidebar={outlet?.openMobileSidebar}
-          session={session}
-          conversation={conversation}
-        />
-        <div className="min-h-0 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col">
-          <ChatMainColumn className="flex flex-1 flex-col min-h-0" data-testid="chat-scroll-column">
-            <ChatEmptyState name={name} projectName={projectName} onPickPrompt={setInput} />
-          </ChatMainColumn>
-        </div>
-        <ChatComposerDock scopePicker={scopePicker ?? undefined}>
-          {composer}
-        </ChatComposerDock>
-      </div>
-    );
-  }
-
-  const empty = conversation!.messages.length === 0 && !streamingText && !retrievalStatus;
+  const headerTitle = activeConversation?.title ?? "New chat";
+  const showWelcome =
+    !activeConversation ||
+    (activeConversation.messages.length === 0 && !streamingText && !retrievalStatus && !loading);
 
   async function onRegenerate(userQuery: string) {
-    if (!conversation || loading) return;
-    const latest = getConversation(conversation.id) ?? conversation;
+    if (!activeConversation || loading) return;
+    const latest = getConversation(activeConversation.id) ?? activeConversation;
     await streamReply(userQuery, latest);
   }
 
   return (
     <div className="chat-view bg-chat-main">
       <ChatConversationHeader
-        conversationTitle={conversation!.title}
+        conversationTitle={headerTitle}
         onOpenSidebar={outlet?.openMobileSidebar}
         session={session}
-        conversation={conversation}
+        conversation={activeConversation}
       />
 
-      {empty ? (
+      {showWelcome ? (
         <>
           <div className="min-h-0 min-w-0 overflow-y-auto overflow-x-hidden flex flex-col">
             <ChatMainColumn className="flex flex-1 flex-col min-h-0" data-testid="chat-scroll-column">
@@ -445,7 +458,7 @@ export default function ChatPage() {
       ) : (
         <>
           <MessageList
-            messages={conversation!.messages}
+            messages={activeConversation!.messages}
             streamingText={streamingText}
             retrievalStatus={retrievalStatus}
             onRegenerate={onRegenerate}

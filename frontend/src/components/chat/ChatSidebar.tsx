@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
   IconCheckCircle,
@@ -34,6 +34,8 @@ import { AdminConsoleLink } from "../nav/AdminConsoleLink";
 import { hasAdminConsoleAccess } from "../../lib/permissions";
 import { adminBuildMarker } from "../../lib/appBuildInfo";
 import { PRODUCT_V1 } from "../../lib/productV1";
+import { AnchoredMenu } from "../ui/AnchoredMenu";
+import { SidebarMenuProvider, useSidebarMenu } from "./SidebarMenuContext";
 
 const legacyPrimaryNav = [
   { to: "/projects", label: "Projects", Icon: IconFolder },
@@ -57,6 +59,52 @@ type Props = {
   onOpenCommandPalette?: () => void;
 };
 
+const SIDEBAR_USER_MENU_ID = "sidebar-user";
+
+function AccountMenuItems({
+  email,
+  showAdminConsole,
+  onClose,
+  onLogout,
+}: {
+  email?: string;
+  showAdminConsole?: boolean;
+  onClose: () => void;
+  onLogout: () => void;
+}) {
+  const { resolved, toggle } = useTheme();
+  return (
+    <>
+      {email ? <p className="px-3 py-2 text-xs text-chat-muted truncate border-b border-chat-border">{email}</p> : null}
+      {showAdminConsole ? (
+        <p className="px-3 py-2 text-[11px] text-chat-muted border-b border-chat-border font-mono" aria-label="UI build">
+          {adminBuildMarker()}
+        </p>
+      ) : null}
+      {!PRODUCT_V1 ? (
+        <Link to="/settings" className="chat-menu-item" role="menuitem" onClick={onClose}>
+          Settings
+        </Link>
+      ) : null}
+      {showAdminConsole ? <AdminConsoleLink variant="menu" onNavigate={onClose} /> : null}
+      <button
+        type="button"
+        className="chat-menu-item w-full text-left"
+        role="menuitem"
+        onClick={() => {
+          toggle();
+          onClose();
+        }}
+      >
+        Theme: {resolved === "dark" ? "Dark" : "Light"}
+      </button>
+      <button type="button" className="chat-menu-item w-full text-left text-red-600" role="menuitem" onClick={onLogout}>
+        Sign out
+      </button>
+    </>
+  );
+}
+
 function SidebarUserFooter({
   initials,
   name,
@@ -74,55 +122,37 @@ function SidebarUserFooter({
   compact?: boolean;
   showAdminConsole?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const { resolved, toggle } = useTheme();
+  const { openMenuId, setOpenMenuId } = useSidebarMenu();
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const open = openMenuId === SIDEBAR_USER_MENU_ID;
+  const close = () => setOpenMenuId(null);
+  const toggle = () => setOpenMenuId(open ? null : SIDEBAR_USER_MENU_ID);
 
   if (compact) {
     return (
-      <div className="border-t border-chat-border p-2 mt-auto relative shrink-0">
+      <div className="border-t border-chat-border p-2 mt-auto shrink-0">
         <Tooltip label={`${name} — account menu`}>
           <button
+            ref={anchorRef}
             type="button"
             className="sidebar-rail-btn mx-auto"
             aria-label="Account menu"
             aria-expanded={open}
             aria-haspopup="menu"
-            onClick={() => setOpen((v) => !v)}
+            onClick={toggle}
           >
             <span className="ref-user-avatar">{initials}</span>
           </button>
         </Tooltip>
-        {open ? (
-          <>
-            <button type="button" className="fixed inset-0 z-40" aria-label="Close menu" onClick={() => setOpen(false)} />
-            <div className="absolute bottom-full left-1/2 z-50 mb-2 w-44 -translate-x-1/2 rounded-lg border border-chat-border bg-chat-surface py-1 text-sm shadow-composer">
-              {email ? <p className="px-3 py-2 text-xs text-chat-muted truncate border-b border-chat-border">{email}</p> : null}
-              {showAdminConsole ? (
-                <p className="px-3 py-2 text-[11px] text-chat-muted border-b border-chat-border font-mono" aria-label="UI build">
-                  {adminBuildMarker()}
-                </p>
-              ) : null}
-              {!PRODUCT_V1 ? (
-                <Link to="/settings" className="chat-menu-item" onClick={() => setOpen(false)}>
-                  Settings
-                </Link>
-              ) : null}
-              {showAdminConsole ? <AdminConsoleLink variant="menu" onNavigate={() => setOpen(false)} /> : null}
-              <button type="button" className="chat-menu-item w-full text-left" onClick={() => { toggle(); setOpen(false); }}>
-                Theme: {resolved === "dark" ? "Dark" : "Light"}
-              </button>
-              <button type="button" className="chat-menu-item w-full text-left text-red-600" onClick={onLogout}>
-                Sign out
-              </button>
-            </div>
-          </>
-        ) : null}
+        <AnchoredMenu open={open} onOpenChange={(v) => setOpenMenuId(v ? SIDEBAR_USER_MENU_ID : null)} anchorRef={anchorRef} className="w-44" minWidth={176}>
+          <AccountMenuItems email={email} showAdminConsole={showAdminConsole} onClose={close} onLogout={onLogout} />
+        </AnchoredMenu>
       </div>
     );
   }
 
   return (
-    <div className="border-t border-chat-border p-3 mt-auto relative shrink-0">
+    <div className="border-t border-chat-border p-3 mt-auto shrink-0">
       <div className="flex w-full items-center gap-2 rounded-lg p-1">
         <span className="ref-user-avatar">{initials}</span>
         <div className="min-w-0 flex-1">
@@ -130,41 +160,20 @@ function SidebarUserFooter({
           {!PRODUCT_V1 ? <p className="truncate text-xs text-chat-muted">{roleLabel}</p> : null}
         </div>
         <button
+          ref={anchorRef}
           type="button"
           className="ref-user-menu-btn"
           aria-label="Account menu"
           aria-expanded={open}
           aria-haspopup="menu"
-          onClick={() => setOpen((v) => !v)}
+          onClick={toggle}
         >
           <IconChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
         </button>
       </div>
-      {open ? (
-        <>
-          <button type="button" className="fixed inset-0 z-40" aria-label="Close menu" onClick={() => setOpen(false)} />
-          <div className="absolute bottom-full left-3 right-3 mb-1 z-50 rounded-lg border border-chat-border bg-chat-surface py-1 text-sm shadow-composer">
-            {email ? <p className="px-3 py-2 text-xs text-chat-muted truncate border-b border-chat-border">{email}</p> : null}
-            {showAdminConsole ? (
-              <p className="px-3 py-2 text-[11px] text-chat-muted border-b border-chat-border font-mono" aria-label="UI build">
-                {adminBuildMarker()}
-              </p>
-            ) : null}
-            {!PRODUCT_V1 ? (
-              <Link to="/settings" className="chat-menu-item" onClick={() => setOpen(false)}>
-                Settings
-              </Link>
-            ) : null}
-            {showAdminConsole ? <AdminConsoleLink variant="menu" onNavigate={() => setOpen(false)} /> : null}
-            <button type="button" className="chat-menu-item w-full text-left" onClick={() => { toggle(); setOpen(false); }}>
-              Theme: {resolved === "dark" ? "Dark" : "Light"}
-            </button>
-            <button type="button" className="chat-menu-item w-full text-left text-red-600" onClick={onLogout}>
-              Sign out
-            </button>
-          </div>
-        </>
-      ) : null}
+      <AnchoredMenu open={open} onOpenChange={(v) => setOpenMenuId(v ? SIDEBAR_USER_MENU_ID : null)} anchorRef={anchorRef} className="w-44" minWidth={176}>
+        <AccountMenuItems email={email} showAdminConsole={showAdminConsole} onClose={close} onLogout={onLogout} />
+      </AnchoredMenu>
     </div>
   );
 }
@@ -176,6 +185,7 @@ function ConversationMenu({
   onRename,
   onDelete,
   onShare,
+  scrollRootRef,
 }: {
   conversationId: string;
   title: string;
@@ -183,72 +193,94 @@ function ConversationMenu({
   onRename: (title: string) => void;
   onDelete: (conversationId: string) => void;
   onShare?: () => void;
+  scrollRootRef: RefObject<HTMLElement | null>;
 }) {
-  const [open, setOpen] = useState(false);
+  const menuId = `conv-${conversationId}`;
+  const { openMenuId, setOpenMenuId } = useSidebarMenu();
+  const open = openMenuId === menuId;
+  const anchorRef = useRef<HTMLButtonElement>(null);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [draft, setDraft] = useState(title);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onDoc(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
 
   function submitRename(e: FormEvent) {
     e.preventDefault();
     onRename(draft);
     setEditing(false);
-    setOpen(false);
+    setOpenMenuId(null);
   }
 
   return (
-    <div className="ref-conv-item-actions" ref={ref}>
+    <div className="ref-conv-item-actions">
       <button
+        ref={anchorRef}
         type="button"
         className={`chat-conv-menu-btn ref-conv-menu-btn ${active ? "ref-conv-menu-btn-visible" : ""}`}
         aria-label="Conversation actions"
+        aria-expanded={open}
+        aria-haspopup="menu"
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          setOpen((v) => !v);
+          setOpenMenuId(open ? null : menuId);
         }}
       >
         <IconMore />
       </button>
-      {open ? (
-        <div className="absolute right-0 top-full z-50 mt-1 w-40 rounded-lg border border-chat-border bg-chat-surface py-1 text-sm shadow-composer">
-          <button type="button" className="chat-menu-item w-full flex items-center gap-2" onClick={() => { setEditing(true); setDraft(title); }}>
-            <IconEdit /> Rename
-          </button>
-          {onShare ? (
-            <button type="button" className="chat-menu-item w-full flex items-center gap-2" onClick={() => { onShare(); setOpen(false); }}>
-              Share link
-            </button>
-          ) : null}
+      <AnchoredMenu
+        open={open}
+        onOpenChange={(v) => setOpenMenuId(v ? menuId : null)}
+        anchorRef={anchorRef}
+        scrollRootRef={scrollRootRef}
+        align="end"
+      >
+        <button
+          type="button"
+          className="chat-menu-item w-full flex items-center gap-2"
+          role="menuitem"
+          onClick={() => {
+            setEditing(true);
+            setDraft(title);
+            setOpenMenuId(null);
+          }}
+        >
+          <IconEdit /> Rename
+        </button>
+        {onShare ? (
           <button
             type="button"
-            className="chat-menu-item w-full flex items-center gap-2 text-[var(--color-danger)]"
+            className="chat-menu-item w-full flex items-center gap-2"
+            role="menuitem"
             onClick={() => {
-              setOpen(false);
-              setConfirmDelete(true);
+              onShare();
+              setOpenMenuId(null);
             }}
           >
-            <IconTrash /> Delete
+            Share link
           </button>
-        </div>
-      ) : null}
+        ) : null}
+        <button
+          type="button"
+          className="chat-menu-item w-full flex items-center gap-2 text-[var(--color-danger)]"
+          role="menuitem"
+          onClick={() => {
+            setOpenMenuId(null);
+            setConfirmDelete(true);
+          }}
+        >
+          <IconTrash /> Delete
+        </button>
+      </AnchoredMenu>
       <ConfirmDialog
         open={confirmDelete}
         title="Delete conversation?"
         description={<>This removes “{title}” from your device. This cannot be undone.</>}
         confirmLabel="Delete"
         destructive
-        onConfirm={() => onDelete(conversationId)}
+        onConfirm={() => {
+          onDelete(conversationId);
+          setConfirmDelete(false);
+        }}
         onCancel={() => setConfirmDelete(false)}
       />
       {editing ? (
@@ -318,6 +350,7 @@ export default function ChatSidebar({
     .filter(Boolean)
     .join(" ");
   const asideRef = useRef<HTMLElement>(null);
+  const convScrollRef = useRef<HTMLElement>(null);
   const cmdHint = commandPaletteShortcutLabel();
   const toggleLabel = collapsed ? "Expand sidebar" : "Collapse sidebar";
 
@@ -330,7 +363,7 @@ export default function ChatSidebar({
   }, [mobileOpen]);
 
   return (
-    <>
+    <SidebarMenuProvider>
       {mobileOpen ? (
         <button type="button" className="chat-sidebar-backdrop lg:hidden" aria-label="Close sidebar" onClick={onCloseMobile} />
       ) : null}
@@ -452,6 +485,7 @@ export default function ChatSidebar({
             {primaryNav.length > 0 ? <div className="mx-3 border-t border-chat-border" /> : null}
 
             <nav
+              ref={convScrollRef}
               className="ref-conv-scroll flex-1 overflow-x-hidden overflow-y-auto px-2 py-3 space-y-4 min-h-0 min-w-0"
               aria-label="Chat history"
             >
@@ -483,6 +517,7 @@ export default function ChatSidebar({
                               conversationId={c.id}
                               title={c.title}
                               active={active}
+                              scrollRootRef={convScrollRef}
                               onRename={(t) => rename(c.id, t)}
                               onShare={
                                 PRODUCT_V1
@@ -526,6 +561,6 @@ export default function ChatSidebar({
             />
         </div>
       </aside>
-    </>
+    </SidebarMenuProvider>
   );
 }
