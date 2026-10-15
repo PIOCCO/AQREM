@@ -169,6 +169,10 @@ class Settings(BaseSettings):
         default=384,
         validation_alias=AliasChoices("embedding_dimensions", "EMBEDDING_DIMENSIONS"),
     )
+    debug_rag: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("debug_rag", "DEBUG_RAG"),
+    )
 
     github_app_id: str | None = None
     github_client_id: str | None = None

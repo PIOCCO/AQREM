@@ -26,6 +26,9 @@ from app.services.rag.behavior import (
     compose_employee_answer,
 )
 from app.services.access_control.context import UserAccessContext
+from app.services.chat.messages import format_empty_retrieval_message
+from app.services.retrieval.scope import count_org_evidence_chunks
+from app.services.retrieval.debug_log import log_rag_event
 from app.services.retrieval.service import RetrievalService
 
 
@@ -158,13 +161,23 @@ async def generate_grounded_answer(
         )
 
     if not items:
+        org_chunks = count_org_evidence_chunks(
+            db, organization_id=organization_id, project_id=project_id
+        )
+        base = format_empty_retrieval_message(org_chunk_count=org_chunks)
+        log_rag_event(
+            "grounded_empty_retrieval",
+            organization_id=organization_id,
+            project_id=project_id,
+            org_chunk_count=org_chunks,
+            answer=base,
+        )
         empty_behavior = classify_behavior(
             question=safe_query,
             evidence_items=[],
             llm_sufficiency="insufficient",
             retrieval_error=None,
         )
-        base = "I couldn't find this in the documents you have access to."
         structured = StructuredAnswer(
             answer=base,
             confidence="low",
@@ -183,6 +196,13 @@ async def generate_grounded_answer(
         )
 
     blocks = wrap_evidence_for_prompt(evidence_blocks(items))
+    log_rag_event(
+        "grounded_llm_context",
+        organization_id=organization_id,
+        project_id=project_id,
+        context_chunk_count=len(blocks),
+        context_files=[getattr(i, "file_name", "") for i in items[:5]],
+    )
     allowed_ids = {str(i.id) for i in items}
     llm = get_llm_provider(organization_id)
     try:

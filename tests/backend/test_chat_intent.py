@@ -1,7 +1,12 @@
 """Chat intent routing before retrieval."""
 
 from app.services.chat.intent import classify_chat_intent, build_conversational_answer
-from app.services.chat.messages import format_insufficient_evidence_message, format_no_indexed_documents_message
+from app.services.chat.messages import (
+    format_empty_retrieval_message,
+    format_insufficient_evidence_message,
+    format_no_indexed_documents_message,
+    format_no_relevant_information_message,
+)
 
 
 def test_greeting_intent():
@@ -43,3 +48,8 @@ def test_no_indexed_documents_message():
     msg = format_no_indexed_documents_message()
     assert "indexed" in msg.lower()
     assert "admin" in msg.lower()
+
+
+def test_empty_retrieval_message_uses_chunk_count():
+    assert "indexed" in format_empty_retrieval_message(org_chunk_count=0).lower()
+    assert format_empty_retrieval_message(org_chunk_count=3) == format_no_relevant_information_message()

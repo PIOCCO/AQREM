@@ -4,19 +4,16 @@ import time
 from collections.abc import AsyncIterator
 from uuid import UUID
 
-from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
-from app.models.enums import AnswerOutcome, EvidenceScope
-from app.models.evidence import EvidenceItem
+from app.models.enums import AnswerOutcome
 from app.models.project import Project
 from app.models.source import Source
 from app.schemas.evidence import EvidenceItemSummaryResponse
 from app.services.chat.intent import build_conversational_answer, classify_chat_intent
-from app.services.access_control.policy import evidence_acl_filter
 from app.services.chat.messages import (
+    format_empty_retrieval_message,
     format_insufficient_evidence_message,
-    format_no_indexed_documents_message,
 )
 from app.services.library.service import AnswerLibraryService
 from app.core.config import get_settings
@@ -26,6 +23,8 @@ from app.services.llm.gateway import GatewayLLMProvider, evidence_ids_mentioned
 from app.services.llm.guardrails import clamp_question, sanitize_evidence_content, wrap_evidence_for_prompt
 from app.services.llm.prompts import CHAT_STREAM_SYSTEM
 from app.services.rag.grounding import evidence_blocks, generate_grounded_answer, selected_evidence_ids
+from app.services.retrieval.debug_log import log_rag_event
+from app.services.retrieval.scope import count_org_evidence_chunks
 from app.services.retrieval.service import RetrievalService
 from app.services.rag.behavior import BehaviorResult
 from app.core.roles import Role
@@ -61,32 +60,17 @@ def _count_project_sources(db: Session, organization_id: UUID, project_id: UUID 
     return q.count()
 
 
-def _has_accessible_evidence(
-    db: Session,
+def _empty_retrieval_payload(
     *,
+    db: Session,
     organization_id: UUID,
     project_id: UUID | None,
-    access: UserAccessContext | None,
-) -> bool:
-    q = db.query(EvidenceItem.id).filter(EvidenceItem.organization_id == organization_id)
-    if project_id is not None:
-        q = q.filter(
-            or_(
-                EvidenceItem.project_id == project_id,
-                and_(
-                    EvidenceItem.project_id.is_(None),
-                    EvidenceItem.scope == EvidenceScope.ORGANIZATION.value,
-                ),
-            )
-        )
-    if access is not None:
-        q = evidence_acl_filter(q, access, EvidenceItem)
-    return q.limit(1).first() is not None
-
-
-def _no_indexed_payload(*, project_name: str | None, sources_searched: int) -> dict:
+    project_name: str | None,
+    sources_searched: int,
+) -> dict:
+    org_chunks = count_org_evidence_chunks(db, organization_id=organization_id, project_id=project_id)
     return {
-        "answer": format_no_indexed_documents_message(),
+        "answer": format_empty_retrieval_message(org_chunk_count=org_chunks),
         "confidence": "low",
         "evidence_sufficiency": "insufficient",
         "reasoning_summary": None,
@@ -216,14 +200,6 @@ class ChatAskService:
                 "query_time_ms": 0,
             }
 
-        if not _has_accessible_evidence(
-            self.db,
-            organization_id=organization_id,
-            project_id=project_id,
-            access=access,
-        ):
-            return {"query": safe_query, **_no_indexed_payload(project_name=project_name, sources_searched=sources_searched)}
-
         library = AnswerLibraryService(self.db)
         entries = library.search_entries(
             organization_id=organization_id,
@@ -274,7 +250,7 @@ class ChatAskService:
 
         citations = self._build_citations(items, selected)
         answer = grounded.composed_answer
-        if behavior.outcome == AnswerOutcome.INSUFFICIENT_EVIDENCE:
+        if behavior.outcome == AnswerOutcome.INSUFFICIENT_EVIDENCE and items:
             answer = format_insufficient_evidence_message(
                 project_name=project_name,
                 sources_searched=sources_searched,
@@ -361,13 +337,29 @@ class ChatAskService:
                 yield ev
             return
 
-        if not _has_accessible_evidence(
-            self.db,
+        top_k = min(8, settings.llm_max_retrieval_results)
+        items = await RetrievalService(self.db).retrieve(
             organization_id=organization_id,
+            query=safe_query,
             project_id=project_id,
+            limit=top_k,
             access=access,
-        ):
-            payload = _no_indexed_payload(project_name=project_name, sources_searched=sources_searched)
+        )
+        items = [i for i in items if i.organization_id == organization_id]
+        if not items:
+            payload = _empty_retrieval_payload(
+                db=self.db,
+                organization_id=organization_id,
+                project_id=project_id,
+                project_name=project_name,
+                sources_searched=sources_searched,
+            )
+            log_rag_event(
+                "stream_empty_retrieval",
+                organization_id=organization_id,
+                project_id=project_id,
+                answer=payload["answer"],
+            )
             async for ev in _stream_text(
                 payload["answer"],
                 {
@@ -383,35 +375,14 @@ class ChatAskService:
                 yield ev
             return
 
-        items = await RetrievalService(self.db).retrieve(
-            organization_id=organization_id,
-            query=safe_query,
-            project_id=project_id,
-            limit=min(8, settings.llm_max_retrieval_results),
-            access=access,
-        )
-        items = [i for i in items if i.organization_id == organization_id]
-        if not items:
-            text = format_insufficient_evidence_message(
-                project_name=project_name,
-                sources_searched=sources_searched,
-            )
-            async for ev in _stream_text(
-                text,
-                {
-                    "conversational": False,
-                    "outcome": AnswerOutcome.INSUFFICIENT_EVIDENCE.value,
-                    "citations": [],
-                    "is_draft": True,
-                    "evidence_sufficiency": "insufficient",
-                    "project_name": project_name,
-                    "sources_searched": sources_searched,
-                },
-            ):
-                yield ev
-            return
-
         blocks = wrap_evidence_for_prompt(evidence_blocks(items))
+        log_rag_event(
+            "stream_llm_context",
+            organization_id=organization_id,
+            project_id=project_id,
+            context_chunk_count=len(blocks),
+            context_files=[i.file_name for i in items[:5]],
+        )
         allowed = {str(i.id) for i in items}
         user_payload = json.dumps({"question": safe_query, "evidence": blocks})
         messages = [

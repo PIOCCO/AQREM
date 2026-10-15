@@ -72,6 +72,56 @@ async def test_chat_ask_returns_evidence_backed_answer(client: TestClient, db_se
 
 
 @pytest.mark.asyncio
+async def test_chat_ask_name_query_finds_all_staff_cv(client: TestClient, db_session):
+    org = Organization(name="CV Org", slug="cv-org-chat")
+    db_session.add(org)
+    db_session.flush()
+    user = User(email="cv@acme.example", hashed_password=hash_password("password"), full_name="CV Reader")
+    db_session.add(user)
+    db_session.flush()
+    db_session.add(
+        OrganizationMembership(organization_id=org.id, user_id=user.id, role=Role.VIEWER.value),
+    )
+    project = Project(organization_id=org.id, name="HR")
+    db_session.add(project)
+    db_session.flush()
+    source = Source(
+        organization_id=org.id,
+        project_id=project.id,
+        name="Uploads",
+        source_type=SourceType.FOLDER_ARCHIVE.value,
+        scope=EvidenceScope.PROJECT.value,
+    )
+    mark_source_visible_to_all_staff(source)
+    db_session.add(source)
+    db_session.flush()
+    job = SourceSyncJob(organization_id=org.id, source_id=source.id, status=SyncJobStatus.RUNNING.value)
+    db_session.add(job)
+    db_session.flush()
+
+    cv_text = b"Gammal Oussama is a senior software engineer with 8 years of experience."
+    await index_files(
+        db_session,
+        source=source,
+        job=job,
+        files=[FilePayload(relative_path="cv/gammal_oussama.pdf.txt", data=cv_text)],
+    )
+    db_session.flush()
+
+    token = create_access_token(str(user.id), {"organization_id": str(org.id), "role": Role.VIEWER.value})
+    res = client.post(
+        "/api/v1/chat/ask",
+        headers=_auth_headers(token, str(org.id)),
+        json={"query": "who is gammal oussama"},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert "No documents are indexed yet" not in body["answer"]
+    assert body.get("conversational") is not True
+    assert body["answer"]
+
+
+@pytest.mark.asyncio
 async def test_chat_ask_org_wide_without_project_id(client: TestClient, db_session, demo_repo_path: str):
     org = Organization(name="Org Wide Chat", slug="org-wide-chat")
     db_session.add(org)
@@ -120,6 +170,61 @@ async def test_chat_ask_org_wide_without_project_id(client: TestClient, db_sessi
     assert body["answer"]
     assert "don't have a project" not in body["answer"].lower()
     assert body.get("conversational") is not True
+
+
+@pytest.mark.asyncio
+async def test_chat_ask_with_chunks_but_no_access_not_no_indexed(client: TestClient, db_session):
+    org = Organization(name="Acl Org", slug="acl-org-chat")
+    db_session.add(org)
+    db_session.flush()
+    user = User(email="viewer@acme.example", hashed_password=hash_password("password"), full_name="Viewer")
+    db_session.add(user)
+    db_session.flush()
+    db_session.add(
+        OrganizationMembership(organization_id=org.id, user_id=user.id, role=Role.VIEWER.value),
+    )
+    project = Project(organization_id=org.id, name="P")
+    db_session.add(project)
+    db_session.flush()
+    source = Source(
+        organization_id=org.id,
+        project_id=project.id,
+        name="CV",
+        source_type=SourceType.FILE_UPLOAD.value,
+        scope=EvidenceScope.PROJECT.value,
+    )
+    db_session.add(source)
+    db_session.flush()
+    from app.models.evidence import EvidenceItem
+
+    db_session.add(
+        EvidenceItem(
+            organization_id=org.id,
+            project_id=project.id,
+            source_id=source.id,
+            source_type=source.source_type,
+            scope=source.scope,
+            file_name="cv.pdf",
+            file_path="cv.pdf",
+            content="gammal oussama software engineer",
+            content_type="application/pdf",
+            content_hash="abc123",
+            chunk_index=0,
+            visibility_mode="admins_only",
+        )
+    )
+    db_session.flush()
+
+    token = create_access_token(str(user.id), {"organization_id": str(org.id), "role": Role.VIEWER.value})
+    res = client.post(
+        "/api/v1/chat/ask",
+        headers=_auth_headers(token, str(org.id)),
+        json={"query": "who is gammal oussama"},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert "No documents are indexed yet" not in body["answer"]
+    assert "relevant information" in body["answer"].lower()
 
 
 @pytest.mark.asyncio
