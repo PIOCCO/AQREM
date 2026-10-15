@@ -6,7 +6,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
+from app.core.config import get_settings, is_local_prod_stack
 from app.models.client_admin import ClientDocument
 from app.models.enums import SourceStatus, SyncJobStatus
 from app.models.evidence import EvidenceItem
@@ -134,11 +134,38 @@ def tenant_database_setup_complete(cfg: TenantDataStoreConfig | None) -> bool:
     return _postgres_storage_ready(cfg)
 
 
+def backfill_local_prod_managed_storage_validation(control_db: Session) -> int:
+    """One-time style backfill for orgs created before local-prod auto-validation."""
+    if not is_local_prod_stack():
+        return 0
+    from datetime import UTC, datetime
+
+    rows = (
+        control_db.query(TenantDataStoreConfig)
+        .filter(
+            TenantDataStoreConfig.setup_validated_at.is_(None),
+            TenantDataStoreConfig.storage_mode == MANAGED_COLOCATED,
+            TenantDataStoreConfig.status == "active",
+            TenantDataStoreConfig.paused.is_(False),
+        )
+        .all()
+    )
+    if not rows:
+        return 0
+    now = datetime.now(UTC)
+    for row in rows:
+        row.setup_validated_at = now
+    return len(rows)
+
+
 def _postgres_storage_ready(cfg: TenantDataStoreConfig | None) -> bool:
     """Complete only after org admin finishes Manage → validate → Save and activate."""
     if cfg is None or cfg.paused or cfg.status != "active":
         return False
     if cfg.setup_validated_at is None:
+        # Local-prod compose uses shared Postgres; skip the extra activation click for managed mode.
+        if is_local_prod_stack() and cfg.storage_mode == MANAGED_COLOCATED:
+            return True
         return False
     if cfg.storage_mode == CUSTOMER_POSTGRES:
         return bool(cfg.secret_reference and cfg.host and cfg.database_name)

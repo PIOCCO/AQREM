@@ -183,9 +183,19 @@ export default function ClientAdminDocumentsPage() {
       await uploadDocuments(session, files, visibilityMode);
       await load({ silent: true }).catch(() => null);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Upload failed";
-      if (/broker|queue|worker|redis/i.test(msg)) {
-        setError("Indexing service is unavailable. Ensure Redis and the worker container are running, then try again.");
+      const err = e as Error & { code?: string };
+      const msg = err instanceof Error ? err.message : "Upload failed";
+      const code = err.code;
+      if (code === "DATABASE_NOT_CONFIGURED" || /PostgreSQL is not configured/i.test(msg)) {
+        setError(
+          "Data storage is not activated yet. Open Admin → Data storage, choose AQREM-managed PostgreSQL, and click Save and activate. Then try uploading again.",
+        );
+      } else if (code === "BROKER_UNAVAILABLE" || /broker|queue|worker|redis/i.test(msg)) {
+        setError(
+          "Indexing service is unavailable (503). Start Redis and the worker: docker compose -f docker-compose.local-prod.yml up -d redis worker worker-beat",
+        );
+      } else if (code === "STORAGE_UNAVAILABLE" || /storage|LOCAL_UPLOAD_DIR/i.test(msg)) {
+        setError(msg);
       } else if (msg === "Failed to fetch") {
         setError(
           "Upload failed (network or CORS). Set PUBLIC_BASE_URL and CORS for your browser origin, and finish Data storage setup.",

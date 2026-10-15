@@ -72,6 +72,10 @@ async def lifespan(_: FastAPI):
 
     with SessionLocal() as session:
         ensure_platform_admin(session)
+        from app.services.setup_checklist import backfill_local_prod_managed_storage_validation
+
+        if backfill_local_prod_managed_storage_validation(session):
+            logger.info("Backfilled setup_validated_at for local-prod managed tenant storage configs")
         session.commit()
 
     from app.api.v1.meta import API_CAPABILITIES_REVISION

@@ -2,7 +2,7 @@ import { resolveApiBase } from "./apiBase";
 
 function apiUrl(p: string) { return `${resolveApiBase()}${p}`; }
 
-import { readApiError } from "./errors";
+import { readApiError, readApiErrorDetail } from "./errors";
 import type { AuthSession } from "./api";
 
 
@@ -98,7 +98,12 @@ export async function uploadDocuments(
       body: form,
       signal: controller.signal,
     });
-    if (!res.ok) throw new Error(await readApiError(res, "Upload failed"));
+    if (!res.ok) {
+      const { message, code } = await readApiErrorDetail(res, "Upload failed");
+      const err = new Error(message) as Error & { code?: string };
+      err.code = code;
+      throw err;
+    }
     return res.json();
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {

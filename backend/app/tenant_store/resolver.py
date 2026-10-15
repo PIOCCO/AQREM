@@ -36,6 +36,9 @@ def get_tenant_store_config(control_db: Session, organization_id: UUID) -> Tenan
 
 
 def ensure_managed_config(control_db: Session, organization_id: UUID) -> TenantDataStoreConfig:
+    from datetime import UTC, datetime
+
+    from app.core.config import is_local_prod_stack
     row = (
         control_db.query(TenantDataStoreConfig)
         .filter(TenantDataStoreConfig.organization_id == organization_id)
@@ -49,6 +52,7 @@ def ensure_managed_config(control_db: Session, organization_id: UUID) -> TenantD
         connection_method="managed",
         status="active",
         schema_version=1,
+        setup_validated_at=datetime.now(UTC) if is_local_prod_stack() else None,
     )
     control_db.add(row)
     control_db.flush()

@@ -11,6 +11,11 @@ def _is_local_prod_lab() -> bool:
     return os.environ.get("LOCAL_PROD_STACK", "").strip().lower() in {"1", "true", "yes"}
 
 
+def is_local_prod_stack() -> bool:
+    """Docker local-prod compose stack (not Azure production)."""
+    return _is_local_prod_lab()
+
+
 _WEAK_SECRET_KEYS = frozenset(
     {
         "dev-secret-change-me",
