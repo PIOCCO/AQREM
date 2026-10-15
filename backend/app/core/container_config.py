@@ -26,6 +26,8 @@ def validate_container_startup(role: str, settings: Settings) -> None:
     role = (role or os.environ.get("CONTAINER_ROLE") or "").strip().lower()
     if settings.app_env != "production":
         return
+    if os.environ.get("LOCAL_PROD_STACK", "").strip().lower() in {"1", "true", "yes"}:
+        return
     if role not in {"api", "worker", "web"}:
         raise RuntimeError(
             f"CONTAINER_ROLE must be api, worker, or web in production (got {role!r})"

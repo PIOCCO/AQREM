@@ -6,7 +6,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 
     gateway_env: str = "production"
-    azure_openai_endpoint: str
+    azure_openai_endpoint: str = Field(default="http://fake-azure-openai:8099")
+    azure_openai_api_key: str | None = Field(default=None, validation_alias="AZURE_OPENAI_API_KEY")
     azure_openai_api_version: str = "2024-10-21"
     azure_openai_use_managed_identity: bool = True
 

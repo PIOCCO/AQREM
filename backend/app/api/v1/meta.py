@@ -1,4 +1,7 @@
 import json
+import os
+import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -40,6 +43,38 @@ def _dist_dir() -> Path:
     if settings.frontend_dist_path:
         return Path(settings.frontend_dist_path).expanduser().resolve()
     return Path(__file__).resolve().parents[4] / "frontend" / "dist"
+
+
+class VersionInfo(BaseModel):
+    commit: str
+    build_date: str
+    environment: str
+    llm_provider: str
+
+
+def _git_commit() -> str:
+    try:
+        out = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=Path(__file__).resolve().parents[4],
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=2,
+        )
+        return out.strip()
+    except Exception:
+        return os.environ.get("GIT_COMMIT", "unknown")
+
+
+@router.get("/version", response_model=VersionInfo)
+def version_info() -> VersionInfo:
+    settings = get_settings()
+    return VersionInfo(
+        commit=_git_commit(),
+        build_date=os.environ.get("BUILD_DATE", datetime.now(UTC).date().isoformat()),
+        environment=settings.app_env,
+        llm_provider=settings.llm_provider,
+    )
 
 
 @router.get("/frontend-build", response_model=FrontendBuildInfo)

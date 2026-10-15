@@ -57,6 +57,11 @@ async def lifespan(_: FastAPI):
                 "Model gateway incomplete configuration; missing: %s",
                 ", ".join(gw.missing),
             )
+    role = (os.environ.get("CONTAINER_ROLE") or "").strip().lower()
+    if settings.app_env == "production" and role in {"api", "worker"}:
+        from app.core.broker_health import assert_broker_available
+
+        assert_broker_available()
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         ControlBase.metadata.create_all(bind=conn)

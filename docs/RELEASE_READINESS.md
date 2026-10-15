@@ -1,8 +1,8 @@
-# Release readiness (2026-10-12)
+# Release readiness
 
-| Area | Status | Reason |
-|------|--------|--------|
-| 1. Functional E2E journeys | **Not ready** | Worker/Docker not run; full UI path (upload → index → questionnaire export) not executed in browser this audit |
+| Area | Status (2026-03-26) | RAN / NOT RAN | Reason |
+|------|---------------------|---------------|--------|
+| 1. Functional E2E journeys | **Not ready** | NOT RAN (Docker absent in cloud agent VM) | Local stack + `scripts/smoke-local-prod-stack.sh` added; run on your machine |
 | 2. UI/UX (dark default, contrast) | **Ready with risks** | Blocker white-card bug fixed; admin/legacy pages less exercised |
 | 3. Accessibility | **Ready with risks** | Automated axe + contrast regression pass on main employee routes; no manual SR/keyboard audit |
 | 4. Security | **Ready with risks** | Backend tests pass; frontend deps have critical CVEs; prod `SECRET_KEY` must be rotated |

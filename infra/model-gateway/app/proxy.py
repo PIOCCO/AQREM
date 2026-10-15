@@ -38,10 +38,12 @@ def resolve_path(settings: Settings, path: str) -> tuple[str, str]:
 def _auth_headers(settings: Settings) -> dict[str, str]:
     if settings.gateway_env == "mock":
         return {"api-key": "mock"}
+    if (settings.azure_openai_api_key or "").strip():
+        return {"api-key": settings.azure_openai_api_key.strip()}
     if settings.azure_openai_use_managed_identity:
         token = DefaultAzureCredential().get_token("https://cognitiveservices.azure.com/.default").token
         return {"Authorization": f"Bearer {token}"}
-    raise RuntimeError("Managed identity required for gateway upstream")
+    raise RuntimeError("Managed identity or AZURE_OPENAI_API_KEY required for gateway upstream")
 
 
 async def forward_json(

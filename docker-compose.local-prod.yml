@@ -1,0 +1,150 @@
+# Production-like local stack (no Azure subscription). See scripts/start-local-prod-stack.sh
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: aqrem
+      POSTGRES_PASSWORD: aqrem
+      POSTGRES_DB: aqrem
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_local_prod:/var/lib/postgresql/data
+      - ./infra/dev/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aqrem -d aqrem"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000
+    ports:
+      - "10000:10000"
+    volumes:
+      - azurite_local_prod:/data
+
+  fake-azure-openai:
+    build:
+      context: ./infra/dev/fake_azure_openai
+    environment:
+      FAKE_EMBED_DIM: "384"
+      FAKE_AZURE_MODE: ok
+    ports:
+      - "8099:8099"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8099/health')\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  model-gateway:
+    build:
+      context: ./infra/model-gateway
+    environment:
+      GATEWAY_ENV: local
+      AZURE_OPENAI_ENDPOINT: http://fake-azure-openai:8099
+      AZURE_OPENAI_API_KEY: fake-local-key
+      AZURE_OPENAI_USE_MANAGED_IDENTITY: "false"
+      DATABASE_URL: postgresql://aqrem:aqrem@postgres:5432/aqrem
+      DATABASE_USE_ENTRA: "false"
+      DEPLOYMENT_ALIAS_CHAT: chat-default
+      DEPLOYMENT_ALIAS_EMBEDDINGS: embeddings-default
+    ports:
+      - "8088:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      fake-azure-openai:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.api
+    volumes:
+      - ./infra/dev:/app/infra/dev:ro
+      - ./scripts:/app/scripts:ro
+      - ./tests:/app/tests:ro
+    environment:
+      APP_ENV: production
+      LOCAL_PROD_STACK: "true"
+      CONTAINER_ROLE: api
+      SECRET_KEY: local-prod-stack-secret-key-32chars-min
+      DATABASE_URL: postgresql+psycopg://aqrem:aqrem@postgres:5432/aqrem
+      REDIS_URL: redis://redis:6379/0
+      PUBLIC_BASE_URL: http://127.0.0.1:5173
+      CORS_ALLOWED_ORIGINS: http://127.0.0.1:5173,http://localhost:5173
+      AZURE_STORAGE_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
+      LLM_PROVIDER: gateway
+      GATEWAY_URL: http://model-gateway:8080
+      GATEWAY_API_KEY: local_dev_gateway_key_00000001
+      EMBEDDING_DIMENSIONS: "384"
+      LICENSING_TEST_MODE: "false"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      azurite:
+        condition: service_started
+      model-gateway:
+        condition: service_started
+
+  worker:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.worker
+    volumes:
+      - ./infra/dev:/app/infra/dev:ro
+    environment:
+      APP_ENV: production
+      LOCAL_PROD_STACK: "true"
+      CONTAINER_ROLE: worker
+      DATABASE_URL: postgresql+psycopg://aqrem:aqrem@postgres:5432/aqrem
+      REDIS_URL: redis://redis:6379/0
+      AZURE_STORAGE_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
+      LLM_PROVIDER: gateway
+      GATEWAY_URL: http://model-gateway:8080
+      GATEWAY_API_KEY: local_dev_gateway_key_00000001
+      EMBEDDING_DIMENSIONS: "384"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      azurite:
+        condition: service_started
+      model-gateway:
+        condition: service_started
+
+  web:
+    image: node:20-bookworm-slim
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    environment:
+      VITE_PUBLIC_APP_URL: http://127.0.0.1:5173
+      VITE_API_BASE: http://127.0.0.1:8000
+    command: sh -c "npm ci && npm run build && npm run preview -- --host 0.0.0.0 --port 5173"
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
+volumes:
+  pgdata_local_prod:
+  azurite_local_prod:

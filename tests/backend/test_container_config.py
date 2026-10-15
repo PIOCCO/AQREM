@@ -8,8 +8,10 @@ def test_production_api_requires_gateway(monkeypatch):
     monkeypatch.setenv("CONTAINER_ROLE", "api")
     monkeypatch.delenv("GATEWAY_URL", raising=False)
     monkeypatch.delenv("GATEWAY_API_KEY", raising=False)
+    monkeypatch.delenv("LOCAL_PROD_STACK", raising=False)
     settings = Settings(
         app_env="production",
+        llm_provider="gateway",
         secret_key="x" * 32,
         database_url="postgresql+psycopg://u:p@db/aqrem",
         redis_url="redis://localhost:6379/0",

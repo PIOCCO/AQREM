@@ -92,9 +92,12 @@ async def upload_files(
     db.commit()
     db.refresh(job)
 
-    from worker.app.tasks.ingestion import enqueue_source_sync
+    from app.services.ingestion.enqueue import IngestionEnqueueError, enqueue_source_sync_for_job
 
-    enqueue_source_sync(str(job.id), str(tenant.organization_id))
+    try:
+        enqueue_source_sync_for_job(db, job=job, organization_id=tenant.organization_id)
+    except IngestionEnqueueError as exc:
+        raise HTTPException(status_code=503, detail=exc.message) from exc
     return job
 
 
@@ -117,9 +120,12 @@ def trigger_sync(
     db.commit()
     db.refresh(job)
 
-    from worker.app.tasks.ingestion import enqueue_source_sync
+    from app.services.ingestion.enqueue import IngestionEnqueueError, enqueue_source_sync_for_job
 
-    enqueue_source_sync(str(job.id), str(tenant.organization_id))
+    try:
+        enqueue_source_sync_for_job(db, job=job, organization_id=tenant.organization_id)
+    except IngestionEnqueueError as exc:
+        raise HTTPException(status_code=503, detail=exc.message) from exc
     return job
 
 

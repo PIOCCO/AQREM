@@ -389,12 +389,19 @@ async def upload_documents(
             resource_id=str(doc.id),
             metadata={"size_bytes": len(data), "content_type": doc.content_type},
         )
+        doc.status = "indexing"
         try:
-            from worker.app.tasks.ingestion import enqueue_source_sync
+            from app.services.ingestion.enqueue import IngestionEnqueueError, enqueue_source_sync_for_job
 
-            enqueue_source_sync(str(job.id), str(tenant.organization_id))
-        except Exception:
-            pass
+            enqueue_source_sync_for_job(
+                db,
+                job=job,
+                organization_id=tenant.organization_id,
+                document_ids=[doc.id],
+            )
+        except IngestionEnqueueError as exc:
+            db.commit()
+            raise org_admin_error(code=exc.code, message=exc.message, status_code=503) from exc
     ingest_org_telemetry(
         db,
         organization_id=tenant.organization_id,

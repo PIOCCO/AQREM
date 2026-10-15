@@ -210,7 +210,12 @@ class Settings(BaseSettings):
                         "Production requires complete Azure OpenAI settings when LLM_PROVIDER=azure. "
                         f"Missing: {', '.join(status.missing)}"
                     )
-            if self.llm_provider.lower().strip() == "gateway":
+            provider = self.llm_provider.lower().strip()
+            if provider in {"mock", "azure"}:
+                raise ValueError(
+                    "Production requires LLM_PROVIDER=gateway (direct Azure and mock are not allowed)."
+                )
+            if provider == "gateway":
                 from app.core.gateway_config import inspect_gateway
 
                 gw = inspect_gateway(self)
@@ -219,6 +224,10 @@ class Settings(BaseSettings):
                         "Production requires GATEWAY_URL when LLM_PROVIDER=gateway. "
                         f"Missing: {', '.join(gw.missing)}"
                     )
+            if not (self.azure_storage_connection_string or "").strip():
+                raise ValueError(
+                    "Production requires blob storage (AZURE_STORAGE_CONNECTION_STRING); local disk uploads are forbidden."
+                )
         return self
 
     @property
