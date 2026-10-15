@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from urllib.parse import urlparse
 
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+def _is_local_prod_lab() -> bool:
+    return os.environ.get("LOCAL_PROD_STACK", "").strip().lower() in {"1", "true", "yes"}
+
 
 _WEAK_SECRET_KEYS = frozenset(
     {
@@ -234,11 +239,15 @@ class Settings(BaseSettings):
                         "Production requires GATEWAY_URL when LLM_PROVIDER=gateway. "
                         f"Missing: {', '.join(gw.missing)}"
                     )
-            if not (self.azure_storage_connection_string or "").strip():
+            if not (self.azure_storage_connection_string or "").strip() and not _is_local_prod_lab():
                 raise ValueError(
                     "Production requires blob storage (AZURE_STORAGE_CONNECTION_STRING); local disk uploads are forbidden."
                 )
         return self
+
+    @property
+    def use_azure_blob_storage(self) -> bool:
+        return bool((self.azure_storage_connection_string or "").strip())
 
     @property
     def resolved_email_provider(self) -> str:

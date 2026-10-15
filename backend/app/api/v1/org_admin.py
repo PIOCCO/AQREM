@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
@@ -287,12 +288,24 @@ async def upload_documents(
     try:
         storage = get_blob_storage()
     except Exception as exc:
-        raise org_admin_error(
-            code="STORAGE_UNAVAILABLE",
-            message=(
+        settings = get_settings()
+        if settings.use_azure_blob_storage:
+            message = (
                 "Blob storage is not reachable. For Docker Compose, ensure the azurite service is running "
                 "or set LOCAL_UPLOAD_DIR to a writable path and clear AZURE_STORAGE_CONNECTION_STRING."
-            ),
+            )
+        else:
+            message = (
+                f"File storage is not ready at {settings.local_upload_dir}. "
+                "For local-prod Docker, recreate api and worker after compose sets LOCAL_UPLOAD_DIR and a shared volume."
+            )
+        if os.environ.get("LOCAL_PROD_STACK", "").strip().lower() in {"1", "true", "yes"}:
+            hint = str(exc).split("\n")[0][:240]
+            if hint:
+                message = f"{message} ({hint})"
+        raise org_admin_error(
+            code="STORAGE_UNAVAILABLE",
+            message=message,
             status_code=503,
         ) from exc
     created: list[str] = []

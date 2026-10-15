@@ -15,7 +15,7 @@ class StorageUnavailable(Exception):
 
 def assert_upload_storage_ready() -> None:
     settings = get_settings()
-    if settings.azure_storage_connection_string:
+    if settings.use_azure_blob_storage:
         return
     root = Path(settings.local_upload_dir)
     try:
