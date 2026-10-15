@@ -1,8 +1,11 @@
 import type { AuthSession } from "./api";
+import { resolveApiBase } from "./apiBase";
 import { readApiError } from "./errors";
 import type { ChatConversation } from "./conversations";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+function apiUrl(path: string): string {
+  return `${resolveApiBase()}${path}`;
+}
 
 function headers(session: AuthSession): HeadersInit {
   const h: Record<string, string> = {
@@ -42,7 +45,7 @@ export function conversationToSharePayload(conversation: ChatConversation) {
 }
 
 export async function createChatShare(session: AuthSession, conversation: ChatConversation): Promise<CreateShareResult> {
-  const res = await fetch(`${API_BASE}/api/v1/chat/shares`, {
+  const res = await fetch(apiUrl("/api/v1/chat/shares"), {
     method: "POST",
     headers: headers(session),
     body: JSON.stringify(conversationToSharePayload(conversation)),
@@ -52,7 +55,7 @@ export async function createChatShare(session: AuthSession, conversation: ChatCo
 }
 
 export async function fetchChatShare(session: AuthSession, token: string): Promise<ChatShareView> {
-  const res = await fetch(`${API_BASE}/api/v1/chat/shares/${encodeURIComponent(token)}`, {
+  const res = await fetch(apiUrl(`/api/v1/chat/shares/${encodeURIComponent(token)}`), {
     headers: headers(session),
   });
   if (!res.ok) throw new Error(await readApiError(res, "Share link not found or access denied"));
@@ -60,7 +63,7 @@ export async function fetchChatShare(session: AuthSession, token: string): Promi
 }
 
 export async function fetchPublicChatShare(token: string): Promise<ChatShareView> {
-  const res = await fetch(`${API_BASE}/api/v1/public/chat/shares/${encodeURIComponent(token)}`);
+  const res = await fetch(apiUrl(`/api/v1/public/chat/shares/${encodeURIComponent(token)}`));
   if (!res.ok) throw new Error(await readApiError(res, "Share link not found or expired"));
   return res.json() as Promise<ChatShareView>;
 }

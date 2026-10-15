@@ -1,4 +1,5 @@
 import type { AuthSession } from "./api";
+import { resolveApiBase } from "./apiBase";
 import { readApiError } from "./errors";
 
 function authHeaders(session: AuthSession): HeadersInit {
@@ -71,16 +72,18 @@ function qs(params: ActivityQuery): string {
   return sp.toString();
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+function apiUrl(path: string): string {
+  return `${resolveApiBase()}${path}`;
+}
 
 export async function fetchActivity(session: AuthSession, query: ActivityQuery): Promise<ActivityListResponse> {
-  const res = await activityFetch(session, `${API_BASE}/api/v1/audit?${qs(query)}`);
+  const res = await activityFetch(session, apiUrl(`/api/v1/audit?${qs(query)}`));
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load activity"));
   return res.json();
 }
 
 export async function fetchActivityActors(session: AuthSession): Promise<ActivityActor[]> {
-  const res = await activityFetch(session, `${API_BASE}/api/v1/audit/actors`);
+  const res = await activityFetch(session, apiUrl("/api/v1/audit/actors"));
   if (!res.ok) throw new Error(await readApiError(res, "Failed to load actors"));
   const data = await res.json();
   return data.items ?? [];
@@ -93,7 +96,7 @@ export async function exportActivity(
 ): Promise<Blob> {
   const sp = new URLSearchParams(qs(query));
   sp.set("format", format);
-  const res = await activityFetch(session, `${API_BASE}/api/v1/audit/export?${sp.toString()}`);
+  const res = await activityFetch(session, apiUrl(`/api/v1/audit/export?${sp.toString()}`));
   if (!res.ok) throw new Error(await readApiError(res, "Export failed"));
   return res.blob();
 }

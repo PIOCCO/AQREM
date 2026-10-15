@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { loadSession } from "../../lib/api";
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+import { resolveApiBase } from "../../lib/apiBase";
 
 type EnvRow = {
   organization_id: string;
@@ -22,7 +21,7 @@ export default function SuperAdminDeploymentsPage() {
   useEffect(() => {
     const session = loadSession();
     if (!session?.token) return;
-    fetch(`${API_BASE}/api/v1/master/environments`, {
+    fetch(`${resolveApiBase()}/api/v1/master/environments`, {
       headers: { Authorization: `Bearer ${session.token}` },
     })
       .then(async (res) => {
