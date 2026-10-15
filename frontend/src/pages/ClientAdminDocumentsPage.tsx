@@ -5,36 +5,116 @@ import { fetchDocuments, removeDocument, retryDocument, uploadDocuments } from "
 const ALLOWED_HINT = "PDF, Markdown, plain text, and .tar.gz archives";
 const MAX_MB = 50;
 
+type DocRow = {
+  id: string;
+  file_name: string;
+  size_bytes: number;
+  status: string;
+  index_progress: number;
+  index_stage: string;
+  processed_units: number;
+  total_units: number | null;
+  indexed_chunk_count: number;
+  index_started_at: string | null;
+  index_finished_at: string | null;
+  index_progress_updated_at: string | null;
+  queue_ahead: number | null;
+  failure_reason: string | null;
+  visibility_mode: string;
+  sensitivity_flag: boolean;
+  acl_reviewed: boolean;
+};
+
 function visibilityLabel(mode: string) {
   switch (mode) {
     case "all_staff":
       return "All staff";
     case "admins_only":
       return "Admins only";
-    case "groups":
-      return "Specific groups";
-    case "users":
-      return "Specific people";
     default:
       return mode;
   }
 }
 
-function statusLabel(status: string) {
-  switch (status) {
+function stageLabel(row: DocRow): string {
+  const stage = row.index_stage || row.status;
+  switch (stage) {
     case "queued":
-      return "Queued";
-    case "uploading":
-      return "Uploading";
-    case "indexing":
-      return "Indexing";
+      return row.queue_ahead != null && row.queue_ahead > 0
+        ? `Waiting, ${row.queue_ahead} ahead`
+        : "Queued";
+    case "reading":
+      return "Reading file";
+    case "parsing":
+      return "Parsing";
+    case "chunking":
+      return "Splitting";
+    case "embedding":
+      if (row.total_units != null && row.total_units > 0) {
+        return `Embedding ${row.processed_units}/${row.total_units}`;
+      }
+      return "Embedding";
+    case "writing":
+      if (row.total_units != null && row.total_units > 0) {
+        return `Saving ${row.processed_units}/${row.total_units}`;
+      }
+      return "Saving";
     case "indexed":
       return "Indexed";
+    case "empty":
     case "failed":
       return "Failed";
     default:
-      return status;
+      if (row.status === "indexing") return "Indexing";
+      return row.status;
   }
+}
+
+function isActiveRow(row: DocRow): boolean {
+  return ["queued", "uploading", "indexing"].includes(row.status) && !["indexed", "failed"].includes(row.index_stage);
+}
+
+function formatElapsed(startIso: string | null): string {
+  if (!startIso) return "";
+  const start = new Date(startIso).getTime();
+  const sec = Math.max(0, Math.floor((Date.now() - start) / 1000));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function DocumentProgressCell({ row, tick }: { row: DocRow; tick: number }) {
+  void tick;
+  const active = isActiveRow(row);
+  const showBar = active && row.total_units != null && row.total_units > 0;
+  const label = stageLabel(row);
+  return (
+    <div className="space-y-1" aria-live="polite">
+      <div className="flex flex-wrap items-center gap-2">
+        <span>{label}</span>
+        {active && row.index_started_at ? (
+          <span className="text-xs text-chat-muted">Indexing for {formatElapsed(row.index_started_at)}</span>
+        ) : null}
+        {row.index_stage === "indexed" && row.indexed_chunk_count > 0 ? (
+          <span className="text-xs text-chat-muted">{row.indexed_chunk_count} chunks</span>
+        ) : null}
+      </div>
+      {showBar ? (
+        <div
+          className="h-1.5 w-full max-w-[12rem] rounded-full bg-chat-surface-subtle overflow-hidden"
+          role="progressbar"
+          aria-valuenow={row.index_progress}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`Indexing progress ${row.index_progress}%`}
+        >
+          <div className="h-full bg-[var(--chat-brand-mark)] transition-[width] duration-300" style={{ width: `${row.index_progress}%` }} />
+        </div>
+      ) : active && !showBar ? (
+        <p className="text-xs text-chat-muted">{row.index_progress > 0 ? `${row.index_progress}%` : "Preparing…"}</p>
+      ) : null}
+    </div>
+  );
 }
 
 export default function ClientAdminDocumentsPage() {
@@ -44,22 +124,15 @@ export default function ClientAdminDocumentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<{
-    items: Array<{
-      id: string;
-      file_name: string;
-      size_bytes: number;
-      status: string;
-      index_progress: number;
-      failure_reason: string | null;
-      visibility_mode: string;
-      sensitivity_flag: boolean;
-      acl_reviewed: boolean;
-    }>;
+    items: DocRow[];
     total: number;
     counts: Record<string, number>;
+    worker_reachable?: boolean;
+    queue_wait_warning?: boolean;
   } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [visibilityMode, setVisibilityMode] = useState("admins_only");
+  const [tick, setTick] = useState(0);
 
   const load = useCallback(
     (opts?: { silent?: boolean }) => {
@@ -86,14 +159,21 @@ export default function ClientAdminDocumentsPage() {
     void load();
   }, [load]);
 
+  const indexingCount = data?.counts?.indexing ?? 0;
+
   useEffect(() => {
-    const indexing = data?.counts?.indexing ?? 0;
-    if (!session || indexing <= 0) return;
+    if (!session || indexingCount <= 0) return;
     const id = window.setInterval(() => {
       void load({ silent: true });
-    }, 5000);
+    }, 1500);
     return () => window.clearInterval(id);
-  }, [session, data?.counts?.indexing, load]);
+  }, [session, indexingCount, load]);
+
+  useEffect(() => {
+    if (indexingCount <= 0) return;
+    const id = window.setInterval(() => setTick((t) => t + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [indexingCount]);
 
   async function onFiles(files: FileList | null) {
     if (!session || !files?.length) return;
@@ -104,9 +184,11 @@ export default function ClientAdminDocumentsPage() {
       await load({ silent: true });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Upload failed";
-      if (msg === "Failed to fetch") {
+      if (/broker|queue|worker|redis/i.test(msg)) {
+        setError("Indexing service is unavailable. Ensure Redis and the worker container are running, then try again.");
+      } else if (msg === "Failed to fetch") {
         setError(
-          "Upload failed (network or CORS). Restart the API after editing .env, set PUBLIC_BASE_URL or CORS_ALLOWED_ORIGINS to your frontend origin (e.g. http://100.80.43.124:5173), and use APP_ENV=development for local Docker Compose. If the API returns 503, finish Data storage setup (validate PostgreSQL and Save and activate) before uploading.",
+          "Upload failed (network or CORS). Set PUBLIC_BASE_URL and CORS for your browser origin, and finish Data storage setup.",
         );
       } else {
         setError(msg);
@@ -124,6 +206,17 @@ export default function ClientAdminDocumentsPage() {
           Upload private files for indexing. Allowed: {ALLOWED_HINT}. Max {MAX_MB} MB per file.
         </p>
       </header>
+
+      {data?.worker_reachable === false ? (
+        <div className="admin-inline-alert border rounded-lg px-4 py-3 mb-4 text-sm text-amber-200" role="alert">
+          Indexing service is not reachable (Redis/worker). Uploads may queue but will not index until the worker is running.
+        </div>
+      ) : null}
+      {data?.queue_wait_warning ? (
+        <div className="admin-inline-alert border rounded-lg px-4 py-3 mb-4 text-sm" role="status">
+          Waiting for the indexing service. This is taking longer than usual.
+        </div>
+      ) : null}
 
       <section
         className="admin-card p-8 border-2 border-dashed border-chat-border mb-6 text-center"
@@ -143,28 +236,11 @@ export default function ClientAdminDocumentsPage() {
             <option value="admins_only">Admins only</option>
             <option value="all_staff">All staff</option>
           </select>
-          <span className="text-xs text-chat-muted mt-1 block">
-            Sensitive file names may be kept admins-only automatically.
-          </span>
         </label>
-        <p className="text-sm font-medium">Drag and drop files here</p>
-        <p className="text-xs text-chat-muted mt-1">or</p>
-        <button
-          type="button"
-          className="aq-btn-primary mt-3"
-          disabled={uploading}
-          onClick={() => inputRef.current?.click()}
-        >
+        <button type="button" className="aq-btn-primary mt-3" disabled={uploading} onClick={() => inputRef.current?.click()}>
           {uploading ? "Uploading…" : "Choose files"}
         </button>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          className="sr-only"
-          aria-label="Choose files to upload"
-          onChange={(e) => void onFiles(e.target.files)}
-        />
+        <input ref={inputRef} type="file" multiple className="sr-only" aria-label="Choose files to upload" onChange={(e) => void onFiles(e.target.files)} />
       </section>
 
       {error ? (
@@ -174,20 +250,13 @@ export default function ClientAdminDocumentsPage() {
       ) : null}
 
       {data?.counts ? (
-        <p className="text-sm text-chat-muted mb-4">
-          {data.counts.total} total · {data.counts.indexed} indexed · {data.counts.indexing} indexing ·{" "}
-          {data.counts.failed} failed
-          {typeof data.counts.needs_visibility_review === "number" && data.counts.needs_visibility_review > 0
-            ? ` · ${data.counts.needs_visibility_review} need visibility review`
-            : ""}
+        <p className="text-sm text-chat-muted mb-4" aria-live="polite">
+          {data.counts.total} total · {data.counts.indexed} indexed · {data.counts.indexing} indexing · {data.counts.failed}{" "}
+          failed
         </p>
       ) : null}
 
       {loading ? <p className="text-sm text-chat-muted">Loading documents…</p> : null}
-
-      {!loading && data && data.items.length === 0 ? (
-        <p className="text-sm text-chat-muted admin-card p-6">No documents yet. Upload your first file above.</p>
-      ) : null}
 
       {data && data.items.length > 0 ? (
         <div className="admin-card overflow-x-auto">
@@ -212,23 +281,12 @@ export default function ClientAdminDocumentsPage() {
                       </p>
                     ) : null}
                   </td>
+                  <td className="p-3">{visibilityLabel(row.visibility_mode)}</td>
                   <td className="p-3">
-                    {visibilityLabel(row.visibility_mode)}
-                    {row.sensitivity_flag ? (
-                      <span className="block text-xs text-amber-400">Sensitive</span>
-                    ) : null}
-                    {!row.acl_reviewed ? (
-                      <span className="block text-xs text-amber-400">Needs review</span>
-                    ) : null}
-                  </td>
-                  <td className="p-3">
-                    {statusLabel(row.status)}
-                    {row.status === "indexing" ? (
-                      <span className="text-xs text-chat-muted ml-2">{row.index_progress}%</span>
-                    ) : null}
+                    <DocumentProgressCell row={row} tick={tick} />
                   </td>
                   <td className="p-3 space-x-2">
-                    {row.status === "failed" ? (
+                    {row.status === "failed" || row.index_stage === "failed" || row.index_stage === "empty" ? (
                       <button
                         type="button"
                         className="text-sm text-[var(--chat-brand-mark)]"
@@ -254,22 +312,6 @@ export default function ClientAdminDocumentsPage() {
               ))}
             </tbody>
           </table>
-        </div>
-      ) : null}
-
-      {data && data.total > 10 ? (
-        <div className="flex gap-2 mt-4">
-          <button type="button" className="aq-btn-secondary text-sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-            Previous
-          </button>
-          <button
-            type="button"
-            className="aq-btn-secondary text-sm"
-            disabled={page * 10 >= data.total}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Next
-          </button>
         </div>
       ) : null}
     </div>
