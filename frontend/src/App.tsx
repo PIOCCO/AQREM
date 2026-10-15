@@ -78,16 +78,7 @@ const orgAdminRouteTreeFull = (
   </>
 );
 
-const orgAdminRouteTreeV1 = (
-  <>
-    <Route index element={<Navigate to="documents" replace />} />
-    <Route path="documents" element={<ClientAdminDocumentsPage />} />
-    <Route path="users" element={<ClientAdminUsersPage />} />
-    <Route path="*" element={<Navigate to="documents" replace />} />
-  </>
-);
-
-const orgAdminRouteTree = PRODUCT_V1 ? orgAdminRouteTreeV1 : orgAdminRouteTreeFull;
+const orgAdminRouteTree = orgAdminRouteTreeFull;
 
 function OrgAdminRouteShell() {
   return (

@@ -108,8 +108,21 @@ class ChatShareService:
             exp = exp.replace(tzinfo=UTC)
         return exp < _utcnow()
 
-    def get_share_for_tenant(self, *, token: str, organization_id: uuid.UUID) -> ChatConversationShare:
+    def get_share_for_tenant(
+        self,
+        *,
+        token: str,
+        organization_id: uuid.UUID,
+        user_id: uuid.UUID | None = None,
+        is_org_admin: bool = False,
+        allow_public: bool = False,
+    ) -> ChatConversationShare:
         share = self._load_active_share(token=token, organization_id=organization_id)
+        if not allow_public:
+            if user_id is None:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed to view this share link")
+            if share.created_by_user_id != user_id and not is_org_admin:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed to view this share link")
         return share
 
     def _load_active_share(self, *, token: str, organization_id: uuid.UUID) -> ChatConversationShare:

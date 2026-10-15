@@ -5,8 +5,6 @@ import { useAuth } from "../../lib/authContext";
 import { roleDisplayLabel } from "../../lib/roleLabels";
 import { clearSession } from "../../lib/api";
 import { fetchOrgOverview } from "../../lib/orgAdminApi";
-import { PRODUCT_V1 } from "../../lib/productV1";
-
 const NAV_FULL = [
   { to: "/org-admin", end: true, label: "Overview" },
   { to: "/org-admin/users", label: "Members" },
@@ -18,12 +16,7 @@ const NAV_FULL = [
   { to: "/org-admin/privacy", label: "Privacy" },
 ];
 
-const NAV_V1 = [
-  { to: "/org-admin/documents", end: false, label: "Company documents" },
-  { to: "/org-admin/users", end: false, label: "Employees" },
-];
-
-const NAV = PRODUCT_V1 ? NAV_V1 : NAV_FULL;
+const NAV = NAV_FULL;
 
 export default function ClientAdminShell() {
   const { user, session } = useAuth();
@@ -36,7 +29,7 @@ export default function ClientAdminShell() {
   }
 
   useEffect(() => {
-    if (!session || PRODUCT_V1) return;
+    if (!session) return;
     fetchOrgOverview(session)
       .then((o) => setIncomplete(o.setup.incomplete_count))
       .catch(() => setIncomplete(null));

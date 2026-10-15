@@ -180,6 +180,10 @@ class Settings(BaseSettings):
         default=False,
         validation_alias=AliasChoices("debug_rag", "DEBUG_RAG"),
     )
+    product_v1: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("product_v1", "PRODUCT_V1"),
+    )
 
     github_app_id: str | None = None
     github_client_id: str | None = None

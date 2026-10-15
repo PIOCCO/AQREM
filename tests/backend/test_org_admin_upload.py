@@ -85,6 +85,8 @@ def test_upload_txt_creates_document(client: TestClient, db_session, monkeypatch
     from app.core.config import get_settings
 
     get_settings.cache_clear()
+    monkeypatch.setattr("app.core.broker_health.assert_broker_available", lambda: None)
+    monkeypatch.setattr("app.services.ingestion.enqueue.enqueue_source_sync_for_job", lambda *a, **k: None)
     org, token = _seed_admin(db_session)
     res = client.post(
         "/api/v1/org-admin/documents/upload",

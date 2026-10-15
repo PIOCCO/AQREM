@@ -171,7 +171,7 @@ function ConversationMenu({
   active?: boolean;
   onRename: (title: string) => void;
   onDelete: (conversationId: string) => void;
-  onShare: () => void;
+  onShare?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -214,9 +214,11 @@ function ConversationMenu({
           <button type="button" className="chat-menu-item w-full flex items-center gap-2" onClick={() => { setEditing(true); setDraft(title); }}>
             <IconEdit /> Rename
           </button>
-          <button type="button" className="chat-menu-item w-full flex items-center gap-2" onClick={() => { onShare(); setOpen(false); }}>
-            Share link
-          </button>
+          {onShare ? (
+            <button type="button" className="chat-menu-item w-full flex items-center gap-2" onClick={() => { onShare(); setOpen(false); }}>
+              Share link
+            </button>
+          ) : null}
           <button
             type="button"
             className="chat-menu-item w-full flex items-center gap-2 text-[var(--color-danger)]"
@@ -471,10 +473,16 @@ export default function ChatSidebar({
                               title={c.title}
                               active={active}
                               onRename={(t) => rename(c.id, t)}
-                              onShare={() => {
-                                const url = `${window.location.origin}/c/${c.id}`;
-                                void navigator.clipboard.writeText(url).then(() => toast.push("Conversation link copied"));
-                              }}
+                              onShare={
+                                PRODUCT_V1
+                                  ? undefined
+                                  : () => {
+                                      const url = `${window.location.origin}/c/${c.id}`;
+                                      void navigator.clipboard
+                                        .writeText(url)
+                                        .then(() => toast.push("Conversation link copied"));
+                                    }
+                              }
                               onDelete={(id) => {
                                 const wasActive = activeConversationId === id;
                                 remove(id);

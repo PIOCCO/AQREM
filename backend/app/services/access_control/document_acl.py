@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from app.models.client_admin import ClientDocument
 from app.models.evidence import EvidenceItem
 from app.models.source import Source
-from app.services.access_control.constants import VISIBILITY_ADMINS_ONLY, VISIBILITY_UNSET
+from app.core.config import get_settings
+from app.services.access_control.constants import VISIBILITY_ADMINS_ONLY, VISIBILITY_ALL_STAFF, VISIBILITY_UNSET
 
 
 def resolve_document_acl(
@@ -17,6 +18,8 @@ def resolve_document_acl(
     source_id: UUID,
     file_name: str,
 ) -> tuple[str, list[UUID], list[UUID]]:
+    if get_settings().product_v1:
+        return VISIBILITY_ALL_STAFF, [], []
     doc = (
         db.query(ClientDocument)
         .filter(

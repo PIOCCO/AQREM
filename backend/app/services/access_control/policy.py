@@ -11,10 +11,13 @@ from app.services.access_control.constants import (
     VISIBILITY_GROUPS,
     VISIBILITY_USERS,
 )
+from app.core.config import get_settings
 from app.services.access_control.context import UserAccessContext
 
 
 def evidence_acl_filter(query: Query, access: UserAccessContext, model) -> Query:
+    if get_settings().product_v1:
+        return query
     if access.is_org_admin:
         return query
     user_id = access.user_id

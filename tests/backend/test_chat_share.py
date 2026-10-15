@@ -10,6 +10,16 @@ from app.models.chat_share import ChatConversationShare
 from app.models.organization import Organization, OrganizationMembership, User
 
 
+@pytest.fixture(autouse=True)
+def legacy_product_surface(monkeypatch):
+    monkeypatch.setenv("PRODUCT_V1", "false")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 def _auth_headers(token: str, org_id: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}", "X-Organization-Id": org_id}
 
@@ -71,6 +81,35 @@ def test_share_disabled_by_default(client: TestClient, db_session):
         json={"client_conversation_id": "x", "title": "T", "messages": []},
     )
     assert res.status_code == 403
+
+
+def test_share_not_readable_by_other_user_same_org(client: TestClient, db_session):
+    org, user_a, token_a = _seed_org_user(db_session, "share-same", "same-a@example.com")
+    user_b = User(email="same-b@example.com", hashed_password=hash_password("password"), full_name="B")
+    db_session.add(user_b)
+    db_session.flush()
+    db_session.add(
+        OrganizationMembership(organization_id=org.id, user_id=user_b.id, role=Role.EDITOR.value, is_active=True)
+    )
+    db_session.flush()
+    token_b = create_access_token(
+        str(user_b.id),
+        {"organization_id": str(org.id), "role": Role.EDITOR.value, "auth_version": 1},
+        audience=AUD_EMPLOYEE,
+    )
+    create = client.post(
+        "/api/v1/chat/shares",
+        headers=_auth_headers(token_a, str(org.id)),
+        json={
+            "client_conversation_id": "conv-owned",
+            "title": "Mine",
+            "messages": [{"role": "user", "content": "private"}],
+        },
+    )
+    assert create.status_code == 201
+    share_token = create.json()["share_token"]
+    denied = client.get(f"/api/v1/chat/shares/{share_token}", headers=_auth_headers(token_b, str(org.id)))
+    assert denied.status_code == 403
 
 
 def test_share_not_accessible_from_other_org(client: TestClient, db_session):

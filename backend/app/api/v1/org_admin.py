@@ -1,7 +1,5 @@
 """Client organization admin console (private assistant dashboard)."""
 
-from __future__ import annotations
-
 import hashlib
 import os
 from datetime import UTC, datetime, timedelta
@@ -293,13 +291,12 @@ def list_documents(
 @limiter.limit("20/minute")
 async def upload_documents(
     request: Request,
-    *,
-    tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_tenant_db),
-    control_db: Session = Depends(get_db),
     files: Annotated[list[UploadFile], File()],
     visibility_mode: Annotated[str, Form()],
     visibility_group_ids: Annotated[str | None, Form()] = None,
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    db: Session = Depends(get_tenant_db),
+    control_db: Session = Depends(get_db),
 ) -> dict:
     assert_org_admin_action(tenant, action="write", resource_type="document", resource_org_id=tenant.organization_id)
     from app.services.setup_checklist import tenant_database_setup_complete
@@ -319,7 +316,10 @@ async def upload_documents(
     except StorageUnavailable as exc:
         raise org_admin_error(code="STORAGE_UNAVAILABLE", message=exc.message, status_code=503) from exc
     ensure_default_access_groups(db, tenant.organization_id)
-    if visibility_mode not in {VISIBILITY_ALL_STAFF, VISIBILITY_GROUPS, VISIBILITY_USERS, VISIBILITY_ADMINS_ONLY}:
+    settings = get_settings()
+    if settings.product_v1:
+        visibility_mode = VISIBILITY_ALL_STAFF
+    elif visibility_mode not in {VISIBILITY_ALL_STAFF, VISIBILITY_GROUPS, VISIBILITY_USERS, VISIBILITY_ADMINS_ONLY}:
         raise org_admin_error(code="VISIBILITY_REQUIRED", message="Choose who can see these files.", field="visibility_mode")
     group_ids: list[UUID] = []
     if visibility_group_ids:
@@ -329,7 +329,6 @@ async def upload_documents(
                 group_ids.append(UUID(part))
     if visibility_mode == VISIBILITY_GROUPS and not group_ids:
         raise org_admin_error(code="GROUPS_REQUIRED", message="Pick at least one group.", field="visibility_mode")
-    settings = get_settings()
     source = _ensure_document_source(db, tenant)
     try:
         storage = get_blob_storage()
@@ -430,7 +429,7 @@ async def upload_documents(
             ) from exc
         sensitive, _reason = detect_sensitive(file_name=safe_name, content_sample=data)
         effective_mode = visibility_mode
-        if sensitive and visibility_mode == VISIBILITY_ALL_STAFF:
+        if not settings.product_v1 and sensitive and visibility_mode == VISIBILITY_ALL_STAFF:
             effective_mode = VISIBILITY_ADMINS_ONLY
         doc = ClientDocument(
             organization_id=tenant.organization_id,

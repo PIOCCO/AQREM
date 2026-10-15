@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.audit.service import record_audit
+from app.core.product_v1 import assert_chat_sharing_enabled
 from app.core.rate_limit import PUBLIC_SHARE_LIMIT, limiter
 from app.db.session import get_db
 from app.models.chat_share_index import ChatShareTokenIndex
@@ -36,12 +37,14 @@ def _tenant_session_for_org(control_db: Session, organization_id) -> tuple[Sessi
 @router.get("/shares/{token}", response_model=ChatShareViewResponse)
 @limiter.limit(PUBLIC_SHARE_LIMIT)
 def view_public_chat_share(token: str, request: Request, control_db: Session = Depends(get_db)) -> JSONResponse:
+    assert_chat_sharing_enabled()
     index = _index_valid(control_db.get(ChatShareTokenIndex, token))
     tenant_db, close_tenant = _tenant_session_for_org(control_db, index.organization_id)
     try:
         share = ChatShareService(tenant_db, control_db=control_db).get_share_for_tenant(
             token=token,
             organization_id=index.organization_id,
+            allow_public=True,
         )
         record_audit(
             tenant_db,

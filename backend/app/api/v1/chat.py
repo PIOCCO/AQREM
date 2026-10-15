@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.audit.service import record_audit
 from app.core.access_deps import get_user_access
 from app.core.dependencies import get_tenant_context
+from app.core.product_v1 import assert_chat_sharing_enabled
 from app.services.access_control.context import UserAccessContext
 from app.core.rate_limit import RETRIEVAL_PREVIEW_LIMIT, limiter
 from app.core.roles import Role
@@ -86,6 +87,7 @@ async def create_chat_share(
     control_db: Session = Depends(get_db),
     db: Session = Depends(get_tenant_db),
 ) -> CreateChatShareResponse:
+    assert_chat_sharing_enabled()
     messages = [m.model_dump() for m in payload.messages]
     share = ChatShareService(db, control_db=control_db).create_or_update_share(
         organization_id=tenant.organization_id,
@@ -118,8 +120,12 @@ async def get_chat_share(
     control_db: Session = Depends(get_db),
     db: Session = Depends(get_tenant_db),
 ) -> ChatShareViewResponse:
+    assert_chat_sharing_enabled()
     share = ChatShareService(db, control_db=control_db).get_share_for_tenant(
-        token=token, organization_id=tenant.organization_id
+        token=token,
+        organization_id=tenant.organization_id,
+        user_id=tenant.user_id,
+        is_org_admin=tenant.role == Role.ORG_ADMIN,
     )
     record_audit(
         db,
@@ -145,6 +151,7 @@ async def revoke_chat_share(
     control_db: Session = Depends(get_db),
     db: Session = Depends(get_tenant_db),
 ) -> None:
+    assert_chat_sharing_enabled()
     is_admin = tenant.role == Role.ORG_ADMIN
     ChatShareService(db, control_db=control_db).revoke_share(
         token=token,

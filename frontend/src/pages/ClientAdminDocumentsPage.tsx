@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/authContext";
+import { PRODUCT_V1 } from "../lib/productV1";
 import { fetchDocuments, removeDocument, retryDocument, uploadDocuments } from "../lib/orgAdminApi";
 
 const ALLOWED_HINT = "PDF, Markdown, plain text, and .tar.gz archives";
@@ -144,7 +145,7 @@ export default function ClientAdminDocumentsPage() {
     queue_wait_warning?: boolean;
   } | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [visibilityMode, setVisibilityMode] = useState("admins_only");
+  const [visibilityMode, setVisibilityMode] = useState(PRODUCT_V1 ? "all_staff" : "admins_only");
   const [tick, setTick] = useState(0);
 
   const load = useCallback(
@@ -258,17 +259,23 @@ export default function ClientAdminDocumentsPage() {
           void onFiles(e.dataTransfer.files);
         }}
       >
-        <label className="block text-sm text-left max-w-md mx-auto mb-4">
-          <span className="font-medium">Who can see uploaded files?</span>
-          <select
-            className="mt-1 w-full rounded-lg border border-chat-border bg-chat-surface px-3 py-2 text-sm"
-            value={visibilityMode}
-            onChange={(e) => setVisibilityMode(e.target.value)}
-          >
-            <option value="admins_only">Admins only</option>
-            <option value="all_staff">All staff</option>
-          </select>
-        </label>
+        {PRODUCT_V1 ? (
+          <p className="text-sm text-chat-muted max-w-md mx-auto mb-4">
+            Uploaded files are available to every employee in your organization for the assistant.
+          </p>
+        ) : (
+          <label className="block text-sm text-left max-w-md mx-auto mb-4">
+            <span className="font-medium">Who can see uploaded files?</span>
+            <select
+              className="mt-1 w-full rounded-lg border border-chat-border bg-chat-surface px-3 py-2 text-sm"
+              value={visibilityMode}
+              onChange={(e) => setVisibilityMode(e.target.value)}
+            >
+              <option value="admins_only">Admins only</option>
+              <option value="all_staff">All staff</option>
+            </select>
+          </label>
+        )}
         <button type="button" className="aq-btn-primary mt-3" disabled={uploading} onClick={() => inputRef.current?.click()}>
           {uploading ? "Uploading…" : "Choose files"}
         </button>
@@ -296,7 +303,7 @@ export default function ClientAdminDocumentsPage() {
             <thead>
               <tr className="border-b border-chat-border text-left text-chat-muted">
                 <th className="p-3 font-medium">File</th>
-                <th className="p-3 font-medium">Who can see</th>
+                {PRODUCT_V1 ? null : <th className="p-3 font-medium">Who can see</th>}
                 <th className="p-3 font-medium">Status</th>
                 <th className="p-3 font-medium">Actions</th>
               </tr>
@@ -316,7 +323,7 @@ export default function ClientAdminDocumentsPage() {
                       </p>
                     ) : null}
                   </td>
-                  <td className="p-3">{visibilityLabel(row.visibility_mode)}</td>
+                  {PRODUCT_V1 ? null : <td className="p-3">{visibilityLabel(row.visibility_mode)}</td>}
                   <td className="p-3">
                     <DocumentProgressCell row={row} tick={tick} />
                   </td>
