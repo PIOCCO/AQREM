@@ -128,6 +128,7 @@ services:
       GATEWAY_URL: http://model-gateway:8080
       GATEWAY_API_KEY: local_dev_gateway_key_00000001
       EMBEDDING_DIMENSIONS: "384"
+      CELERY_BEAT_SCHEDULE_FILE: /tmp/celerybeat-schedule
     command: ["celery", "-A", "app.celery_app", "beat", "--loglevel=info"]
     depends_on:
       redis:
