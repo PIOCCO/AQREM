@@ -96,7 +96,7 @@ def _sync_document_from_job(doc: ClientDocument, job: SourceSyncJob | None) -> N
     if job.status == SyncJobStatus.RUNNING.value:
         doc.status = "indexing"
         doc.index_progress = min(95, doc.index_progress + 10 or 10)
-    elif job.status == SyncJobStatus.SUCCEEDED.value:
+    elif job.status == SyncJobStatus.COMPLETED.value:
         doc.status = "indexed"
         doc.index_progress = 100
         doc.failure_reason = None
