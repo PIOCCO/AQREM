@@ -16,6 +16,7 @@ from app.services.ingestion.ignore import build_pathspec, should_ignore
 from app.services.ingestion.parsers import parse_bytes
 from app.services.ingestion.strength import classify_evidence_strength
 from app.services.access_control.document_acl import resolve_document_acl
+from app.services.ingestion.embedding_health import embedding_is_current, stamp_embedding
 from app.services.library.invalidate import mark_evidence_changed
 from app.core.config import get_settings
 from app.services.llm.errors import EmbeddingDimensionMismatchError
@@ -68,7 +69,9 @@ async def index_files(
     path_spec = build_pathspec(db, source.organization_id, source.project_id)
     llm = get_llm_provider(source.organization_id)
     expected_dim = get_settings().embedding_dimensions
+    model_id = llm.embedding_model_id
     indexed = 0
+    embedded = 0
     skipped = 0
     updated = 0
 
@@ -112,12 +115,19 @@ async def index_files(
         report("embedding", 0, len(chunks))
         embeddings = await llm.embed(chunk_texts)
         report("embedding", len(chunks), len(chunks))
+        if len(embeddings) != len(chunks):
+            raise RuntimeError(
+                f"Embedding provider returned {len(embeddings)} vectors for {len(chunks)} chunks."
+            )
         for vec in embeddings:
-            if vec and len(vec) != expected_dim:
-                raise EmbeddingDimensionMismatchError(expected=expected_dim, actual=len(vec))
+            if not vec or len(vec) != expected_dim:
+                raise EmbeddingDimensionMismatchError(
+                    expected=expected_dim,
+                    actual=len(vec or []),
+                )
 
         written = 0
-        for chunk, embedding in zip(chunks, embeddings, strict=False):
+        for chunk, embedding in zip(chunks, embeddings, strict=True):
             c_hash = content_hash(chunk.content)
             existing = (
                 db.query(EvidenceItem)
@@ -136,7 +146,10 @@ async def index_files(
 
             if existing and existing.content_hash == c_hash:
                 _apply_chunk_visibility(db, source=source, file_name=rel.split("/")[-1], item=existing)
+                if not embedding_is_current(existing, model_id, expected_dim):
+                    stamp_embedding(existing, embedding, model_id, expected_dim)
                 indexed += 1
+                embedded += 1
                 continue
 
             if existing and existing.content_hash != c_hash:
@@ -173,6 +186,7 @@ async def index_files(
                 existing.symbol_name = symbol.name if symbol else None
                 existing.symbol_kind = symbol.kind if symbol else None
                 existing.evidence_strength = strength
+                stamp_embedding(existing, embedding, model_id, expected_dim)
                 _apply_chunk_visibility(db, source=source, file_name=rel.split("/")[-1], item=existing)
                 db.execute(
                     text(
@@ -182,6 +196,7 @@ async def index_files(
                 )
                 updated += 1
                 indexed += 1
+                embedded += 1
                 continue
 
             item = EvidenceItem(
@@ -206,8 +221,8 @@ async def index_files(
                 chunk_index=chunk.chunk_index,
                 content_hash=c_hash,
                 evidence_strength=strength,
-                embedding=embedding,
             )
+            stamp_embedding(item, embedding, model_id, expected_dim)
             db.add(item)
             db.flush()
             _apply_chunk_visibility(db, source=source, file_name=rel.split("/")[-1], item=item)
@@ -216,11 +231,19 @@ async def index_files(
                 {"content": chunk.content, "id": str(item.id)},
             )
             indexed += 1
+            embedded += 1
             written += 1
             report("writing", written, len(chunks))
 
     source.status = SourceStatus.READY.value
     job.status = SyncJobStatus.COMPLETED.value
-    job.stats = {"indexed_chunks": indexed, "skipped_files": skipped, "updated_chunks": updated}
+    job.stats = {
+        "indexed_chunks": indexed,
+        "embedded_chunks": embedded,
+        "skipped_files": skipped,
+        "updated_chunks": updated,
+        "embedding_model": model_id,
+        "embedding_dimensions": expected_dim,
+    }
     db.flush()
     return job.stats

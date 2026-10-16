@@ -33,7 +33,7 @@ async def _run() -> int:
     settings = Settings()
     provider_name = settings.llm_provider.lower().strip()
 
-    if provider_name not in {"gateway", "mock", "azure"}:
+    if provider_name not in {"gateway", "mock", "local", "azure", "openai"}:
         _fail("llm_provider", f"unexpected {provider_name}")
         fails += 1
     else:

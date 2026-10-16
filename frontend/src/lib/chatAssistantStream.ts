@@ -74,7 +74,8 @@ export async function streamAssistantReply(
             conversational: Boolean(event.conversational),
             outcome: typeof event.outcome === "string" ? event.outcome : undefined,
             citations,
-            insufficientEvidence: event.evidence_sufficiency === "insufficient",
+            insufficientEvidence:
+              event.evidence_sufficiency === "insufficient" && citations.length === 0,
             projectName: typeof event.project_name === "string" ? event.project_name : undefined,
             sourcesSearched:
               typeof event.sources_searched === "number" ? event.sources_searched : undefined,

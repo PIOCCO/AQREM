@@ -176,8 +176,24 @@ class Settings(BaseSettings):
         default=384,
         validation_alias=AliasChoices("embedding_dimensions", "EMBEDDING_DIMENSIONS"),
     )
+    openai_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("openai_api_key", "OPENAI_API_KEY"),
+    )
+    openai_base_url: str = Field(
+        default="https://api.openai.com/v1",
+        validation_alias=AliasChoices("openai_base_url", "OPENAI_BASE_URL"),
+    )
+    openai_chat_model: str = Field(
+        default="gpt-4o-mini",
+        validation_alias=AliasChoices("openai_chat_model", "OPENAI_CHAT_MODEL"),
+    )
+    openai_embedding_model: str = Field(
+        default="text-embedding-3-small",
+        validation_alias=AliasChoices("openai_embedding_model", "OPENAI_EMBEDDING_MODEL"),
+    )
     debug_rag: bool = Field(
-        default=False,
+        default=True,
         validation_alias=AliasChoices("debug_rag", "DEBUG_RAG"),
     )
     product_v1: bool = Field(
@@ -251,29 +267,47 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "In production, SECRET_KEY must be a unique value of at least 32 characters."
                 )
-            if self.llm_provider.lower().strip() == "azure":
-                from app.core.llm_config import inspect_azure_openai
-
-                status = inspect_azure_openai(self)
-                if not status.configured:
-                    raise ValueError(
-                        "Production requires complete Azure OpenAI settings when LLM_PROVIDER=azure. "
-                        f"Missing: {', '.join(status.missing)}"
-                    )
             provider = self.llm_provider.lower().strip()
-            if provider in {"mock", "azure"}:
+            if provider in {"mock", "local", "fake", "test", ""}:
                 raise ValueError(
-                    "Production requires LLM_PROVIDER=gateway (direct Azure and mock are not allowed)."
+                    "Production refuses to start with a mock or fake LLM provider "
+                    f"(LLM_PROVIDER={provider or 'unset'}). "
+                    "Set LLM_PROVIDER=openai with OPENAI_API_KEY, or LLM_PROVIDER=gateway "
+                    "pointed at a real model service. The deterministic local provider is "
+                    "allowed only when APP_ENV is not production."
                 )
-            if provider == "gateway":
+            if provider == "openai":
+                if not (self.openai_api_key or "").strip():
+                    raise ValueError(
+                        "Production LLM_PROVIDER=openai requires OPENAI_API_KEY. "
+                        "Refusing to start with an unconfigured model provider."
+                    )
+            elif provider == "gateway":
                 from app.core.gateway_config import inspect_gateway
+                from app.core.llm_config import gateway_points_at_fake
 
+                if gateway_points_at_fake(self):
+                    raise ValueError(
+                        "Production refuses to start with a mock or fake model provider. "
+                        "GATEWAY_URL points at a fake or test upstream."
+                    )
                 gw = inspect_gateway(self)
                 if not (self.gateway_url or "").strip():
                     raise ValueError(
                         "Production requires GATEWAY_URL when LLM_PROVIDER=gateway. "
                         f"Missing: {', '.join(gw.missing)}"
                     )
+            elif provider == "azure":
+                raise ValueError(
+                    "Production refuses LLM_PROVIDER=azure. "
+                    "Set LLM_PROVIDER=openai with OPENAI_API_KEY, or LLM_PROVIDER=gateway "
+                    "pointed at a real model service."
+                )
+            else:
+                raise ValueError(
+                    f"Production refuses unknown LLM_PROVIDER={provider!r}. "
+                    "Use openai or gateway. Mock providers are not allowed."
+                )
             if not (self.azure_storage_connection_string or "").strip() and not _is_local_prod_lab():
                 raise ValueError(
                     "Production requires blob storage (AZURE_STORAGE_CONNECTION_STRING); local disk uploads are forbidden."

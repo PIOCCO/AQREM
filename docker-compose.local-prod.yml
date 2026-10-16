@@ -94,10 +94,15 @@ services:
       # Shared disk uploads (API + worker). Overrides .env Azurite/127.0.0.1 strings that break inside containers.
       LOCAL_UPLOAD_DIR: /data/uploads
       AZURE_STORAGE_CONNECTION_STRING: ""
-      LLM_PROVIDER: gateway
-      GATEWAY_URL: http://model-gateway:8080
-      GATEWAY_API_KEY: local_dev_gateway_key_00000001
-      EMBEDDING_DIMENSIONS: "384"
+      # Real OpenAI for chat and embeddings. Production refuses mock/fake providers.
+      # Without OPENAI_API_KEY the API will not start (APP_ENV=production).
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4o-mini}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-384}
+      DEBUG_RAG: ${DEBUG_RAG:-true}
       LICENSING_TEST_MODE: "false"
     ports:
       - "8000:8000"
@@ -108,9 +113,6 @@ services:
         condition: service_healthy
       azurite:
         condition: service_started
-      model-gateway:
-        condition: service_started
-
   worker-beat:
     build:
       context: .
@@ -123,11 +125,13 @@ services:
       CONTAINER_ROLE: worker
       DATABASE_URL: postgresql+psycopg://aqrem:aqrem@postgres:5432/aqrem
       REDIS_URL: redis://redis:6379/0
-      # Same as worker — beat imports app.celery_app → production Settings requires gateway.
-      LLM_PROVIDER: gateway
-      GATEWAY_URL: http://model-gateway:8080
-      GATEWAY_API_KEY: local_dev_gateway_key_00000001
-      EMBEDDING_DIMENSIONS: "384"
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4o-mini}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-384}
+      DEBUG_RAG: ${DEBUG_RAG:-true}
       CELERY_BEAT_SCHEDULE_FILE: /tmp/celerybeat-schedule
     command: ["celery", "-A", "app.celery_app", "beat", "--loglevel=info"]
     depends_on:
@@ -151,18 +155,19 @@ services:
       REDIS_URL: redis://redis:6379/0
       LOCAL_UPLOAD_DIR: /data/uploads
       AZURE_STORAGE_CONNECTION_STRING: ""
-      LLM_PROVIDER: gateway
-      GATEWAY_URL: http://model-gateway:8080
-      GATEWAY_API_KEY: local_dev_gateway_key_00000001
-      EMBEDDING_DIMENSIONS: "384"
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4o-mini}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-384}
+      DEBUG_RAG: ${DEBUG_RAG:-true}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       azurite:
-        condition: service_started
-      model-gateway:
         condition: service_started
 
   web:

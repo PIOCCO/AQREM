@@ -3,6 +3,7 @@
 import os
 
 from celery import Celery
+from celery.signals import worker_process_init
 
 from app.core.config import get_settings
 
@@ -25,5 +26,21 @@ celery_app.conf.beat_schedule = {
 celery_app.conf.include = ["app.tasks.ingestion", "app.tasks.maintenance"]
 
 # Import task modules so @celery_app.task registers before the worker consumes queues.
-import app.tasks.ingestion  # noqa: E402, F401
-import app.tasks.maintenance  # noqa: E402, F401
+import app.tasks.ingestion
+import app.tasks.maintenance  # noqa: F401
+
+
+@worker_process_init.connect
+def _log_worker_providers(**_kwargs: object) -> None:
+    from app.core.llm_config import log_active_providers
+
+    log_active_providers(os.environ.get("CONTAINER_ROLE") or "worker")
+
+
+def _log_providers_on_import() -> None:
+    from app.core.llm_config import log_active_providers
+
+    log_active_providers(os.environ.get("CONTAINER_ROLE") or "worker")
+
+
+_log_providers_on_import()

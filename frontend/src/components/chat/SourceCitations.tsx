@@ -96,7 +96,8 @@ export default function MessageMetaPanel({
 
   if (meta.conversational) return null;
 
-  if (meta.insufficientEvidence) {
+  const citations = meta.citations ?? [];
+  if (meta.insufficientEvidence && citations.length === 0) {
     return <InsufficientEvidencePanel meta={meta} />;
   }
 
@@ -116,8 +117,6 @@ export default function MessageMetaPanel({
     else if (meta.outcome && outcomeLabels[meta.outcome]) badges.push(outcomeLabels[meta.outcome]);
     if (meta.needsReview && !badges.includes("Needs review")) badges.push("Needs review");
   }
-
-  const citations = meta.citations ?? [];
 
   return (
     <div className="mt-4 space-y-3">

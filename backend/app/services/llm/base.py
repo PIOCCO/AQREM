@@ -19,6 +19,16 @@ class AnswerRequest:
 
 
 class LLMProvider(ABC):
+    provider_name: str = "unknown"
+
+    @property
+    def chat_model_id(self) -> str:
+        return self.provider_name
+
+    @property
+    def embedding_model_id(self) -> str:
+        return self.provider_name
+
     @abstractmethod
     async def embed(self, texts: list[str]) -> list[list[float]]: ...
 

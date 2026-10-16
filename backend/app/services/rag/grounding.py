@@ -89,11 +89,15 @@ def selected_evidence_ids(
     behavior: BehaviorResult,
 ) -> set[UUID]:
     if behavior.outcome in {
-        AnswerOutcome.INSUFFICIENT_EVIDENCE,
         AnswerOutcome.ACCESS_DENIED,
         AnswerOutcome.SOURCE_UNAVAILABLE,
     }:
         return set()
+
+    if behavior.outcome == AnswerOutcome.INSUFFICIENT_EVIDENCE:
+        if not items:
+            return set()
+        return {item.id for item in items[:3]}
 
     selected_ids = {UUID(x) for x in structured.evidence_ids if x}
     if not selected_ids and items and structured.evidence_sufficiency != "insufficient":

@@ -1,7 +1,6 @@
 import { askChat, type AuthSession } from "./api";
 import { buildConversationalReply, classifyChatIntent } from "./chatIntent";
 import type { ChatCitation, ChatMessageMeta } from "./conversations";
-import { formatNoEvidenceMessage } from "./noEvidenceMessage";
 import { truncateText } from "./textPreview";
 
 export type AssistantReply = {
@@ -82,12 +81,8 @@ export async function generateAssistantReply(
     const fromLibrary = Boolean(data.from_library);
 
     let content = formatLibraryAnswer(data.answer ?? "", fromLibrary);
-    if (!fromLibrary && insufficient) {
-      content = formatNoEvidenceMessage(
-        (data.project_name as string | undefined) ?? scope?.projectName,
-        typeof data.sources_searched === "number" ? data.sources_searched : (scope?.sourcesCount ?? 0),
-      );
-    }
+    // Keep the server's two empty-state sentences distinct. Replacing them here
+    // made "no documents" and "no match" look the same.
     if (
       !fromLibrary &&
       !insufficient &&
@@ -106,7 +101,7 @@ export async function generateAssistantReply(
         fromLibrary,
         libraryEntryId: data.library_entry_id ?? undefined,
         libraryStatus: fromLibrary ? "approved" : undefined,
-        insufficientEvidence: insufficient,
+        insufficientEvidence: insufficient && citations.length === 0,
         conversational,
         intent: typeof data.intent === "string" ? data.intent : undefined,
         outcome,

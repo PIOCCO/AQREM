@@ -2,11 +2,11 @@
 
 
 def format_no_indexed_documents_message() -> str:
-    return "No documents are indexed yet. Ask your admin to upload sources."
+    return "No documents available"
 
 
 def format_no_relevant_information_message() -> str:
-    return "I couldn't find this in the company documents. Please ask your admin."
+    return "I couldn't find this in the company documents"
 
 
 def format_insufficient_evidence_message(*, project_name: str | None, sources_searched: int) -> str:

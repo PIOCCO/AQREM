@@ -20,10 +20,20 @@ _RETRY_BACKOFF_SEC = (0.5, 1.5, 3.0)
 class AzureOpenAIProvider(LLMProvider):
     """Azure OpenAI chat + embeddings via the official OpenAI Python SDK."""
 
+    provider_name = "azure"
+
     def __init__(self, settings: Settings) -> None:
         require_azure_openai(settings)
         self.settings = settings
         self._client = self._build_client(settings)
+
+    @property
+    def chat_model_id(self) -> str:
+        return f"azure:{self.settings.azure_openai_chat_deployment}"
+
+    @property
+    def embedding_model_id(self) -> str:
+        return f"azure:{self.settings.azure_openai_embedding_deployment}:{self.settings.embedding_dimensions}"
 
     @staticmethod
     def _build_client(settings: Settings) -> AsyncAzureOpenAI:

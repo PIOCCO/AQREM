@@ -24,8 +24,9 @@ export const V1_HIDDEN_WORKSPACE_ROUTES = [
   "/settings",
 ] as const;
 
-export const V1_EMPLOYEE_NOT_FOUND_MESSAGE =
-  "I couldn't find this in the company documents. Please ask your admin.";
+export const V1_NO_DOCUMENTS_MESSAGE = "No documents available";
+
+export const V1_EMPLOYEE_NOT_FOUND_MESSAGE = "I couldn't find this in the company documents";
 
 export const V1_COMPOSER_DISCLAIMER =
   "AQREM can make mistakes. Check important answers against the source documents.";

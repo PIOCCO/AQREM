@@ -32,16 +32,33 @@ import app.models  # noqa: F401
 logger = logging.getLogger("aqrem")
 
 
+def _attach_info_logger(name: str) -> None:
+    """Show provider and retrieval lines in the API process logs."""
+    log = logging.getLogger(name)
+    log.setLevel(logging.INFO)
+    if not any(isinstance(handler, logging.StreamHandler) for handler in log.handlers):
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(levelname)s %(name)s %(message)s"))
+        log.addHandler(handler)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    for name in ("aqrem", "aqrem.providers", "aqrem.rag"):
+        _attach_info_logger(name)
     settings = get_settings()
     validate_container_startup(os.environ.get("CONTAINER_ROLE", ""), settings)
+    from app.core.llm_config import log_active_providers
+
     summary = llm_provider_summary(settings)
+    log_active_providers(os.environ.get("CONTAINER_ROLE") or "api")
     logger.info(
-        "LLM provider=%s configured=%s auth=%s",
+        "LLM provider=%s configured=%s auth=%s chat_model=%s embedding_model=%s",
         summary.get("provider"),
         summary.get("configured"),
         summary.get("auth_mode"),
+        summary.get("chat_model"),
+        summary.get("embedding_model"),
     )
     if settings.llm_provider.lower().strip() == "azure":
         az = inspect_azure_openai(settings)
