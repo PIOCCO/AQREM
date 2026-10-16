@@ -1005,7 +1005,7 @@ def deactivate_org_member(
             ) from exc
         raise org_admin_error(code=code, message=code.replace("_", " ").capitalize()) from exc
     db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/usage", response_model=UsageSummaryResponse)
@@ -1598,4 +1598,4 @@ def reject_pending(
     except ValueError as exc:
         raise org_admin_error(code="NOT_FOUND", message=str(exc)) from exc
     control_db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

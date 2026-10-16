@@ -84,5 +84,7 @@ def test_diagnostics_bundle_has_no_secrets_or_content(client, db_session, monkey
 
 
 def test_org_admin_diagnostics_only_in_dedicated(client):
+    # Unauthenticated callers are refused before the tier check (CHECK 2); an authenticated org admin
+    # in the shared tier gets 404 (covered by test_endpoint_isolation_matrix).
     r = client.get("/api/v1/org-admin/system/diagnostics")
-    assert r.status_code == 404
+    assert r.status_code == 401

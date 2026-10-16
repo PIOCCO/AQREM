@@ -441,7 +441,7 @@ def delete_admin_invitation_row(
     _delete_admin_invitation_impl(db, organization_id=organization_id, invitation_id=invitation_id, admin=admin)
 
 
-    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 @router.post(
     "/organizations/{organization_id}/invitations/admin/{invitation_id}/delete",
     status_code=status.HTTP_204_NO_CONTENT, response_class=Response,
@@ -506,7 +506,7 @@ def delete_employee_link_row(
     _delete_employee_link_impl(db, organization_id=organization_id, link_id=link_id, admin=admin)
 
 
-    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 @router.post("/organizations/{organization_id}/employee-link/{link_id}/delete", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def delete_employee_link_row_post(
     organization_id: UUID,
@@ -517,7 +517,7 @@ def delete_employee_link_row_post(
     _delete_employee_link_impl(db, organization_id=organization_id, link_id=link_id, admin=admin)
 
 
-    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 @router.get("/organizations/{organization_id}/employee-link", response_model=EmployeeLinkSummary)
 def get_employee_link_summary(
     organization_id: UUID,
@@ -636,7 +636,7 @@ def pause_link(
     db.commit()
 
 
-    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 @router.post("/organizations/{organization_id}/employee-link/{link_id}/resume", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def resume_link(
     organization_id: UUID,
@@ -652,7 +652,7 @@ def resume_link(
     db.commit()
 
 
-    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 @router.post("/organizations/{organization_id}/employee-link/{link_id}/disable", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def disable_link(
     organization_id: UUID,
@@ -666,4 +666,4 @@ def disable_link(
         raise admin_error(code="NOT_FOUND", message="Link not found", status_code=404)
     set_link_status(db, admin_user_id=admin.id, link=link, status=LINK_DISABLED)
     db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

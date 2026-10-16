@@ -722,7 +722,7 @@ def revoke_user_invitation(
     db.commit()
 
 
-    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 @router.post(
     "/organizations/{organization_id}/invitation-history/{record_id}/delete",
     status_code=status.HTTP_204_NO_CONTENT, response_class=Response,
@@ -857,7 +857,7 @@ def deactivate_member(
     db.commit()
 
 
-    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 @router.get("/organizations/{organization_id}/audit", response_model=AdminAuditListResponse)
 def list_org_audit(
     organization_id: UUID,

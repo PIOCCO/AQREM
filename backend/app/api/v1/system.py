@@ -89,7 +89,8 @@ def platform_diagnostics(_: User = Depends(require_platform_permission("deployme
 from app.api.v1.org_admin import _require_org_admin_surface  # noqa: E402
 from app.core.tenant import TenantContext  # noqa: E402
 
-org_admin_router = APIRouter(dependencies=[Depends(require_dedicated)])
+# Authenticate first (unauthenticated callers get 401 like every other route), then the tier check.
+org_admin_router = APIRouter(dependencies=[Depends(_require_org_admin_surface), Depends(require_dedicated)])
 
 
 @org_admin_router.get("/database-check")

@@ -309,7 +309,7 @@ def reset_password(
     db.commit()
 
 
-    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 @router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def change_password(
     payload: ChangePasswordRequest,
@@ -323,7 +323,7 @@ def change_password(
     db.commit()
 
 
-    return Response(status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 @router.get("/me", response_model=UserResponse)
 def me(
     user: User = Depends(get_authenticated_user),
@@ -358,7 +358,8 @@ def me(
         )
         if membership and membership.is_active:
             role = Role(membership.role)
-        elif membership and not membership.is_active:
+        else:
+            # Not a member (or inactive): never echo a foreign organization id back.
             organization_id = None
     else:
         platform_role_preview = resolve_platform_role(user)
