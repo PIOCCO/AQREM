@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/authContext";
+import AiProviderPanel from "../components/client-admin/AiProviderPanel";
 import { PRODUCT_V1 } from "../lib/productV1";
 import { fetchDocuments, removeDocument, retryDocument, uploadDocuments } from "../lib/orgAdminApi";
 
@@ -29,6 +30,7 @@ type DocRow = {
   index_progress_updated_at: string | null;
   queue_ahead: number | null;
   failure_reason: string | null;
+  embedding_mismatch?: boolean;
   visibility_mode: string;
   sensitivity_flag: boolean;
   acl_reviewed: boolean;
@@ -257,6 +259,8 @@ export default function ClientAdminDocumentsPage() {
         </p>
       </header>
 
+      {session ? <AiProviderPanel session={session} onReindexed={() => void load({ silent: true })} /> : null}
+
       {data?.worker_reachable === false ? (
         <div className="admin-inline-alert border rounded-lg px-4 py-3 mb-4 text-sm text-amber-200" role="alert">
           Indexing service is not reachable (Redis/worker). Uploads may queue but will not index until the worker is running.
@@ -334,6 +338,11 @@ export default function ClientAdminDocumentsPage() {
                       {formatFileSize(row.size_bytes)}
                       {row.size_bytes === 0 ? " (empty file — remove and upload again)" : null}
                     </p>
+                    {row.embedding_mismatch ? (
+                      <p className="text-xs text-amber-500 mt-1" role="alert">
+                        Indexed with a different embedding model or size. Use “Re-index all documents”.
+                      </p>
+                    ) : null}
                     {row.failure_reason ? (
                       <p className="text-xs text-red-700 mt-1" role="alert">
                         {row.failure_reason}

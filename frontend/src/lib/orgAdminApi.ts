@@ -352,3 +352,58 @@ export async function refreshDataStorageHealth(session: AuthSession): Promise<Da
   if (!res.ok) throw new Error(await readApiError(res, "Health refresh failed"));
   return res.json();
 }
+
+export type AiCheck = { ok: boolean; code?: string; message: string };
+
+export type AiConnectionTest = {
+  ok: boolean;
+  provider: string;
+  error?: string;
+  endpoint_host?: string;
+  chat_deployment?: string;
+  embedding_deployment?: string;
+  embedding_dimensions?: number;
+  chat?: AiCheck;
+  embeddings?: AiCheck;
+};
+
+export type AiStatus = {
+  provider: string;
+  configured: boolean;
+  endpoint?: string;
+  chat_deployment?: string;
+  embedding_deployment?: string;
+  chat_model?: string;
+  embedding_model?: string;
+  dimensions?: number;
+  mismatched_documents: string[];
+  stale_chunks: number;
+  vector_column_issues: string[];
+  embedding_warning: string | null;
+};
+
+export async function fetchAiStatus(session: AuthSession): Promise<AiStatus> {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/ai/status`), { headers: headers(session) });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to load AI status"));
+  return res.json();
+}
+
+export async function testAiConnection(session: AuthSession): Promise<AiConnectionTest> {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/ai/test-connection`), {
+    method: "POST",
+    headers: headers(session),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "AI connection test failed"));
+  return res.json();
+}
+
+export async function reindexAllDocuments(
+  session: AuthSession,
+): Promise<{ queued: number; skipped_in_progress: number }> {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/documents/reindex-all`), {
+    method: "POST",
+    headers: headers(session),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Re-index failed"));
+  return res.json();
+}
