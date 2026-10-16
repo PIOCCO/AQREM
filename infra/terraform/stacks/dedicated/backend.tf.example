@@ -1,0 +1,10 @@
+# Copy to backend.tf (scripts/new-client-env.sh does this). One state file per client.
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "rg-aqrem-tfstate"
+    storage_account_name = "staqremtfstate"
+    container_name       = "tfstate"
+    key                  = "dedicated/CLIENT.tfstate"
+    use_azuread_auth     = true
+  }
+}

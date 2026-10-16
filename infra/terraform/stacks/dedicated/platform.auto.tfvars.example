@@ -1,0 +1,11 @@
+# Shared values for every dedicated client. Copy to platform.auto.tfvars (gitignored) and fill in.
+tenant_id                   = "00000000-0000-0000-0000-000000000000"
+subscription_id             = "00000000-0000-0000-0000-000000000000"
+registry_login_server       = "acraqrem.azurecr.io"
+acr_id                      = "/subscriptions/.../resourceGroups/rg-aqrem-platform/providers/Microsoft.ContainerRegistry/registries/acraqrem"
+image_tag                   = "2026.10.0"
+openai_account_id           = "/subscriptions/.../resourceGroups/rg-aqrem-ai/providers/Microsoft.CognitiveServices/accounts/oai-aqrem"
+openai_endpoint             = "https://oai-aqrem.openai.azure.com/"
+openai_chat_deployment      = "chat"
+openai_embedding_deployment = "embeddings"
+deployer_ip_cidrs           = ["203.0.113.10/32"]

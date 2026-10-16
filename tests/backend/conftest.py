@@ -31,6 +31,7 @@ def engine():
         ControlBase.metadata.drop_all(bind=conn)
         TenantBase.metadata.drop_all(bind=conn)
         conn.execute(text("DROP TYPE IF EXISTS public_chat_share_index CASCADE"))
+        conn.execute(text("DROP TABLE IF EXISTS aqrem_schema_versions"))
         ControlBase.metadata.create_all(bind=conn)
         TenantBase.metadata.create_all(bind=conn)
     yield eng

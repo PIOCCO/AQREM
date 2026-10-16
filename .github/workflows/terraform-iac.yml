@@ -42,6 +42,12 @@ jobs:
           terraform init -backend=false
           terraform validate
 
+      - name: Validate dedicated (single-tenant) stack
+        working-directory: infra/terraform/stacks/dedicated
+        run: |
+          terraform init -backend=false
+          terraform validate
+
       - name: TFLint
         uses: terraform-linters/setup-tflint@v4
       - run: tflint --init

@@ -26,3 +26,27 @@ def test_runner_is_idempotent(engine):
     with engine.connect() as conn:
         assert migrate.applied_versions(conn) >= {m.version for m in migrate.MIGRATIONS}
         assert conn.execute(text("SELECT to_regclass('ix_evidence_items_org_source') IS NOT NULL")).scalar()
+
+
+def test_ensure_app_role_creates_least_privilege_role(engine):
+    import uuid
+
+    from app.services.system.db_check import run_database_checks
+    from sqlalchemy.engine import make_url
+    from tests.backend.conftest import DATABASE_URL
+
+    role = f"aq_app_{uuid.uuid4().hex[:8]}"
+    migrate.ensure_app_role(engine, role, "Pw-test-12345")
+    migrate.ensure_app_role(engine, role, "Pw-test-12345")  # idempotent
+    try:
+        url = make_url(DATABASE_URL).set(username=role, password="Pw-test-12345").render_as_string(hide_password=False)
+        r = run_database_checks(url, role="app")
+        checks = {c.name: c.status for c in r.checks}
+        assert checks["permissions"] == "ok", r.to_dict()
+        assert checks["least_privilege"] == "ok", r.to_dict()
+    finally:
+        with engine.begin() as conn:
+            conn.execute(text(f"ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM {role}"))
+            conn.execute(text(f"ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM {role}"))
+            conn.execute(text(f"DROP OWNED BY {role}"))
+            conn.execute(text(f"DROP ROLE {role}"))

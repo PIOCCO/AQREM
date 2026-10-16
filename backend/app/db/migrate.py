@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
+import re
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -115,6 +117,40 @@ def run_migrations(engine: Engine, *, app_version: str = "") -> list[int]:
     return applied
 
 
+def ensure_app_role(engine: Engine, role: str, password: str) -> None:
+    """Create/refresh the least-privilege runtime role (idempotent). Mirrors docs/sql/app_role.sql."""
+    if not re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", role or ""):
+        raise ValueError("APP_DB_ROLE must be a simple lowercase identifier")
+    try:
+        _ensure_app_role(engine, role, password)
+    except Exception as exc:
+        # Never surface SQL parameters (they contain the password).
+        raise RuntimeError(f"Could not ensure app role {role}: {type(exc).__name__}") from None
+    logger.info("Least-privilege app role %s ensured", role)
+
+
+def _ensure_app_role(engine: Engine, role: str, password: str) -> None:
+    with engine.begin() as conn:
+        exists = conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = :r"), {"r": role}).scalar()
+        # Password is passed as a bound literal via format() server-side; never logged.
+        stmt = "CREATE ROLE %I LOGIN PASSWORD %L" if not exists else "ALTER ROLE %I LOGIN PASSWORD %L"
+        sql = conn.execute(
+            text("SELECT format(CAST(:f AS text), CAST(:r AS text), CAST(:p AS text))"),
+            {"f": stmt, "r": role, "p": password},
+        ).scalar()
+        conn.execute(text(sql))
+        db = conn.execute(text("SELECT current_database()")).scalar()
+        for q in (
+            f'GRANT CONNECT, TEMPORARY ON DATABASE "{db}" TO {role}',
+            f"GRANT USAGE ON SCHEMA public TO {role}",
+            f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {role}",
+            f"GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO {role}",
+            f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {role}",
+            f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {role}",
+        ):
+            conn.execute(text(q))
+
+
 def migration_engine() -> Engine:
     from app.core.config import get_settings
 
@@ -138,6 +174,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{m.version:>4}  {'pending' if m in todo else 'applied'}  {m.name}")
             return 1 if todo else 0
         run_migrations(eng, app_version=get_settings().app_version)
+        role = (os.environ.get("APP_DB_ROLE") or "").strip()
+        pw = os.environ.get("APP_DB_PASSWORD") or ""
+        if role and pw:
+            ensure_app_role(eng, role, pw)
         return 0
     finally:
         eng.dispose()

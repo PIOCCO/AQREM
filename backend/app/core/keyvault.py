@@ -34,6 +34,7 @@ SECRET_ENV_NAMES: tuple[str, ...] = (
     "PLATFORM_ADMIN_PASSWORD",
     "TENANT_SECRETS_KEY",
     "LICENSE_KEY",
+    "APP_DB_PASSWORD",
 )
 
 _loaded = False
