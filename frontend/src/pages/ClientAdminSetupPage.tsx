@@ -1,3 +1,4 @@
+import OrgSystemTools from "../components/OrgSystemTools";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../lib/authContext";
@@ -157,6 +158,7 @@ export default function ClientAdminSetupPage() {
           </div>
         </aside>
       </div>
+      <OrgSystemTools />
     </div>
   );
 }

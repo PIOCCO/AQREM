@@ -210,10 +210,13 @@ class RetrievalService:
         scores: list[dict],
         method: str,
     ) -> list[EvidenceItem]:
+        import hashlib
+
         logger.info(
-            "RAG retrieval org=%s question=%r filters=organization_id method=%s chunks=%s scores=%s",
+            "RAG retrieval org=%s question_sha=%s question_len=%s filters=organization_id method=%s chunks=%s scores=%s",
             organization_id,
-            question[:180],
+            hashlib.sha256(question.encode()).hexdigest()[:12],
+            len(question),
             method,
             len(items),
             scores,

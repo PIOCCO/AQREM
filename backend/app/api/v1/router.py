@@ -32,6 +32,7 @@ from app.api.v1 import system as system_api  # noqa: E402
 api_router.include_router(setup_api.router, prefix="/setup", tags=["setup"])
 api_router.include_router(system_api.router, tags=["system"])
 api_router.include_router(system_api.platform_router, prefix="/admin/system", tags=["system"])
+api_router.include_router(system_api.org_admin_router, prefix="/org-admin/system", tags=["system"])
 api_router.include_router(meta.router, prefix="/meta", tags=["meta"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(master.router, prefix="/master", tags=["master"])

@@ -46,3 +46,18 @@ def _log_providers_on_import() -> None:
 
 
 _log_providers_on_import()
+
+
+def _configure_worker_logging(**_kwargs) -> None:
+    from app.core.logging_setup import configure_logging
+
+    configure_logging(settings.log_format)
+
+
+try:
+    from celery.signals import after_setup_logger, after_setup_task_logger
+
+    after_setup_logger.connect(_configure_worker_logging)
+    after_setup_task_logger.connect(_configure_worker_logging)
+except Exception:  # pragma: no cover
+    pass

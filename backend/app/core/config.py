@@ -418,6 +418,8 @@ class Settings(BaseSettings):
             object.__setattr__(self, "embedding_dimensions", 384)
         if self.app_env == "production":
             object.__setattr__(self, "platform_admin_sync_password", False)
+            # DEBUG_RAG logs user questions and file names: never in production.
+            object.__setattr__(self, "debug_rag", False)
             if self.licensing_test_mode:
                 object.__setattr__(self, "licensing_test_mode", False)
             if self.allow_public_registration:

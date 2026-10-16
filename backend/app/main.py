@@ -33,12 +33,18 @@ logger = logging.getLogger("aqrem")
 
 
 def _attach_info_logger(name: str) -> None:
-    """Show provider and retrieval lines in the API process logs."""
+    """Show provider and retrieval lines in the API process logs (redacted; JSON when LOG_FORMAT=json)."""
+    from app.core.logging_setup import RedactionFilter, configure_logging
+
+    configure_logging(get_settings().log_format)
     log = logging.getLogger(name)
     log.setLevel(logging.INFO)
+    if get_settings().log_format.lower() == "json":
+        return  # root JSON handler receives propagated records
     if not any(isinstance(handler, logging.StreamHandler) for handler in log.handlers):
         handler = logging.StreamHandler()
         handler.setFormatter(logging.Formatter("%(levelname)s %(name)s %(message)s"))
+        handler.addFilter(RedactionFilter())
         log.addHandler(handler)
 
 

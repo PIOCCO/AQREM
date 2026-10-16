@@ -67,3 +67,45 @@ async def fleet(refresh: bool = True, _: User = Depends(require_platform_permiss
     rows = await poll_fleet(s) if refresh else last_results()
     return {"configured": len(parse_fleet(s.fleet_environments)), "environments": rows,
             "this_environment": {"version": app_version(s), "deployment_mode": s.deployment_mode}}
+
+
+def _zip_response(data: bytes):
+    from fastapi.responses import Response
+
+    stamp = __import__("time").strftime("%Y%m%d-%H%M%S")
+    return Response(content=data, media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="aqrem-diagnostics-{stamp}.zip"',
+                             "Cache-Control": "no-store"})
+
+
+@platform_router.get("/diagnostics")
+def platform_diagnostics(_: User = Depends(require_platform_permission("deployment:read"))):
+    from app.services.system.diagnostics import diagnostics_zip
+
+    return _zip_response(diagnostics_zip())
+
+
+# Org admin (dedicated tier only): the environment belongs to this organization.
+from app.api.v1.org_admin import _require_org_admin_surface  # noqa: E402
+from app.core.tenant import TenantContext  # noqa: E402
+
+org_admin_router = APIRouter(dependencies=[Depends(require_dedicated)])
+
+
+@org_admin_router.get("/database-check")
+def org_admin_database_check(_: TenantContext = Depends(_require_org_admin_surface)) -> dict:
+    return _database_check_payload()
+
+
+@org_admin_router.get("/health")
+def org_admin_health(_: TenantContext = Depends(_require_org_admin_surface)) -> dict:
+    from app.services.system.health import dependency_report
+
+    return dependency_report(use_cache=False)
+
+
+@org_admin_router.get("/diagnostics")
+def org_admin_diagnostics(_: TenantContext = Depends(_require_org_admin_surface)):
+    from app.services.system.diagnostics import diagnostics_zip
+
+    return _zip_response(diagnostics_zip())
