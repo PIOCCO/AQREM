@@ -6,11 +6,17 @@ services:
       POSTGRES_USER: aqrem
       POSTGRES_PASSWORD: aqrem
       POSTGRES_DB: aqrem
+      # Least-privilege roles (created on a fresh volume by init/02-least-privilege.sh; for an EXISTING
+      # volume run ./scripts/pi-db-least-privilege.sh once). "aqrem" stays the admin/superuser only.
+      AQREM_MIGRATOR_DB_PASSWORD: ${AQREM_MIGRATOR_DB_PASSWORD:?set AQREM_MIGRATOR_DB_PASSWORD in .env}
+      AQREM_APP_DB_PASSWORD: ${AQREM_APP_DB_PASSWORD:?set AQREM_APP_DB_PASSWORD in .env}
+      AQREM_TENANT_DB_PASSWORD: ${AQREM_TENANT_DB_PASSWORD:?set AQREM_TENANT_DB_PASSWORD in .env}
     ports:
       - "5432:5432"
     volumes:
       - pgdata_local_prod:/var/lib/postgresql/data
       - ./infra/dev/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./scripts/sql:/aqrem-sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U aqrem -d aqrem"]
       interval: 5s
@@ -84,8 +90,10 @@ services:
       APP_ENV: production
       LOCAL_PROD_STACK: "true"
       CONTAINER_ROLE: api
+      MIGRATION_DATABASE_URL: postgresql+psycopg://aqrem_migrator:${AQREM_MIGRATOR_DB_PASSWORD}@postgres:5432/aqrem
       SECRET_KEY: local-prod-stack-secret-key-32chars-min
-      DATABASE_URL: postgresql+psycopg://aqrem:aqrem@postgres:5432/aqrem
+      DATABASE_URL: postgresql+psycopg://aqrem_app:${AQREM_APP_DB_PASSWORD}@postgres:5432/aqrem
+      TENANT_DATABASE_URL: postgresql+psycopg://aqrem_tenant:${AQREM_TENANT_DB_PASSWORD}@postgres:5432/aqrem
       REDIS_URL: redis://redis:6379/0
       # Set PUBLIC_BASE_URL to the URL you open in the browser (e.g. Tailscale http://100.x.x.x:5173).
       # CORS allows that origin automatically from PUBLIC_BASE_URL; add extras below if needed.
@@ -132,7 +140,8 @@ services:
       APP_ENV: production
       LOCAL_PROD_STACK: "true"
       CONTAINER_ROLE: worker
-      DATABASE_URL: postgresql+psycopg://aqrem:aqrem@postgres:5432/aqrem
+      DATABASE_URL: postgresql+psycopg://aqrem_app:${AQREM_APP_DB_PASSWORD}@postgres:5432/aqrem
+      TENANT_DATABASE_URL: postgresql+psycopg://aqrem_tenant:${AQREM_TENANT_DB_PASSWORD}@postgres:5432/aqrem
       REDIS_URL: redis://redis:6379/0
       LLM_PROVIDER: ${LLM_PROVIDER:-azure}
       AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
@@ -169,7 +178,8 @@ services:
       APP_ENV: production
       LOCAL_PROD_STACK: "true"
       CONTAINER_ROLE: worker
-      DATABASE_URL: postgresql+psycopg://aqrem:aqrem@postgres:5432/aqrem
+      DATABASE_URL: postgresql+psycopg://aqrem_app:${AQREM_APP_DB_PASSWORD}@postgres:5432/aqrem
+      TENANT_DATABASE_URL: postgresql+psycopg://aqrem_tenant:${AQREM_TENANT_DB_PASSWORD}@postgres:5432/aqrem
       REDIS_URL: redis://redis:6379/0
       LOCAL_UPLOAD_DIR: /data/uploads
       AZURE_STORAGE_CONNECTION_STRING: ""

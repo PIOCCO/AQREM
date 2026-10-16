@@ -19,6 +19,7 @@ logger = logging.getLogger("aqrem.keyvault")
 SECRET_ENV_NAMES: tuple[str, ...] = (
     "DATABASE_URL",
     "MIGRATION_DATABASE_URL",
+    "TENANT_DATABASE_URL",  # Key Vault secret "tenant-database-url" (shared tier data-plane role)
     "REDIS_URL",
     "CELERY_BROKER_URL",
     "SECRET_KEY",

@@ -200,3 +200,47 @@ def _apply_org_on_begin(session: Session, transaction, connection: Connection) -
     if value is None or connection.dialect.name != "postgresql":
         return
     connection.execute(text("SELECT set_config(:k, :v, true)"), {"k": ORG_SETTING, "v": value})
+
+
+def disable_rls(conn: Connection) -> list[str]:
+    """Rollback helper (before redeploying a pre-RLS image). Policies/roles/indexes stay; no data change."""
+    existing = {r[0] for r in conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname='public'"))}
+    done = []
+    for t in ALL_RLS_TABLES:
+        if t in existing:
+            conn.execute(text(f"ALTER TABLE {t} NO FORCE ROW LEVEL SECURITY"))
+            conn.execute(text(f"ALTER TABLE {t} DISABLE ROW LEVEL SECURITY"))
+            done.append(t)
+    return done
+
+
+def main(argv: list[str] | None = None) -> int:
+    """python -m app.db.rls {disable|enable|status}  (uses MIGRATION_DATABASE_URL, else DATABASE_URL)."""
+    import argparse
+
+    from app.db.migrate import migration_engine
+
+    ap = argparse.ArgumentParser(description="AQREM row-level security on/off (rollback helper)")
+    ap.add_argument("action", choices=["disable", "enable", "status"])
+    args = ap.parse_args(argv)
+    eng = migration_engine()
+    try:
+        with eng.begin() as conn:
+            if args.action == "disable":
+                print(f"RLS disabled on {len(disable_rls(conn))} tables")
+            elif args.action == "enable":
+                apply_rls(conn)
+                print("RLS enabled and forced")
+            rows = conn.execute(text(
+                "SELECT count(*) FILTER (WHERE relrowsecurity AND relforcerowsecurity), count(*) FROM pg_class "
+                "WHERE relkind='r' AND relname = ANY(:t)"), {"t": list(ALL_RLS_TABLES)}).one()
+            print(f"status: {rows[0]}/{rows[1]} client tables have ENABLE+FORCE RLS")
+    finally:
+        eng.dispose()
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+
+    sys.exit(main())

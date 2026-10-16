@@ -156,23 +156,9 @@ async def lifespan(_: FastAPI):
             if settings.audit_retention_days <= 0:
                 continue
             try:
-                from app.models.organization import Organization
-                from app.services.audit.org_cleanup import purge_audit_logs_older_than_days
-                from app.tenant_store.resolver import open_tenant_session
+                from app.services.audit.org_cleanup import run_audit_retention_all_orgs
 
-                with SessionLocal() as control:
-                    org_ids = [row[0] for row in control.query(Organization.id).filter(Organization.is_active.is_(True)).all()]
-                    for org_id in org_ids:
-                        tenant = open_tenant_session(control, org_id)
-                        try:
-                            purge_audit_logs_older_than_days(
-                                tenant,
-                                organization_id=org_id,
-                                days=settings.audit_retention_days,
-                            )
-                            tenant.commit()
-                        finally:
-                            tenant.close()
+                run_audit_retention_all_orgs(settings.audit_retention_days)
             except Exception:
                 logger.exception("Scheduled audit retention failed")
 

@@ -147,6 +147,22 @@ def _revoke_org_access(db: Session, *, admin_user_id: UUID, org: Organization) -
             )
 
 
+_PURGE_TENANT_TABLES = (
+    "answer_staleness_events",
+    "chat_conversation_shares",
+    "answer_library_entries",
+    "answers",
+    "questions",
+    "questionnaires",
+    "github_repo_configs",
+    "github_connections",
+    "ingestion_ignore_rules",
+    "access_group_memberships",
+    "access_groups",
+    "projects",
+)
+
+
 def purge_organization_tenant_data(db: Session, organization_id: UUID) -> None:
     """Hard-delete tenant rows and storage references for an organization."""
     from app.db.rls import scope_session_to_org
@@ -161,9 +177,17 @@ def purge_organization_tenant_data(db: Session, organization_id: UUID) -> None:
 
     db.execute(delete(EvidenceItemVersion).where(EvidenceItemVersion.organization_id == organization_id))
     db.execute(delete(EvidenceItem).where(EvidenceItem.organization_id == organization_id))
-    db.execute(delete(Source).where(Source.organization_id == organization_id))
+    # client_documents reference sources: delete documents first (previously raised a FK violation
+    # for any org that had uploaded documents).
     db.execute(delete(ClientDocument).where(ClientDocument.organization_id == organization_id))
+    db.execute(delete(Source).where(Source.organization_id == organization_id))
     db.execute(delete(EmployeeJoinPending).where(EmployeeJoinPending.organization_id == organization_id))
+    # Remaining tenant tables have no FK to organizations (separate data plane), so purge them
+    # explicitly, children first. Link tables cascade from their parents.
+    from sqlalchemy import text as _text
+
+    for table in _PURGE_TENANT_TABLES:
+        db.execute(_text(f"DELETE FROM {table} WHERE organization_id = :o"), {"o": organization_id})
 
     from app.models.audit import AuditEvent
 

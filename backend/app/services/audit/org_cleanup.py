@@ -99,3 +99,23 @@ def purge_audit_logs_older_than_days(
         db.flush()
         deleted_total += int(result.rowcount or 0)
     return deleted_total
+
+
+def run_audit_retention_all_orgs(days: int) -> int:
+    """Scheduled retention: one org-scoped tenant session per active org (RLS: app.current_org set)."""
+    from app.db.session import SessionLocal
+    from app.models.organization import Organization
+    from app.tenant_store.resolver import open_tenant_session
+
+    removed = 0
+    with SessionLocal() as control:
+        org_ids = [row[0] for row in control.query(Organization.id).filter(Organization.is_active.is_(True)).all()]
+        for org_id in org_ids:
+            tenant = open_tenant_session(control, org_id)
+            try:
+                removed += int(purge_audit_logs_older_than_days(tenant, organization_id=org_id, days=days) or 0)
+                tenant.commit()
+            finally:
+                tenant.close()
+        control.commit()
+    return removed

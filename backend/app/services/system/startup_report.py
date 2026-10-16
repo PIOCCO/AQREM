@@ -24,6 +24,12 @@ def log_startup_report(settings: Settings) -> dict:
     for name, dep in report["dependencies"].items():
         level = logging.INFO if dep.get("status") in {"ok", "not_configured", "configured", "shared_mode", "valid"} else logging.WARNING
         logger.log(level, "Startup dependency %s: %s", name, {k: v for k, v in dep.items()})
+    if settings.app_env == "production" and not settings.is_dedicated and not (settings.tenant_database_url or "").strip():
+        logger.warning(
+            "Shared production without TENANT_DATABASE_URL (Key Vault secret tenant-database-url): tenant "
+            "sessions use the control-plane role, which can read identity tables of every org. "
+            "See docs/sql/app_role.sql (aqrem_tenant)."
+        )
     if settings.app_env == "production" or settings.is_dedicated:
         from app.services.system.db_check import run_database_checks
         from app.db.session import engine
