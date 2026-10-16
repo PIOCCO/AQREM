@@ -119,11 +119,25 @@ export default function ChatPage() {
     return conversation;
   }, [conversation, conversationId]);
 
+  // Abort an in-flight reply when the user switches to another conversation,
+  // but NOT when the URL only moves from "/" to "/c/:id" for the conversation
+  // we just created on the first send (that used to silently abort the first answer).
+  const prevConversationIdRef = useRef<string | undefined>(conversationId);
+  useEffect(() => {
+    const prev = prevConversationIdRef.current;
+    prevConversationIdRef.current = conversationId;
+    const isFirstSendRoute = !prev && !!conversationId && pendingRouteConvIdRef.current === conversationId;
+    const justCreated = !prev && !!conversationId && sendInFlightRef.current;
+    if (prev !== conversationId && !isFirstSendRoute && !justCreated) {
+      abortRef.current?.abort();
+    }
+  }, [conversationId]);
+
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
     };
-  }, [conversationId]);
+  }, []);
 
   useEffect(() => {
     function onFill(e: Event) {
