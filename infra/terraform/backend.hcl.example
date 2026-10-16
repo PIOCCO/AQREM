@@ -1,0 +1,9 @@
+# Copy to backend.hcl (gitignored) and run:  terraform init -backend-config=backend.hcl
+# Values are identifiers, not secrets. Auth uses your Entra ID login (az login / OIDC),
+# so no storage account key or SAS token is needed. The identity needs
+# "Storage Blob Data Contributor" on the container (or storage account).
+resource_group_name  = "rg-aqrem-tfstate"
+storage_account_name = "staqremtfstate01" # globally unique, 3-24 lowercase alphanumerics
+container_name       = "tfstate"
+key                  = "openai/dev.tfstate" # use openai/production.tfstate for prod
+use_azuread_auth     = true

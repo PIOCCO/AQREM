@@ -38,27 +38,142 @@ variable "resource_group_name" {
 
 variable "openai_account_name" {
   type        = string
-  description = "Globally unique Azure OpenAI account name. Default: aoai-<project_name>-<environment>."
+  description = "Explicit Azure OpenAI account name, also used as the globally unique custom subdomain (<name>.openai.azure.com). Default: aoai-<project_name>-<environment>[-<name_suffix>]. Changing it REPLACES the account (new endpoint, deployments recreated)."
   default     = null
   nullable    = true
+
+  validation {
+    condition     = var.openai_account_name == null || can(regex("^[a-zA-Z0-9][a-zA-Z0-9-]{0,62}[a-zA-Z0-9]$", var.openai_account_name))
+    error_message = "openai_account_name must be 2-64 characters: alphanumerics and hyphens, starting and ending with an alphanumeric."
+  }
+}
+
+variable "name_suffix" {
+  type        = string
+  description = "Optional short, stable suffix appended to the default account name to make the global subdomain unique (e.g. \"sc01\"). Deterministic replacement for a random_string; set once and never change it (a change replaces the account)."
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.name_suffix == null || can(regex("^[a-z0-9]{1,8}$", var.name_suffix))
+    error_message = "name_suffix must be 1-8 lowercase letters or digits."
+  }
 }
 
 variable "openai_sku_name" {
   type        = string
-  description = "Cognitive Services SKU for the OpenAI account."
+  description = "Cognitive Services account SKU. Azure OpenAI accounts only offer S0 (no charge for the account itself; billing is per deployment usage)."
   default     = "S0"
+
+  validation {
+    condition     = var.openai_sku_name == "S0"
+    error_message = "Azure OpenAI accounts support sku_name S0 only."
+  }
 }
 
 variable "public_network_access_enabled" {
   type        = bool
-  description = "When false, public internet access to the account is disabled (use with private endpoints when available)."
+  description = "Allow access over the public endpoint (HTTPS only; Azure OpenAI has no HTTP listener). dev: true, optionally narrowed with allowed_ip_rules. production: prefer false + a private endpoint (not created by this stack; see docs/azure-terraform.md)."
   default     = true
+}
+
+variable "network_acls_default_action" {
+  type        = string
+  description = "Network ACL default action when public access is enabled. Use Deny together with allowed_ip_rules to allow only listed IPs (e.g. the Raspberry Pi's static egress IP)."
+  default     = "Allow"
+
+  validation {
+    condition     = contains(["Allow", "Deny"], var.network_acls_default_action)
+    error_message = "network_acls_default_action must be Allow or Deny."
+  }
+}
+
+variable "allowed_ip_rules" {
+  type        = list(string)
+  description = "Public IPv4 addresses or CIDR ranges allowed when network_acls_default_action = Deny. No secrets; but treat as infra metadata."
+  default     = []
+
+  validation {
+    condition     = alltrue([for ip in var.allowed_ip_rules : can(cidrhost(strcontains(ip, "/") ? ip : "${ip}/32", 0))])
+    error_message = "Each allowed_ip_rules entry must be an IPv4 address or CIDR."
+  }
+}
+
+variable "local_auth_enabled" {
+  type        = bool
+  description = "Allow API-key auth. Set false in production to force Microsoft Entra ID (managed identity / service principal with Cognitive Services OpenAI User). Keep true only where the app cannot use Entra ID (e.g. the Raspberry Pi)."
+  default     = true
+}
+
+variable "outbound_network_access_restricted" {
+  type        = bool
+  description = "Block the account's own outbound calls (data-exfiltration control). Safe for AQREM, which only uses chat/embeddings; breaks features like 'on your data'."
+  default     = true
+}
+
+variable "system_assigned_identity_enabled" {
+  type        = bool
+  description = "Enable a system-assigned managed identity on the Azure OpenAI account (needed for customer-managed keys or calling other Azure resources; harmless otherwise)."
+  default     = true
+}
+
+variable "enable_delete_lock" {
+  type        = bool
+  description = "Create a CanNotDelete management lock on the account (recommended for production). Blocks terraform destroy and deployment deletion until removed."
+  default     = false
+}
+
+variable "log_analytics_workspace_id" {
+  type        = string
+  description = "Optional Log Analytics workspace ID for Audit logs + AllMetrics. No request/response content is logged."
+  default     = null
+  nullable    = true
+}
+
+variable "version_upgrade_option" {
+  type        = string
+  description = "Model version auto-upgrade policy for both deployments: OnceCurrentVersionExpired (stay pinned until retirement), OnceNewDefaultVersionAvailable, or NoAutoUpgrade (deployment stops working at retirement)."
+  default     = "OnceCurrentVersionExpired"
+
+  validation {
+    condition     = contains(["OnceCurrentVersionExpired", "OnceNewDefaultVersionAvailable", "NoAutoUpgrade"], var.version_upgrade_option)
+    error_message = "version_upgrade_option must be OnceCurrentVersionExpired, OnceNewDefaultVersionAvailable or NoAutoUpgrade."
+  }
 }
 
 variable "deployment_sku_name" {
   type        = string
-  description = "SKU name for model deployments (typically Standard)."
-  default     = "Standard"
+  description = "Default deployment type for both deployments (overridable per deployment). Standard = regional processing; DataZoneStandard = processing within the EU data zone; GlobalStandard = any region (cheapest). NOTE: text-embedding-3-small is NOT offered as regional Standard in swedencentral."
+  default     = "GlobalStandard"
+
+  validation {
+    condition     = contains(local.allowed_deployment_skus, var.deployment_sku_name)
+    error_message = "deployment_sku_name must be one of Standard, GlobalStandard, DataZoneStandard, ProvisionedManaged, GlobalProvisionedManaged, DataZoneProvisionedManaged."
+  }
+}
+
+variable "chat_deployment_sku_name" {
+  type        = string
+  description = "Deployment type for the chat deployment; null = deployment_sku_name."
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.chat_deployment_sku_name == null || contains(local.allowed_deployment_skus, coalesce(var.chat_deployment_sku_name, "x"))
+    error_message = "chat_deployment_sku_name must be null or a supported deployment type."
+  }
+}
+
+variable "embedding_deployment_sku_name" {
+  type        = string
+  description = "Deployment type for the embedding deployment; null = deployment_sku_name."
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.embedding_deployment_sku_name == null || contains(local.allowed_deployment_skus, coalesce(var.embedding_deployment_sku_name, "x"))
+    error_message = "embedding_deployment_sku_name must be null or a supported deployment type."
+  }
 }
 
 variable "chat_model_name" {
@@ -78,7 +193,7 @@ variable "chat_deployment_name" {
 
 variable "chat_capacity" {
   type        = number
-  description = "PTU/token capacity units for the chat deployment (MVP: start low)."
+  description = "Chat deployment capacity. For Standard/GlobalStandard/DataZoneStandard: 1 unit = 1,000 tokens-per-minute rate limit (consumes subscription quota; it is NOT a budget, you pay per token). For *Provisioned* SKUs it is PTUs (billed hourly)."
   default     = 1
 
   validation {
@@ -104,7 +219,7 @@ variable "embedding_deployment_name" {
 
 variable "embedding_capacity" {
   type        = number
-  description = "Capacity units for the embedding deployment."
+  description = "Embedding deployment capacity (1 unit = 1,000 TPM for standard deployment types; quota, not a budget)."
   default     = 1
 
   validation {
@@ -142,8 +257,13 @@ variable "key_vault_id" {
 
 variable "store_api_key_in_key_vault" {
   type        = bool
-  description = "Store the Azure OpenAI account primary key in Key Vault. Prefer managed identity for production API/worker."
+  description = "Store the account primary key in Key Vault via Terraform. Discouraged: the key value is then also stored in Terraform state. Prefer Entra ID, or copy the key manually (docs/azure-terraform.md)."
   default     = false
+
+  validation {
+    condition     = !(var.store_api_key_in_key_vault && !var.local_auth_enabled)
+    error_message = "store_api_key_in_key_vault requires local_auth_enabled = true (keys are disabled otherwise)."
+  }
 }
 
 variable "key_vault_secret_name" {
@@ -154,7 +274,7 @@ variable "key_vault_secret_name" {
 
 variable "managed_identity_principal_id" {
   type        = string
-  description = "Principal ID of AQREM api/worker user-assigned or system-assigned managed identity for Cognitive Services OpenAI User role."
+  description = "Object (principal) ID of the AQREM api/worker managed identity or service principal. Granted 'Cognitive Services OpenAI User' (inference only) on the account. Not a secret."
   default     = null
   nullable    = true
 }

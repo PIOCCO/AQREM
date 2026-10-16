@@ -1,10 +1,28 @@
+# Terraform working dirs and state (state can contain secrets — never commit)
 .terraform/
 *.tfstate
 *.tfstate.*
+.terraform.tfstate.lock.info
+*.tfplan
+*.tfplan.json
+
+# Variable files: ignored by default (may hold secrets). Committed, secret-free exceptions:
 *.tfvars
+*.tfvars.json
 !terraform.tfvars.example
+!envs/*.tfvars
+!parameters/clients/*.sample.tfvars.json
+
+# Backend config with real names
+backend.hcl
+!backend.hcl.example
+
+# Logs / overrides
 crash.log
+crash.*.log
 override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+# Keep .terraform.lock.hcl committed (provider pinning).

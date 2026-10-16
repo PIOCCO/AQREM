@@ -8,6 +8,9 @@ module "openai" {
   openai_sku_name                    = var.openai_sku_name
   public_network_access_enabled      = var.public_network_access_enabled
   deployment_sku_name                = var.deployment_sku_name
+  chat_deployment_sku_name           = var.chat_deployment_sku_name
+  embedding_deployment_sku_name      = var.embedding_deployment_sku_name
+  version_upgrade_option             = var.version_upgrade_option
   chat_model_name                    = var.chat_model_name
   chat_model_version                 = var.chat_model_version
   chat_deployment_name               = var.chat_deployment_name
@@ -23,6 +26,13 @@ module "openai" {
   key_vault_secret_name              = var.key_vault_secret_name
   managed_identity_principal_id      = var.managed_identity_principal_id
   assign_openai_user_role            = var.assign_openai_user_role
+  local_auth_enabled                 = var.local_auth_enabled
+  system_assigned_identity_enabled   = var.system_assigned_identity_enabled
+  outbound_network_access_restricted = var.outbound_network_access_restricted
+  network_acls_default_action        = var.network_acls_default_action
+  allowed_ip_rules                   = var.allowed_ip_rules
+  enable_delete_lock                 = var.enable_delete_lock
+  log_analytics_workspace_id         = var.log_analytics_workspace_id
   tags                               = local.common_tags
   purge_cognitive_account_on_destroy = var.purge_cognitive_account_on_destroy
 }

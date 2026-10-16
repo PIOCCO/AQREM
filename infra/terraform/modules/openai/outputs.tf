@@ -34,6 +34,22 @@ output "aqrem_backend_env" {
     AZURE_OPENAI_EMBEDDING_DEPLOYMENT = azurerm_cognitive_deployment.embedding.name
     AZURE_OPENAI_API_VERSION          = var.azure_openai_api_version
     EMBEDDING_DIMENSIONS              = var.embedding_dimensions
-    AZURE_OPENAI_USE_MANAGED_IDENTITY = var.managed_identity_principal_id != null ? "true" : "false"
+    AZURE_OPENAI_USE_MANAGED_IDENTITY = var.managed_identity_principal_id != null || !var.local_auth_enabled ? "true" : "false"
   }
+}
+
+output "local_auth_enabled" {
+  value = azurerm_cognitive_account.openai.local_auth_enabled
+}
+
+output "system_assigned_principal_id" {
+  value = try(azurerm_cognitive_account.openai.identity[0].principal_id, null)
+}
+
+output "chat_deployment_sku_name" {
+  value = local.chat_deployment_sku_name
+}
+
+output "embedding_deployment_sku_name" {
+  value = local.embedding_deployment_sku_name
 }
