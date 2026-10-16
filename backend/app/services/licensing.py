@@ -39,6 +39,8 @@ def org_allows_sign_in(org: Organization, settings: Settings | None = None) -> t
         return False, "Organization is deactivated"
     if getattr(org, "deleted_at", None) is not None:
         return False, "Organization has been deleted"
+    if settings.is_dedicated:
+        return _dedicated_allows_sign_in(settings)
 
     status_value = org.license_status or LicenseStatus.ACTIVE.value
     if status_value in {LicenseStatus.SUSPENDED.value, LicenseStatus.EXPIRED.value}:
@@ -56,9 +58,31 @@ def org_allows_sign_in(org: Organization, settings: Settings | None = None) -> t
     return True, ""
 
 
+def _dedicated_allows_sign_in(settings: Settings) -> tuple[bool, str]:
+    from app.services.offline_license import VALID, load_license
+
+    res = load_license(settings)
+    if res.state != VALID:
+        return False, res.message
+    return True, ""
+
+
 def assert_can_add_seat(db: Session, org: Organization, settings: Settings | None = None) -> None:
     settings = settings or get_settings()
     db.refresh(org)
+    if settings.is_dedicated:
+        from app.services.offline_license import VALID, load_license
+
+        res = load_license(settings)
+        if res.state != VALID:
+            raise LicenseDenied(res.message)
+        usage = get_seat_usage(db, org)
+        if usage.seats_used >= res.seats:
+            raise LicenseDenied(
+                f"Seat limit reached: the license allows {res.seats} users and {usage.seats_used} are in use. "
+                "Remove a user or ask your AQREM vendor for more seats."
+            )
+        return
     allowed, reason = org_allows_sign_in(org, settings)
     if not allowed and org.license_status != LicenseStatus.TEST.value:
         raise LicenseDenied(reason)

@@ -54,6 +54,11 @@ export default function DedicatedSetupPage() {
           This environment has no SETUP_TOKEN configured. Ask your operator to set it, then reload.
         </p>
       ) : null}
+      {status?.license_state && status.license_state !== "valid" ? (
+        <p className="text-sm text-[var(--color-warning,#b45309)] mb-3" role="status">
+          License: {status.license_message}
+        </p>
+      ) : null}
       <form className="space-y-3" onSubmit={onSubmit} noValidate>
         <Field name="organization_name" label="Organization name" defaultValue={status?.organization_name ?? ""} />
         <Field name="full_name" label="Your name" required />

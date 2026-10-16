@@ -61,8 +61,10 @@ export default function LoginPage() {
       const orgId = resolveOrganizationIdForSession(data.access_token, data.organization_id ?? null);
       saveSession(data.access_token, orgId);
       navigate(resolvePostAuthPath({ ...data, organization_id: orgId }, nextPath));
-    } catch {
-      setError(LOGIN_ERROR_GENERIC);
+    } catch (err) {
+      // License problems (missing/expired/seat limit) are not credential errors: show them verbatim.
+      const msg = err instanceof Error ? err.message : "";
+      setError(/licen[sc]e|seat/i.test(msg) ? msg : LOGIN_ERROR_GENERIC);
     } finally {
       setLoading(false);
     }

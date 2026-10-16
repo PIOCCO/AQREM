@@ -6,6 +6,8 @@ export type SetupStatus = {
   setup_required: boolean;
   organization_name: string | null;
   setup_token_configured: boolean;
+  license_state?: string | null;
+  license_message?: string | null;
 };
 
 export async function fetchSetupStatus(): Promise<SetupStatus | null> {

@@ -29,7 +29,7 @@ def test_shared_mode_unchanged(client: TestClient):
     r = client.get("/api/v1/setup/status")
     assert r.status_code == 200
     assert r.json() == {"deployment_mode": "shared", "setup_required": False, "organization_name": None,
-                        "setup_token_configured": False}
+                        "setup_token_configured": False, "license_state": None, "license_message": None}
     r = client.post("/api/v1/setup/first-admin", json={"setup_token": "x", "email": "a@b.co",
                                                         "full_name": "A", "password": "x" * 12})
     assert r.status_code == 404

@@ -12,3 +12,8 @@ upload_data/
 *.egg-info/
 .DS_Store
 /artifacts/
+
+# Offline license signing keys must never be committed
+*license-private*.pem
+aqrem-license-keys/
+*.license.json

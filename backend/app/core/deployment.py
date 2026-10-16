@@ -99,3 +99,21 @@ def platform_route_allowed(path: str, method: str, settings: Settings | None = N
     if settings.dedicated_support_access and method.upper() in {"GET", "HEAD", "OPTIONS"}:
         return True
     return False
+
+
+def sync_license_to_org(db: Session, settings: Settings | None = None) -> None:
+    """Mirror the offline license (seats/expiry) onto the dedicated org row for admin UIs."""
+    settings = settings or get_settings()
+    if not settings.is_dedicated:
+        return
+    from app.services.offline_license import VALID, load_license
+
+    org = get_dedicated_org(db)
+    if org is None:
+        return
+    res = load_license(settings)
+    if res.state == VALID:
+        org.license_limit = res.seats
+        org.license_expires_at = res.expires_at
+        org.license_status = "active"
+    logger.log(logging.INFO if res.state == VALID else logging.ERROR, "License: %s %s", res.state, res.message)

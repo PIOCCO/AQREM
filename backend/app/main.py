@@ -110,8 +110,11 @@ async def lifespan(_: FastAPI):
         if settings.is_dedicated:
             from app.core.deployment import dedicated_setup_required, ensure_dedicated_organization
 
+            from app.core.deployment import sync_license_to_org
+
             ensure_dedicated_organization(session, settings)
             session.flush()
+            sync_license_to_org(session, settings)
             if dedicated_setup_required(session):
                 logger.warning("Dedicated environment: first admin not created yet; open /setup (SETUP_TOKEN required)")
         from app.services.setup_checklist import backfill_local_prod_managed_storage_validation

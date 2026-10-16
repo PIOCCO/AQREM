@@ -24,6 +24,8 @@ class SetupStatus(BaseModel):
     setup_required: bool
     organization_name: str | None = None
     setup_token_configured: bool = False
+    license_state: str | None = None
+    license_message: str | None = None
 
 
 class FirstAdminRequest(BaseModel):
@@ -47,11 +49,16 @@ def setup_status(db: Session = Depends(get_db)) -> SetupStatus:
         return SetupStatus(deployment_mode="shared", setup_required=False)
     org = ensure_dedicated_organization(db, settings)
     db.commit()
+    from app.services.offline_license import load_license
+
+    lic = load_license(settings)
     return SetupStatus(
         deployment_mode="dedicated",
         setup_required=dedicated_setup_required(db),
         organization_name=org.name if org else None,
         setup_token_configured=bool((settings.setup_token or "").strip()),
+        license_state=lic.state,
+        license_message=lic.message,
     )
 
 

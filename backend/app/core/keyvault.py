@@ -33,6 +33,7 @@ SECRET_ENV_NAMES: tuple[str, ...] = (
     "GITHUB_WEBHOOK_SECRET",
     "PLATFORM_ADMIN_PASSWORD",
     "TENANT_SECRETS_KEY",
+    "LICENSE_KEY",
 )
 
 _loaded = False
