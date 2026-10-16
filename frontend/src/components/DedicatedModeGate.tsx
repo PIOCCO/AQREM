@@ -1,11 +1,11 @@
 import { type ReactNode, useEffect, useState } from "react";
-import { fetchSetupStatus } from "../lib/deploymentApi";
+import { fetchDeploymentMode } from "../lib/deploymentApi";
 
 /** Hides the multi-tenant platform console in dedicated environments (API returns 404 there too). */
 export default function DedicatedModeGate({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<"loading" | "shared" | "dedicated">("loading");
   useEffect(() => {
-    void fetchSetupStatus().then((s) => setMode(s?.deployment_mode === "dedicated" ? "dedicated" : "shared"));
+    void fetchDeploymentMode().then((m) => setMode(m === "dedicated" ? "dedicated" : "shared"));
   }, []);
   if (mode === "loading") return null;
   if (mode === "dedicated") {
