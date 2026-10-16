@@ -4,7 +4,7 @@ import os
 from functools import lru_cache
 from urllib.parse import urlparse
 
-from pydantic import AliasChoices, Field, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 def _is_local_prod_lab() -> bool:
@@ -32,6 +32,8 @@ class Settings(BaseSettings):
         env_file=("../.env", ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
+        # Never echo env values (API keys) inside validation errors.
+        hide_input_in_errors=True,
     )
 
     app_env: str = "development"
@@ -157,15 +159,23 @@ class Settings(BaseSettings):
             "AZURE_OPENAI_USE_MANAGED_IDENTITY",
         ),
     )
+    # Azure *deployment* names (what you named the deployment in Azure AI Foundry), not model names.
     azure_openai_embedding_deployment: str = Field(
-        default="text-embedding-3-small",
+        default="",
         validation_alias=AliasChoices(
             "azure_openai_embedding_deployment",
             "AZURE_OPENAI_EMBEDDING_DEPLOYMENT",
         ),
     )
+    azure_openai_embedding_send_dimensions: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "azure_openai_embedding_send_dimensions",
+            "AZURE_OPENAI_EMBEDDING_SEND_DIMENSIONS",
+        ),
+    )
     azure_openai_chat_deployment: str = Field(
-        default="gpt-4o-mini",
+        default="",
         validation_alias=AliasChoices(
             "azure_openai_chat_deployment",
             "AZURE_OPENAI_CHAT_DEPLOYMENT",
@@ -226,7 +236,18 @@ class Settings(BaseSettings):
     llm_max_question_chars: int = 8_000
     llm_max_evidence_block_chars: int = 2_000
     llm_max_answer_chars: int = 16_000
-    llm_max_output_tokens: int = 2_048
+    llm_max_output_tokens: int = Field(
+        default=1_024,
+        validation_alias=AliasChoices("llm_max_output_tokens", "LLM_MAX_ANSWER_TOKENS", "LLM_MAX_OUTPUT_TOKENS"),
+    )
+    llm_temperature: float = Field(
+        default=0.1,
+        validation_alias=AliasChoices("llm_temperature", "LLM_TEMPERATURE"),
+    )
+    llm_max_retries: int = Field(
+        default=3,
+        validation_alias=AliasChoices("llm_max_retries", "LLM_MAX_RETRIES"),
+    )
     llm_max_retrieval_results: int = 12
     rate_limit_enabled: bool = True
     allow_public_registration: bool = False
@@ -254,8 +275,18 @@ class Settings(BaseSettings):
         description="When > 0, scheduled job deletes audit events older than this many days (except cleanup records).",
     )
 
+    @field_validator("embedding_dimensions", mode="before")
+    @classmethod
+    def _blank_dimensions(cls, v: object) -> object:
+        # Compose passes EMBEDDING_DIMENSIONS="" when unset; treat as "not configured" (0).
+        if isinstance(v, str) and not v.strip():
+            return 0
+        return v
+
     @model_validator(mode="after")
     def _production_guardrails(self) -> Settings:
+        if self.embedding_dimensions <= 0 and self.llm_provider.lower().strip() in {"mock", "local"}:
+            object.__setattr__(self, "embedding_dimensions", 384)
         if self.app_env == "production":
             object.__setattr__(self, "platform_admin_sync_password", False)
             if self.licensing_test_mode:
@@ -272,11 +303,17 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "Production refuses to start with a mock or fake LLM provider "
                     f"(LLM_PROVIDER={provider or 'unset'}). "
-                    "Set LLM_PROVIDER=openai with OPENAI_API_KEY, or LLM_PROVIDER=gateway "
-                    "pointed at a real model service. The deterministic local provider is "
+                    "Set LLM_PROVIDER=azure and fill the AZURE_OPENAI_* values "
+                    "(see docs/azure-openai-setup.md). The deterministic local provider is "
                     "allowed only when APP_ENV is not production."
                 )
-            if provider == "openai":
+            if provider == "azure":
+                from app.core.llm_config import azure_missing_message, inspect_azure_openai
+
+                status = inspect_azure_openai(self)
+                if not status.configured:
+                    raise ValueError(azure_missing_message(status.missing))
+            elif provider == "openai":
                 if not (self.openai_api_key or "").strip():
                     raise ValueError(
                         "Production LLM_PROVIDER=openai requires OPENAI_API_KEY. "
@@ -297,16 +334,10 @@ class Settings(BaseSettings):
                         "Production requires GATEWAY_URL when LLM_PROVIDER=gateway. "
                         f"Missing: {', '.join(gw.missing)}"
                     )
-            elif provider == "azure":
-                raise ValueError(
-                    "Production refuses LLM_PROVIDER=azure. "
-                    "Set LLM_PROVIDER=openai with OPENAI_API_KEY, or LLM_PROVIDER=gateway "
-                    "pointed at a real model service."
-                )
             else:
                 raise ValueError(
                     f"Production refuses unknown LLM_PROVIDER={provider!r}. "
-                    "Use openai or gateway. Mock providers are not allowed."
+                    "Use azure (recommended), openai, or gateway. Mock providers are not allowed."
                 )
             if not (self.azure_storage_connection_string or "").strip() and not _is_local_prod_lab():
                 raise ValueError(

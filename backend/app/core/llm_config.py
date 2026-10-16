@@ -53,6 +53,8 @@ def inspect_azure_openai(settings: Settings) -> AzureOpenAIConfigStatus:
         missing.append("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
     if not (settings.azure_openai_api_version or "").strip():
         missing.append("AZURE_OPENAI_API_VERSION")
+    if "embedding_dimensions" not in settings.model_fields_set or settings.embedding_dimensions <= 0:
+        missing.append("EMBEDDING_DIMENSIONS")
     configured = len(missing) == 0
     return AzureOpenAIConfigStatus(
         configured=configured,
@@ -62,16 +64,40 @@ def inspect_azure_openai(settings: Settings) -> AzureOpenAIConfigStatus:
     )
 
 
+def azure_missing_message(missing: tuple[str, ...] | list[str]) -> str:
+    """Fail-fast text naming the missing variables (never their values)."""
+    return (
+        "LLM_PROVIDER=azure but Azure OpenAI is not fully configured. Missing: "
+        + ", ".join(missing)
+        + ". Set these in your .env file (see .env.example and docs/azure-openai-setup.md), "
+        "then rebuild/restart the api and worker containers."
+    )
+
+
 def require_azure_openai(settings: Settings) -> None:
     """Raise when Azure provider is selected but configuration is incomplete."""
     if settings.llm_provider.lower() != "azure":
         return
     status = inspect_azure_openai(settings)
     if not status.configured:
+        raise RuntimeError(azure_missing_message(status.missing))
+
+
+def validate_llm_startup(settings: Settings) -> None:
+    """Fail fast at api/worker startup when the selected provider cannot work.
+
+    Messages name variables only, never secret values.
+    """
+    provider = settings.llm_provider.lower().strip()
+    if provider in {"mock", "local", "fake", "test", ""} and settings.app_env == "production":
         raise RuntimeError(
-            "LLM_PROVIDER=azure but Azure OpenAI is not fully configured. Missing: "
-            + ", ".join(status.missing)
+            "Production refuses to start with a mock or fake LLM provider "
+            f"(LLM_PROVIDER={provider or 'unset'}). Set LLM_PROVIDER=azure."
         )
+    if provider == "azure":
+        require_azure_openai(settings)
+    elif provider == "openai" and not (settings.openai_api_key or "").strip():
+        raise RuntimeError("LLM_PROVIDER=openai requires OPENAI_API_KEY.")
 
 
 def gateway_points_at_fake(settings: Settings) -> bool:
@@ -157,11 +183,14 @@ def log_active_providers(role: str) -> None:
     settings = get_settings()
     summary = llm_provider_summary(settings)
     logger.info(
-        "Active providers: role=%s llm=%s chat_model=%s embeddings=%s embedding_model=%s dimensions=%s",
+        "Active providers: role=%s llm=%s chat_model=%s embeddings=%s embedding_model=%s dimensions=%s"
+        " endpoint_host=%s auth=%s",
         role,
         summary.get("llm_provider"),
         summary.get("chat_model"),
         summary.get("embedding_provider"),
         summary.get("embedding_model"),
         summary.get("dimensions"),
+        summary.get("endpoint") or "-",
+        summary.get("auth_mode"),
     )

@@ -48,7 +48,10 @@ async def lifespan(_: FastAPI):
         _attach_info_logger(name)
     settings = get_settings()
     validate_container_startup(os.environ.get("CONTAINER_ROLE", ""), settings)
-    from app.core.llm_config import log_active_providers
+    from app.core.llm_config import log_active_providers, validate_llm_startup
+
+    # Fail fast (names the missing variable, never a secret value).
+    validate_llm_startup(settings)
 
     summary = llm_provider_summary(settings)
     log_active_providers(os.environ.get("CONTAINER_ROLE") or "api")
@@ -84,6 +87,9 @@ async def lifespan(_: FastAPI):
         ControlBase.metadata.create_all(bind=conn)
         TenantBase.metadata.create_all(bind=conn)
         apply_schema_patches(conn)
+    from app.services.ingestion.vector_schema import check_vector_column_dimensions
+
+    check_vector_column_dimensions(engine, settings)
     from app.db.session import SessionLocal
     from app.services.bootstrap import ensure_platform_admin
 

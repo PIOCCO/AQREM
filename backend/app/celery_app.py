@@ -38,7 +38,9 @@ def _log_worker_providers(**_kwargs: object) -> None:
 
 
 def _log_providers_on_import() -> None:
-    from app.core.llm_config import log_active_providers
+    from app.core.llm_config import log_active_providers, validate_llm_startup
+
+    validate_llm_startup(get_settings())
 
     log_active_providers(os.environ.get("CONTAINER_ROLE") or "worker")
 

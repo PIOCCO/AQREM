@@ -23,6 +23,11 @@ def _settings_set(value: str | None) -> bool:
 
 def _model_requirements(settings: Settings) -> list[EnvRequirement]:
     provider = settings.llm_provider.lower().strip()
+    if provider == "azure":
+        from app.core.llm_config import inspect_azure_openai
+
+        status = inspect_azure_openai(settings)
+        return [EnvRequirement(name, False, "Azure OpenAI") for name in status.missing]
     if provider == "openai":
         return [
             EnvRequirement(
