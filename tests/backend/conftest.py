@@ -23,11 +23,18 @@ DATABASE_URL = os.getenv(
 )
 
 
+def _drop_rls_policies(conn) -> None:
+    # RLS policies (migration 3 / test_rls_isolation) reference other tables; drop them before drop_all.
+    for t, p in conn.execute(text("SELECT tablename, policyname FROM pg_policies WHERE schemaname='public'")).all():
+        conn.execute(text(f'DROP POLICY IF EXISTS "{p}" ON "{t}"'))
+
+
 @pytest.fixture(scope="session")
 def engine():
     eng = create_engine(DATABASE_URL, pool_pre_ping=True)
     with eng.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        _drop_rls_policies(conn)
         ControlBase.metadata.drop_all(bind=conn)
         TenantBase.metadata.drop_all(bind=conn)
         conn.execute(text("DROP TYPE IF EXISTS public_chat_share_index CASCADE"))
@@ -36,6 +43,7 @@ def engine():
         TenantBase.metadata.create_all(bind=conn)
     yield eng
     with eng.begin() as conn:
+        _drop_rls_policies(conn)
         ControlBase.metadata.drop_all(bind=conn)
         TenantBase.metadata.drop_all(bind=conn)
 

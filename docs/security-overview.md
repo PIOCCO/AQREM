@@ -9,8 +9,20 @@ This describes what is implemented in the code and infrastructure definitions to
   and admin API is scoped to the signed-in user's organization (membership is verified on every request,
   a client-supplied organization header that does not match a membership is rejected). Automated tests
   with two organizations check that one cannot retrieve the other's chunks, documents, chats or admin
-  data (`tests/backend/test_cross_org_isolation.py`). There is no database row-level security; isolation
-  in the shared tier relies on the application layer.
+  data (`tests/backend/test_cross_org_isolation.py`).
+  In addition, PostgreSQL **row-level security** is enabled and forced on every table holding client data
+  (migration 3, `backend/app/db/rls.py`). Each database transaction of a tenant session runs with
+  `SET LOCAL app.current_org` (set automatically for API requests and every background task); policies
+  allow only rows of that organization and reject writes for another one. When no organization is set the
+  database returns no tenant rows (fail closed). The runtime role is not a superuser, has no BYPASSRLS and
+  owns no tables. Cross-organization access exists only for: (a) the control-plane group on identity/
+  control tables (users, organizations, memberships, invitations), needed for sign-in by email, invitations,
+  organization creation and the AQREM super-admin console - it does **not** extend to documents, chunks,
+  sources, answers or audit data; (b) the migration role and a separately named, normally disabled
+  `aqrem_support` role. Tests connect directly as a non-superuser role and prove SELECT/UPDATE/DELETE/INSERT
+  and vector search cannot cross organizations (`tests/backend/test_rls_isolation.py`). RLS protects the
+  database only when the deployment uses the least-privilege roles from `docs/sql/app_role.sql`; a
+  superuser connection (e.g. the local Docker Compose default) bypasses it.
 * **Dedicated**: one organization per environment with its own containers, its own PostgreSQL database,
   storage account and Key Vault, hosted in the AQREM Azure subscription. The multi-tenant platform console
   is disabled. Running inside the client's own subscription/network is *planned* (see below).

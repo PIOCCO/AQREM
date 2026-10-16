@@ -15,6 +15,9 @@ def record_audit(
     resource_id: str | None = None,
     metadata: dict | None = None,
 ) -> AuditEvent:
+    from app.db.rls import ensure_org_scope
+
+    ensure_org_scope(db, organization_id)
     event = AuditEvent(
         organization_id=organization_id,
         user_id=user_id,

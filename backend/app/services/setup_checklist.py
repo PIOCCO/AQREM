@@ -28,6 +28,9 @@ def build_setup_checklist(
     organization_id: UUID,
     control_db: Session | None = None,
 ) -> dict:
+    from app.db.rls import ensure_org_scope
+
+    ensure_org_scope(db, organization_id)
     settings = get_settings()
     ctrl = control_db or db
     org = ctrl.get(Organization, organization_id)

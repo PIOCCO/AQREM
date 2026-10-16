@@ -866,6 +866,9 @@ def list_org_audit(
     admin: User = Depends(require_platform_permission("org:audit_read")),
 ) -> AdminAuditListResponse:
     _require_admin_visible_org(db, organization_id)
+    from app.db.rls import scope_session_to_org
+
+    scope_session_to_org(db, organization_id)  # RLS: audit_events is tenant data
     events = (
         db.query(AuditEvent, User)
         .outerjoin(User, User.id == AuditEvent.user_id)

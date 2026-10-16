@@ -62,7 +62,7 @@ def ensure_managed_config(control_db: Session, organization_id: UUID) -> TenantD
 def build_database_url(config: TenantDataStoreConfig, secrets: SecretStore) -> str:
     settings = get_settings()
     if config.storage_mode == MANAGED_COLOCATED:
-        return settings.database_url
+        return (settings.tenant_database_url or "").strip() or settings.database_url
 
     if config.storage_mode != CUSTOMER_POSTGRES:
         raise TenantStoreUnavailable("Storage mode is not configured.")
@@ -106,6 +106,10 @@ def open_tenant_session(
     url = build_database_url(config, secrets)
     factory = tenant_pool_manager.session_factory(tenant_key, url)
     session = factory()
+    from app.db.rls import scope_session_to_org
+
+    # RLS: every transaction of this session runs with SET LOCAL app.current_org = <org>.
+    scope_session_to_org(session, organization_id)
     try:
         assert_schema_compatible(session)
         tenant_pool_manager.record_success(tenant_key)

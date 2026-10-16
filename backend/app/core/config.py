@@ -106,6 +106,12 @@ class Settings(BaseSettings):
     frontend_dist_path: str | None = None
 
     database_url: str = "postgresql+psycopg://aqrem:aqrem@localhost:5432/aqrem"
+    tenant_database_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("tenant_database_url", "TENANT_DATABASE_URL"),
+        description="Optional data-plane role (not in aqrem_rls_control) for org-scoped tenant sessions; "
+        "defaults to DATABASE_URL.",
+    )
     migration_database_url: str | None = Field(
         default=None,
         validation_alias=AliasChoices("migration_database_url", "MIGRATION_DATABASE_URL"),

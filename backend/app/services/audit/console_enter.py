@@ -21,6 +21,9 @@ def record_admin_console_entered(
     request_id: str | None = None,
 ) -> bool:
     """Return True if a new audit row was written."""
+    from app.db.rls import ensure_org_scope
+
+    ensure_org_scope(db, organization_id)
     since = datetime.now(UTC) - DEDUPE_WINDOW
     recent = (
         db.query(AuditEvent.id)

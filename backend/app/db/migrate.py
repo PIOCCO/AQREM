@@ -64,12 +64,25 @@ def _m2_indexes(conn: Connection) -> None:
     ))
 
 
+def _m3_row_level_security(conn: Connection) -> None:
+    from app.db.rls import apply_rls
+
+    # org_id indexes RLS relies on (most already exist via index=True; these are additive no-ops then).
+    for t in ("evidence_items", "evidence_item_versions", "client_documents", "sources", "source_sync_jobs",
+              "audit_events", "answers", "questions", "questionnaires", "organization_memberships"):
+        conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_rls_{t}_org ON {t} (organization_id)"))
+    apply_rls(conn)
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "baseline (models + idempotent schema patches)", _m1_baseline,
               "Baseline; rollback = restore the pre-upgrade database backup."),
     Migration(2, "org-scoped composite indexes", _m2_indexes,
               "Safe to keep on rollback; to remove: DROP INDEX IF EXISTS ix_evidence_items_org_source, "
               "ix_client_documents_org_created."),
+    Migration(3, "row-level security (org isolation, fail closed)", _m3_row_level_security,
+              "No data change. Emergency rollback (per table, as owner): ALTER TABLE <t> NO FORCE ROW LEVEL "
+              "SECURITY; ALTER TABLE <t> DISABLE ROW LEVEL SECURITY; policies may stay. See docs/migrations.md."),
 )
 
 LATEST_VERSION = MIGRATIONS[-1].version
@@ -147,8 +160,15 @@ def _ensure_app_role(engine: Engine, role: str, password: str) -> None:
             f"GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO {role}",
             f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {role}",
             f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {role}",
+            # RLS: control-plane group (cross-org on identity tables only); never BYPASSRLS, never owner.
+            f"GRANT aqrem_rls_control TO {role}",
         ):
             conn.execute(text(q))
+        bad = conn.execute(
+            text("SELECT rolbypassrls OR rolsuper FROM pg_roles WHERE rolname = :r"), {"r": role}
+        ).scalar()
+        if bad:
+            raise ValueError("app role must not be SUPERUSER or BYPASSRLS")
 
 
 def migration_engine() -> Engine:

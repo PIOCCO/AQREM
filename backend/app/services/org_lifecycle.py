@@ -149,6 +149,9 @@ def _revoke_org_access(db: Session, *, admin_user_id: UUID, org: Organization) -
 
 def purge_organization_tenant_data(db: Session, organization_id: UUID) -> None:
     """Hard-delete tenant rows and storage references for an organization."""
+    from app.db.rls import scope_session_to_org
+
+    scope_session_to_org(db, organization_id)  # RLS: purge runs for exactly this org
     org = db.get(Organization, organization_id)
     if org is None:
         return
