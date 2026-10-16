@@ -24,6 +24,7 @@ def _azure_settings(**overrides) -> Settings:
         azure_openai_chat_deployment="chat-deploy",
         azure_openai_embedding_deployment="embed-deploy",
         azure_openai_api_version="2024-10-21",
+        embedding_dimensions=2,
     )
     base.update(overrides)
     return Settings(**base)

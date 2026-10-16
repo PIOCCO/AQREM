@@ -24,6 +24,7 @@ def test_inspect_azure_api_key_complete():
         azure_openai_api_key="secret-not-logged",
         azure_openai_chat_deployment="aqrem-chat",
         azure_openai_embedding_deployment="aqrem-embed",
+        embedding_dimensions=1536,
     )
     status = inspect_azure_openai(settings)
     assert status.configured
