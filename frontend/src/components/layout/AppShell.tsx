@@ -72,7 +72,11 @@ export default function AppShell() {
             chatMode ? "" : "overflow-y-auto chat-workspace-main"
           }`}
         >
-          <RouteErrorBoundary key={location.pathname}>
+          {/* Chat routes ("/", "/chat", "/c/:id") share one key so the first send's
+              "/" -> "/c/:id" URL change doesn't remount ChatPage and abort the reply. */}
+          <RouteErrorBoundary
+            key={/^\/(chat|c\/[^/]+)?\/?$/.test(location.pathname) ? "chat" : location.pathname}
+          >
             <Outlet
               context={{
                 openMobileSidebar: () => setMobileOpen(true),
