@@ -281,12 +281,17 @@ class AzureOpenAIProvider(LLMProvider):
     async def chat_text(self, messages: list[dict], *, max_tokens: int | None = None,
                         json_mode: bool = False) -> str:
         deployment = self.settings.azure_openai_chat_deployment
-        kwargs: dict[str, Any] = {
-            "model": deployment,
-            "messages": messages,
-            "temperature": self.settings.llm_temperature,
-            "max_tokens": max_tokens or self.settings.llm_max_output_tokens,
-        }
+        limit = max_tokens or self.settings.llm_max_output_tokens
+        kwargs: dict[str, Any] = {"model": deployment, "messages": messages}
+        if self.settings.azure_openai_reasoning_model:
+            # Reasoning models (gpt-5*, o-series) reject temperature/max_tokens and
+            # spend hidden reasoning tokens from the same budget, so keep a floor.
+            kwargs["max_completion_tokens"] = max(limit, 2048)
+            if self.settings.azure_openai_reasoning_effort:
+                kwargs["reasoning_effort"] = self.settings.azure_openai_reasoning_effort
+        else:
+            kwargs["temperature"] = self.settings.llm_temperature
+            kwargs["max_tokens"] = limit
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
 

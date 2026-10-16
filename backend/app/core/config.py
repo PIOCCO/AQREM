@@ -244,6 +244,15 @@ class Settings(BaseSettings):
         default=0.1,
         validation_alias=AliasChoices("llm_temperature", "LLM_TEMPERATURE"),
     )
+    azure_openai_reasoning_model: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("azure_openai_reasoning_model", "AZURE_OPENAI_REASONING_MODEL"),
+        description="True for gpt-5*/o-series chat deployments: send max_completion_tokens, omit temperature.",
+    )
+    azure_openai_reasoning_effort: str = Field(
+        default="low",
+        validation_alias=AliasChoices("azure_openai_reasoning_effort", "AZURE_OPENAI_REASONING_EFFORT"),
+    )
     llm_max_retries: int = Field(
         default=3,
         validation_alias=AliasChoices("llm_max_retries", "LLM_MAX_RETRIES"),
