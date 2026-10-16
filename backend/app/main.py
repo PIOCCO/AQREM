@@ -95,6 +95,13 @@ async def lifespan(_: FastAPI):
 
     with SessionLocal() as session:
         ensure_platform_admin(session)
+        if settings.is_dedicated:
+            from app.core.deployment import dedicated_setup_required, ensure_dedicated_organization
+
+            ensure_dedicated_organization(session, settings)
+            session.flush()
+            if dedicated_setup_required(session):
+                logger.warning("Dedicated environment: first admin not created yet; open /setup (SETUP_TOKEN required)")
         from app.services.setup_checklist import backfill_local_prod_managed_storage_validation
 
         if backfill_local_prod_managed_storage_validation(session):
@@ -202,6 +209,17 @@ def create_app() -> FastAPI:
         ],
     )
     app.include_router(api_router)
+
+    @app.middleware("http")
+    async def dedicated_platform_gate(request: Request, call_next):
+        from app.core.deployment import platform_route_allowed
+
+        if not platform_route_allowed(request.url.path, request.method, settings):
+            return JSONResponse(
+                status_code=404,
+                content={"message": "Not available in a dedicated environment.", "code": "DEDICATED_MODE"},
+            )
+        return await call_next(request)
 
     @app.middleware("http")
     async def admin_api_no_store(request: Request, call_next):

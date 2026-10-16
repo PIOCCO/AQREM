@@ -17,6 +17,8 @@ import EvidenceDetailPage from "./pages/EvidenceDetailPage";
 import EvidencePage from "./pages/EvidencePage";
 import AcceptInvitePage from "./pages/AcceptInvitePage";
 import JoinOrgPage from "./pages/JoinOrgPage";
+import DedicatedSetupPage from "./pages/DedicatedSetupPage";
+import DedicatedModeGate from "./components/DedicatedModeGate";
 import SuperAdminShell from "./pages/super-admin/SuperAdminShell";
 import SuperAdminOrganizationsPage from "./pages/super-admin/SuperAdminOrganizationsPage";
 import SuperAdminLicensesPage from "./pages/super-admin/SuperAdminLicensesPage";
@@ -153,6 +155,14 @@ export default function App() {
         }
       />
       <Route
+        path="/setup"
+        element={
+          <PublicTheme>
+            <DedicatedSetupPage />
+          </PublicTheme>
+        }
+      />
+      <Route
         path="/share/:shareToken"
         element={
           <PublicTheme>
@@ -232,11 +242,13 @@ export default function App() {
         path="/super-admin"
         element={
           <PublicTheme>
-            <RequireSuperAdmin>
-              <RouteErrorBoundary>
-                <SuperAdminShell />
-              </RouteErrorBoundary>
-            </RequireSuperAdmin>
+            <DedicatedModeGate>
+              <RequireSuperAdmin>
+                <RouteErrorBoundary>
+                  <SuperAdminShell />
+                </RouteErrorBoundary>
+              </RequireSuperAdmin>
+            </DedicatedModeGate>
           </PublicTheme>
         }
       >

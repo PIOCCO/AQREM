@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useId, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AuthPageShell } from "../components/auth/AuthPageShell";
 import { clearSession, loginUser, saveSession } from "../lib/api";
+import { fetchSetupStatus } from "../lib/deploymentApi";
 import { resolveOrganizationIdForSession, resolvePostAuthPath } from "../lib/authRouting";
 
 const LOGIN_ERROR_GENERIC = "Incorrect email or password.";
@@ -39,6 +40,13 @@ export default function LoginPage() {
   useEffect(() => {
     emailRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    // Dedicated environments: first start goes to the one-time administrator setup.
+    void fetchSetupStatus().then((s) => {
+      if (s?.deployment_mode === "dedicated" && s.setup_required) navigate("/setup", { replace: true });
+    });
+  }, [navigate]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();

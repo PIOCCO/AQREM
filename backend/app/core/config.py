@@ -284,6 +284,51 @@ class Settings(BaseSettings):
         description="When > 0, scheduled job deletes audit events older than this many days (except cleanup records).",
     )
 
+    # --- Deployment tier -------------------------------------------------
+    deployment_mode: str = Field(
+        default="shared",
+        validation_alias=AliasChoices("deployment_mode", "DEPLOYMENT_MODE"),
+        description="shared (multi-tenant, default) | dedicated (single organization per environment)",
+    )
+    dedicated_org_name: str = Field(
+        default="",
+        validation_alias=AliasChoices("dedicated_org_name", "DEDICATED_ORG_NAME"),
+    )
+    dedicated_org_slug: str = Field(
+        default="",
+        validation_alias=AliasChoices("dedicated_org_slug", "DEDICATED_ORG_SLUG"),
+    )
+    setup_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("setup_token", "SETUP_TOKEN"),
+        description="One-time secret required by the dedicated first-admin setup screen.",
+    )
+    dedicated_support_access: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("dedicated_support_access", "DEDICATED_SUPPORT_ACCESS"),
+        description="Dedicated: allow PLATFORM_SUPPORT/SUPER_ADMIN read-only (GET) access to /api/v1/admin.",
+    )
+    environment_name: str = Field(
+        default="",
+        validation_alias=AliasChoices("environment_name", "ENVIRONMENT_NAME"),
+    )
+    app_version: str = Field(
+        default="",
+        validation_alias=AliasChoices("app_version", "APP_VERSION"),
+    )
+
+    @field_validator("deployment_mode", mode="before")
+    @classmethod
+    def _norm_mode(cls, v: object) -> object:
+        mode = str(v or "shared").strip().lower()
+        if mode not in {"shared", "dedicated"}:
+            raise ValueError("DEPLOYMENT_MODE must be 'shared' or 'dedicated'")
+        return mode
+
+    @property
+    def is_dedicated(self) -> bool:
+        return self.deployment_mode == "dedicated"
+
     @field_validator("embedding_dimensions", mode="before")
     @classmethod
     def _blank_dimensions(cls, v: object) -> object:
