@@ -10,6 +10,13 @@ No code changes are needed.
 
 ---
 
+> **Prefer Terraform.** `infra/terraform/` (with `envs/dev.tfvars` / `envs/prod.tfvars`) creates the
+> account and both deployments reproducibly, and outputs the non-secret env values
+> (`terraform output aqrem_backend_env`). See [`docs/azure-terraform.md`](azure-terraform.md) for the
+> runbook, the model availability and retirement notes, and costs. Note: in swedencentral
+> `text-embedding-3-small` is only offered as *Global Standard* or *Data Zone Standard*, not regional *Standard*.
+> The portal steps below are the manual equivalent.
+
 ## 1. Create the Azure resources
 
 1. **Azure portal → Create a resource → "Azure OpenAI"**
@@ -52,6 +59,20 @@ AZURE_OPENAI_CHAT_DEPLOYMENT=aqrem-chat
 AZURE_OPENAI_EMBEDDING_DEPLOYMENT=aqrem-embeddings
 EMBEDDING_DIMENSIONS=1536
 ```
+
+### Keyless option: Microsoft Entra ID (managed identity)
+
+The app supports `AZURE_OPENAI_USE_MANAGED_IDENTITY=true` (it then uses `DefaultAzureCredential` and
+ignores `AZURE_OPENAI_API_KEY`). Give the app's identity the **Cognitive Services OpenAI User** role on
+the account (Terraform: `managed_identity_principal_id`). The production Terraform env also sets
+`local_auth_enabled = false`, so keys stop working there.
+
+Managed identity **only works when AQREM runs inside Azure** (Container Apps, App Service, VM).
+The **Raspberry Pi can't use it**. On the Pi, keep `AZURE_OPENAI_API_KEY` in the gitignored `.env`
+(`chmod 600 .env`), and point it at an account with `local_auth_enabled = true` (the dev env).
+Fetch the key with `az cognitiveservices account keys list` (see `docs/azure-terraform.md` §6). Don't use a Terraform output.
+A service principal secret (`AZURE_CLIENT_ID`/`AZURE_TENANT_ID`/`AZURE_CLIENT_SECRET` read by
+`DefaultAzureCredential`) also works off-Azure, but it is still a secret stored on the device.
 
 Calls always use the **deployment names** from env. Model names are never sent.
 `docker-compose.local-prod.yml` passes all of these into the `api`, `worker` and `worker-beat`
