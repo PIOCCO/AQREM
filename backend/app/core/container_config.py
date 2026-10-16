@@ -21,6 +21,30 @@ def _settings_set(value: str | None) -> bool:
     return bool(value and str(value).strip())
 
 
+def _model_requirements(settings: Settings) -> list[EnvRequirement]:
+    provider = settings.llm_provider.lower().strip()
+    if provider == "openai":
+        return [
+            EnvRequirement(
+                "OPENAI_API_KEY",
+                _settings_set(settings.openai_api_key) or _env_set("OPENAI_API_KEY"),
+                "OpenAI chat and embeddings",
+            )
+        ]
+    return [
+        EnvRequirement(
+            "GATEWAY_URL",
+            _settings_set(settings.gateway_url) or _env_set("GATEWAY_URL"),
+            "model gateway",
+        ),
+        EnvRequirement(
+            "GATEWAY_API_KEY",
+            _settings_set(settings.gateway_api_key) or _env_set("GATEWAY_API_KEY"),
+            "model gateway auth",
+        ),
+    ]
+
+
 def validate_container_startup(role: str, settings: Settings) -> None:
     """Fail fast in production when required per-client configuration is missing."""
     role = (role or os.environ.get("CONTAINER_ROLE") or "").strip().lower()
@@ -44,8 +68,7 @@ def validate_container_startup(role: str, settings: Settings) -> None:
                 _settings_set(settings.app_public_base_url),
                 "invitation and email links",
             ),
-            EnvRequirement("GATEWAY_URL", _env_set("GATEWAY_URL"), "model gateway"),
-            EnvRequirement("GATEWAY_API_KEY", _env_set("GATEWAY_API_KEY"), "model gateway auth"),
+            *_model_requirements(settings),
             EnvRequirement(
                 "AZURE_STORAGE_CONNECTION_STRING",
                 _settings_set(settings.azure_storage_connection_string),
@@ -69,8 +92,7 @@ def validate_container_startup(role: str, settings: Settings) -> None:
                 _settings_set(settings.azure_storage_connection_string),
                 "ingestion storage",
             ),
-            EnvRequirement("GATEWAY_URL", _env_set("GATEWAY_URL"), "embeddings via gateway"),
-            EnvRequirement("GATEWAY_API_KEY", _env_set("GATEWAY_API_KEY"), "model gateway auth"),
+            *_model_requirements(settings),
         ]
         for r in reqs:
             if not r.present:

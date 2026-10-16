@@ -175,20 +175,26 @@ def run_source_sync(job_id: str, organization_id: str) -> dict:
         job.completed_at = datetime.now(UTC)
         _touch_job(db, job)
         chunk_count = int(stats.get("indexed_chunks") or 0)
+        embedded_count = int(stats.get("embedded_chunks") or 0)
         if doc is not None:
-            if chunk_count == 0:
-                mark_document_failed(db, doc, "No indexable text found in file.")
+            if chunk_count == 0 or embedded_count <= 0 or embedded_count < chunk_count:
+                message = (
+                    "No indexable text found in file."
+                    if chunk_count == 0
+                    else "Indexing did not store embeddings for every chunk."
+                )
+                mark_document_failed(db, doc, message)
                 job.status = SyncJobStatus.FAILED.value
-                job.error_message = "No indexable text found in file."
+                job.error_message = message
             else:
                 mark_document_progress(
                     db,
                     doc,
                     stage=STAGE_INDEXED,
                     status="indexed",
-                    processed_units=chunk_count,
-                    total_units=chunk_count,
-                    indexed_chunk_count=chunk_count,
+                    processed_units=embedded_count,
+                    total_units=embedded_count,
+                    indexed_chunk_count=embedded_count,
                 )
         record_audit(
             db,

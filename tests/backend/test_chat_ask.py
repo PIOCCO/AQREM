@@ -116,9 +116,9 @@ async def test_chat_ask_name_query_finds_all_staff_cv(client: TestClient, db_ses
     )
     assert res.status_code == 200, res.text
     body = res.json()
-    assert "No documents are indexed yet" not in body["answer"]
+    assert "No documents available" not in body["answer"]
     assert body.get("conversational") is not True
-    assert body["answer"]
+    assert "gammal" in body["answer"].lower() or body.get("citations")
 
 
 @pytest.mark.asyncio
@@ -223,8 +223,8 @@ async def test_chat_ask_with_chunks_but_no_access_not_no_indexed(client: TestCli
     )
     assert res.status_code == 200, res.text
     body = res.json()
-    assert "No documents are indexed yet" not in body["answer"]
-    assert "company documents" in body["answer"].lower()
+    assert "No documents available" not in body["answer"]
+    assert "gammal" in body["answer"].lower() or (body.get("citations") or [])
 
 
 @pytest.mark.asyncio
@@ -248,7 +248,8 @@ async def test_chat_ask_no_indexed_documents(client: TestClient, db_session):
     )
     assert res.status_code == 200, res.text
     body = res.json()
-    assert "indexed" in body["answer"].lower()
+    assert body["answer"] == "No documents available"
+    assert "company documents" not in body["answer"].lower()
     assert body.get("conversational") is not True
 
 

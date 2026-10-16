@@ -32,6 +32,12 @@ type DocRow = {
   visibility_mode: string;
   sensitivity_flag: boolean;
   acl_reviewed: boolean;
+  chunks_stored?: number;
+  chunks_with_embedding?: number;
+  embedding_dimensions?: number | null;
+  search_ready?: boolean;
+  leftover_project_ids?: string[];
+  leftover_visibility_modes?: string[];
 };
 
 function visibilityLabel(mode: string) {
@@ -109,7 +115,18 @@ function DocumentProgressCell({ row, tick }: { row: DocRow; tick: number }) {
         {active && row.index_started_at ? (
           <span className="text-xs text-chat-muted">Indexing for {formatElapsed(row.index_started_at)}</span>
         ) : null}
-        {row.index_stage === "indexed" && row.indexed_chunk_count > 0 ? (
+        {row.chunks_stored != null ? (
+          <span className="text-xs text-chat-muted">
+            {row.chunks_stored} chunks stored · ready for search: {row.search_ready ? "yes" : "no"}
+            {row.embedding_dimensions ? ` · ${row.embedding_dimensions}-d` : ""}
+            {row.leftover_project_ids && row.leftover_project_ids.length > 0
+              ? ` · project tags ${row.leftover_project_ids.length}`
+              : ""}
+            {row.leftover_visibility_modes && row.leftover_visibility_modes.length > 0
+              ? ` · access ${row.leftover_visibility_modes.join(", ")}`
+              : ""}
+          </span>
+        ) : row.index_stage === "indexed" && row.indexed_chunk_count > 0 ? (
           <span className="text-xs text-chat-muted">{row.indexed_chunk_count} chunks</span>
         ) : null}
       </div>

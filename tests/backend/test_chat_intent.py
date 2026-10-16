@@ -46,12 +46,13 @@ def test_insufficient_evidence_message_org_wide():
 
 def test_no_indexed_documents_message():
     msg = format_no_indexed_documents_message()
-    assert "indexed" in msg.lower()
-    assert "admin" in msg.lower()
+    assert msg == "No documents available"
+    assert "company documents" not in msg.lower()
 
 
 def test_empty_retrieval_message_uses_chunk_count():
-    assert "indexed" in format_empty_retrieval_message(org_chunk_count=0).lower()
+    assert format_empty_retrieval_message(org_chunk_count=0) == "No documents available"
     msg = format_empty_retrieval_message(org_chunk_count=3)
-    assert "company documents" in msg.lower()
+    assert msg == "I couldn't find this in the company documents"
     assert msg == format_no_relevant_information_message()
+    assert "No documents available" not in msg

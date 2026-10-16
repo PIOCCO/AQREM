@@ -11,10 +11,7 @@ from app.models.project import Project
 from app.models.source import Source
 from app.schemas.evidence import EvidenceItemSummaryResponse
 from app.services.chat.intent import build_conversational_answer, classify_chat_intent
-from app.services.chat.messages import (
-    format_empty_retrieval_message,
-    format_insufficient_evidence_message,
-)
+from app.services.chat.messages import format_empty_retrieval_message
 from app.services.library.service import AnswerLibraryService
 from app.core.config import get_settings
 from app.services.llm.errors import ModelServiceError
@@ -250,11 +247,6 @@ class ChatAskService:
 
         citations = self._build_citations(items, selected)
         answer = grounded.composed_answer
-        if behavior.outcome == AnswerOutcome.INSUFFICIENT_EVIDENCE and items:
-            answer = format_insufficient_evidence_message(
-                project_name=project_name,
-                sources_searched=sources_searched,
-            )
 
         return {
             "query": safe_query,

@@ -1,10 +1,19 @@
-"""Azure OpenAI configuration validation (no secrets in error messages)."""
+"""Model provider configuration validation (no secrets in error messages)."""
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from app.core.config import Settings
+
+logger = logging.getLogger("aqrem.providers")
+
+_FAKE_GATEWAY_MARKERS = (
+    "fake-azure-openai",
+    "fake.invalid",
+    "fake-azure",
+)
 
 
 @dataclass(frozen=True)
@@ -65,17 +74,29 @@ def require_azure_openai(settings: Settings) -> None:
         )
 
 
-def llm_provider_summary(settings: Settings) -> dict[str, str | bool]:
-    provider = settings.llm_provider.lower()
+def gateway_points_at_fake(settings: Settings) -> bool:
+    """True when the configured gateway URL is a known local fake/test upstream."""
+    blob = (settings.gateway_url or "").lower()
+    return any(marker in blob for marker in _FAKE_GATEWAY_MARKERS)
+
+
+def llm_provider_summary(settings: Settings) -> dict[str, str | bool | int]:
+    provider = settings.llm_provider.lower().strip()
+    dim = settings.embedding_dimensions
     if provider == "azure":
         status = inspect_azure_openai(settings)
         return {
             "provider": "azure",
+            "llm_provider": "azure",
+            "embedding_provider": "azure",
             "configured": status.configured,
             "auth_mode": status.auth_mode,
             "endpoint": status.endpoint_host or "",
             "chat_deployment": settings.azure_openai_chat_deployment,
             "embedding_deployment": settings.azure_openai_embedding_deployment,
+            "chat_model": f"azure:{settings.azure_openai_chat_deployment}",
+            "embedding_model": f"azure:{settings.azure_openai_embedding_deployment}:{dim}",
+            "dimensions": dim,
         }
     if provider == "gateway":
         from app.core.gateway_config import inspect_gateway
@@ -83,10 +104,64 @@ def llm_provider_summary(settings: Settings) -> dict[str, str | bool]:
         status = inspect_gateway(settings)
         return {
             "provider": "gateway",
-            "configured": status.configured,
+            "llm_provider": "gateway",
+            "embedding_provider": "gateway",
+            "configured": status.configured and not gateway_points_at_fake(settings),
             "auth_mode": "api_key",
             "endpoint": status.gateway_host or "",
             "chat_alias": settings.gateway_chat_alias,
             "embedding_alias": settings.gateway_embeddings_alias,
+            "chat_model": f"gateway:{settings.gateway_chat_alias}",
+            "embedding_model": f"gateway:{settings.gateway_embeddings_alias}:{dim}",
+            "dimensions": dim,
+            "fake_upstream": gateway_points_at_fake(settings),
         }
-    return {"provider": provider, "configured": True, "auth_mode": "n/a"}
+    if provider == "openai":
+        return {
+            "provider": "openai",
+            "llm_provider": "openai",
+            "embedding_provider": "openai",
+            "configured": bool((settings.openai_api_key or "").strip()),
+            "auth_mode": "api_key",
+            "chat_model": f"openai:{settings.openai_chat_model}",
+            "embedding_model": f"openai:{settings.openai_embedding_model}:{dim}",
+            "dimensions": dim,
+        }
+    if provider in {"mock", "local"}:
+        return {
+            "provider": provider,
+            "llm_provider": provider,
+            "embedding_provider": provider,
+            "configured": settings.app_env != "production",
+            "auth_mode": "n/a",
+            "chat_model": "local-extractive",
+            "embedding_model": f"local-deterministic-hash-{dim}",
+            "dimensions": dim,
+        }
+    return {
+        "provider": provider,
+        "llm_provider": provider,
+        "embedding_provider": provider,
+        "configured": False,
+        "auth_mode": "n/a",
+        "chat_model": provider or "unset",
+        "embedding_model": provider or "unset",
+        "dimensions": dim,
+    }
+
+
+def log_active_providers(role: str) -> None:
+    """Startup line naming the LLM and embedding providers actually in use."""
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    summary = llm_provider_summary(settings)
+    logger.info(
+        "Active providers: role=%s llm=%s chat_model=%s embeddings=%s embedding_model=%s dimensions=%s",
+        role,
+        summary.get("llm_provider"),
+        summary.get("chat_model"),
+        summary.get("embedding_provider"),
+        summary.get("embedding_model"),
+        summary.get("dimensions"),
+    )

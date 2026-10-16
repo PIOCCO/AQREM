@@ -87,17 +87,28 @@ def _require_org_admin_surface(request: Request, tenant: TenantContext = Depends
 
 
 def _sync_document_from_job(doc: ClientDocument, job: SourceSyncJob | None) -> None:
-    """Align document row with sync job when worker or UI state diverges."""
+    """Align document row with sync job when worker or UI state diverges.
+
+    A completed job is indexed only when it recorded stored embeddings.
+    """
     if job is None:
         return
-    if doc.index_stage in {"indexed", "failed", "empty"} and doc.status in {"indexed", "failed"}:
-        return
     if job.status == SyncJobStatus.COMPLETED.value:
-        if doc.status != "indexed" or doc.index_stage != "indexed":
+        stats = job.stats or {}
+        if "embedded_chunks" not in stats:
+            return
+        embedded = int(stats.get("embedded_chunks") or 0)
+        if embedded > 0:
             doc.status = "indexed"
             doc.index_progress = 100
             doc.index_stage = "indexed"
+            doc.indexed_chunk_count = embedded
             doc.failure_reason = None
+        else:
+            doc.status = "failed"
+            doc.index_stage = "failed"
+            doc.indexed_chunk_count = 0
+            doc.failure_reason = "Indexing finished without stored embeddings."
         return
     if job.status == SyncJobStatus.FAILED.value:
         if doc.status != "failed" or doc.index_stage != "failed":
@@ -211,9 +222,32 @@ def list_documents(
         .limit(page_size)
         .all()
     )
+    import asyncio
+    import logging
+
+    from app.services.ingestion.embedding_health import apply_index_truth, document_search_health, reembed_stale_chunks
+
+    health_log = logging.getLogger("aqrem.rag")
+    asyncio.run(reembed_stale_chunks(db, tenant.organization_id))
+    health_by_id: dict = {}
     for doc in rows:
         job = db.get(SourceSyncJob, doc.sync_job_id) if doc.sync_job_id else None
         _sync_document_from_job(doc, job)
+        health = document_search_health(db, doc)
+        apply_index_truth(doc, health)
+        health_by_id[doc.id] = health
+        health_log.info(
+            "document index health file=%s org=%s chunks_stored=%s chunks_with_embedding=%s "
+            "vector_size=%s search_ready=%s leftover_project_ids=%s leftover_visibility=%s",
+            doc.file_name,
+            doc.organization_id,
+            health["chunks_stored"],
+            health["chunks_with_embedding"],
+            health["embedding_dimensions"],
+            health["search_ready"],
+            health["leftover_project_ids"],
+            health["leftover_visibility_modes"],
+        )
     db.commit()
     queued_jobs = (
         db.query(SourceSyncJob)
@@ -274,6 +308,12 @@ def list_documents(
                 sensitivity_flag=r.sensitivity_flag,
                 acl_reviewed=r.acl_reviewed,
                 created_at=r.created_at,
+                chunks_stored=health_by_id.get(r.id, {}).get("chunks_stored", 0),
+                chunks_with_embedding=health_by_id.get(r.id, {}).get("chunks_with_embedding", 0),
+                embedding_dimensions=health_by_id.get(r.id, {}).get("embedding_dimensions"),
+                search_ready=bool(health_by_id.get(r.id, {}).get("search_ready", False)),
+                leftover_project_ids=health_by_id.get(r.id, {}).get("leftover_project_ids", []),
+                leftover_visibility_modes=health_by_id.get(r.id, {}).get("leftover_visibility_modes", []),
             )
         )
     return DocumentListResponse(

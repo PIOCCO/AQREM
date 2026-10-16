@@ -31,11 +31,21 @@ def _jitter_delay(base: float) -> float:
 
 
 class GatewayLLMProvider(LLMProvider):
+    provider_name = "gateway"
+
     def __init__(self, settings: Settings, *, api_key: str) -> None:
         require_gateway(settings)
         self.settings = settings
         self.api_key = api_key
         self._timeout = httpx.Timeout(settings.gateway_timeout_seconds)
+
+    @property
+    def chat_model_id(self) -> str:
+        return f"gateway:{self.settings.gateway_chat_alias}"
+
+    @property
+    def embedding_model_id(self) -> str:
+        return f"gateway:{self.settings.gateway_embeddings_alias}:{self.settings.embedding_dimensions}"
 
     def _base_url(self) -> str:
         return (self.settings.gateway_url or "").rstrip("/")

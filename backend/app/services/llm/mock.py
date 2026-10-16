@@ -45,10 +45,19 @@ def _mock_evidence_supports_question(question: str, blocks: list[dict]) -> bool:
 
 
 class MockLLMProvider(LLMProvider):
-    """Deterministic embeddings and placeholder answers for local dev/CI."""
+    """Deterministic embeddings and extractive answers. Allowed only outside production."""
 
-    def __init__(self, dimensions: int = 384) -> None:
+    def __init__(self, dimensions: int = 384, *, provider_name: str = "local") -> None:
         self.dimensions = dimensions
+        self.provider_name = provider_name
+
+    @property
+    def chat_model_id(self) -> str:
+        return "local-extractive"
+
+    @property
+    def embedding_model_id(self) -> str:
+        return f"local-deterministic-hash-{self.dimensions}"
 
     def _hash_embed(self, text: str) -> list[float]:
         digest = hashlib.sha256(text.encode("utf-8")).digest()

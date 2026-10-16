@@ -152,7 +152,7 @@ INTEGRATION_CASES = [
         question="Give me the latest penetration test report.",
         fixture_names=["Information_Security_Policy.md"],
         expected_outcome=AnswerOutcome.INSUFFICIENT_EVIDENCE,
-        answer_contains=["couldn't find evidence", "source searched"],
+        answer_contains=["insufficient evidence"],
         answer_must_not_contain=["penetration-test-2026.pdf", "download link"],
     ),
     ConceptualCase(

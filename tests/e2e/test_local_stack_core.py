@@ -28,7 +28,8 @@ async def test_health_and_version(api_base: str):
         assert ver.status_code == 200
         body = ver.json()
         assert body.get("environment") == "production"
-        assert body.get("llm_provider") == "gateway"
+        assert body.get("llm_provider") in {"openai", "gateway"}
+        assert body.get("llm_provider") not in {"mock", "local", "fake", "test"}
 
 
 def _gateway_health_url() -> str:

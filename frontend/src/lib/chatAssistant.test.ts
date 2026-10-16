@@ -32,4 +32,29 @@ describe("generateAssistantReply", () => {
     expect(reply.meta.insufficientEvidence).toBe(true);
     expect(reply.meta.conversational).toBeFalsy();
   });
+
+  it("keeps the two empty-document messages distinct", async () => {
+    const session = { token: "t", organizationId: "org" };
+    vi.spyOn(api, "askChat").mockResolvedValueOnce({
+      answer: "No documents available",
+      evidence_sufficiency: "insufficient",
+      outcome: "insufficient_evidence",
+      is_draft: true,
+      citations: [],
+    });
+    const none = await generateAssistantReply(session, "What is our DR policy?", null);
+    expect(none.content).toBe("No documents available");
+    expect(none.content.toLowerCase()).not.toContain("company documents");
+
+    vi.spyOn(api, "askChat").mockResolvedValueOnce({
+      answer: "I couldn't find this in the company documents",
+      evidence_sufficiency: "insufficient",
+      outcome: "insufficient_evidence",
+      is_draft: true,
+      citations: [],
+    });
+    const miss = await generateAssistantReply(session, "What is our DR policy?", null);
+    expect(miss.content).toBe("I couldn't find this in the company documents");
+    expect(miss.content).not.toContain("No documents available");
+  });
 });

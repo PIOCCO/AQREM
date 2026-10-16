@@ -38,6 +38,12 @@ class DocumentRowResponse(BaseModel):
     sensitivity_flag: bool
     acl_reviewed: bool
     created_at: datetime
+    chunks_stored: int = 0
+    chunks_with_embedding: int = 0
+    embedding_dimensions: int | None = None
+    search_ready: bool = False
+    leftover_project_ids: list[str] = Field(default_factory=list)
+    leftover_visibility_modes: list[str] = Field(default_factory=list)
 
 
 class DocumentListResponse(BaseModel):
