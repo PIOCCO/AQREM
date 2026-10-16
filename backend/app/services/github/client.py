@@ -28,7 +28,10 @@ class GitHubClient:
         return headers
 
     async def fetch_repo_archive(self, ref: GitHubRepoRef) -> list[FilePayload]:
-        url = f"https://api.github.com/repos/{ref.owner}/{ref.repo}/tarball/{ref.branch}"
+        from app.core.config import get_settings
+
+        base = (get_settings().github_api_url or "https://api.github.com").rstrip("/")
+        url = f"{base}/repos/{ref.owner}/{ref.repo}/tarball/{ref.branch}"
         async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
             resp = await client.get(url, headers=self._headers())
             resp.raise_for_status()

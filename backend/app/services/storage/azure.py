@@ -7,16 +7,27 @@ from app.services.storage.base import BlobStorage
 class AzureBlobStorage(BlobStorage):
     def __init__(
         self,
-        connection_string: str,
+        connection_string: str | None,
         container: str,
         *,
         api_version: str | None = None,
+        account_url: str | None = None,
     ) -> None:
-        blob_api_version = resolve_blob_api_version(connection_string, api_version)
+        blob_api_version = resolve_blob_api_version(connection_string or "", api_version)
         kwargs = {}
         if blob_api_version:
             kwargs["api_version"] = blob_api_version
-        self.client = BlobServiceClient.from_connection_string(connection_string, **kwargs)
+        if (account_url or "").strip() and not (connection_string or "").strip():
+            # Managed identity / workload identity; account_url may be a private-endpoint FQDN.
+            from azure.identity import DefaultAzureCredential
+
+            self.client = BlobServiceClient(
+                account_url=account_url.strip(),
+                credential=DefaultAzureCredential(exclude_interactive_browser_credential=True),
+                **kwargs,
+            )
+        else:
+            self.client = BlobServiceClient.from_connection_string(connection_string or "", **kwargs)
         self.container = container
         self._container_client = self.client.get_container_client(container)
         if not self._container_client.exists():

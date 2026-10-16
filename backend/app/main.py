@@ -82,11 +82,23 @@ async def lifespan(_: FastAPI):
         from app.core.broker_health import assert_broker_available
 
         assert_broker_available()
-    with engine.begin() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        ControlBase.metadata.create_all(bind=conn)
-        TenantBase.metadata.create_all(bind=conn)
-        apply_schema_patches(conn)
+    from app.db.migrate import LATEST_VERSION, migration_engine, pending, run_migrations
+
+    if settings.run_migrations_on_startup:
+        mig_engine = migration_engine() if (settings.migration_database_url or "").strip() else engine
+        run_migrations(mig_engine, app_version=settings.app_version)
+        if mig_engine is not engine:
+            mig_engine.dispose()
+    else:
+        todo = pending(engine)
+        if todo:
+            raise RuntimeError(
+                f"Database schema is behind (pending migrations {[m.version for m in todo]}, latest {LATEST_VERSION}). "
+                "Run the migration job: python -m app.db.migrate"
+            )
+    from app.services.system.startup_report import log_startup_report
+
+    log_startup_report(settings)
     from app.services.ingestion.vector_schema import check_vector_column_dimensions
 
     check_vector_column_dimensions(engine, settings)
@@ -274,8 +286,14 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=500, content={"message": message})
 
     @app.get("/health")
-    def health() -> dict[str, str]:
-        return {"status": "ok"}
+    def health() -> dict[str, object]:
+        """Always 200 while the process serves requests; body reports each dependency."""
+        from app.services.system.health import dependency_report
+
+        try:
+            return dependency_report(settings)
+        except Exception as exc:  # never fail the liveness probe because a check crashed
+            return {"status": "degraded", "error": type(exc).__name__}
 
     @app.get("/health/live")
     def health_live() -> dict[str, str]:

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def assert_broker_available() -> None:
     settings = get_settings()
-    url = (settings.redis_url or "").strip()
+    url = (settings.broker_url or "").strip()
     if not url:
         raise RuntimeError("REDIS_URL is not configured.")
     try:

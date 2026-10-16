@@ -106,7 +106,67 @@ class Settings(BaseSettings):
     frontend_dist_path: str | None = None
 
     database_url: str = "postgresql+psycopg://aqrem:aqrem@localhost:5432/aqrem"
+    migration_database_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("migration_database_url", "MIGRATION_DATABASE_URL"),
+        description="Owner/migration role URL used only for DDL. DATABASE_URL should be the least-privilege app role.",
+    )
+    run_migrations_on_startup: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("run_migrations_on_startup", "RUN_MIGRATIONS_ON_STARTUP"),
+    )
+    database_require_tls: bool | None = Field(
+        default=None,
+        validation_alias=AliasChoices("database_require_tls", "DATABASE_REQUIRE_TLS"),
+        description="Fail the DB check when TLS is not in use. Defaults to true in production.",
+    )
     redis_url: str = "redis://localhost:6379/0"
+    celery_broker_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("celery_broker_url", "CELERY_BROKER_URL"),
+        description="Overrides REDIS_URL as the Celery broker (e.g. rediss:// private endpoint).",
+    )
+    key_vault_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("key_vault_url", "KEY_VAULT_URL"),
+    )
+    azure_storage_account_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("azure_storage_account_url", "AZURE_STORAGE_ACCOUNT_URL"),
+        description="https://<acct>.blob.core.windows.net (or private endpoint FQDN); uses managed identity.",
+    )
+    document_intelligence_endpoint: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("document_intelligence_endpoint", "DOCUMENT_INTELLIGENCE_ENDPOINT"),
+    )
+    document_intelligence_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("document_intelligence_key", "DOCUMENT_INTELLIGENCE_KEY"),
+    )
+    auth_provider: str = Field(
+        default="local",
+        validation_alias=AliasChoices("auth_provider", "AUTH_PROVIDER"),
+        description="local (email+password). 'entra' is reserved; not implemented yet.",
+    )
+    license_file: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("license_file", "LICENSE_FILE"),
+    )
+    license_public_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("license_public_key", "LICENSE_PUBLIC_KEY"),
+        description="Base64 Ed25519 public key override (tests/key rotation). Default: embedded key.",
+    )
+    fleet_environments: str = Field(
+        default="",
+        validation_alias=AliasChoices("fleet_environments", "FLEET_ENVIRONMENTS"),
+        description="Comma list name=https://url of dedicated environments for the fleet view.",
+    )
+    log_format: str = Field(
+        default="text",
+        validation_alias=AliasChoices("log_format", "LOG_FORMAT"),
+        description="text | json",
+    )
 
     azure_storage_connection_string: str | None = None
     azure_storage_container: str = "evidence"
@@ -211,6 +271,21 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("product_v1", "PRODUCT_V1"),
     )
 
+    github_api_url: str = Field(
+        default="https://api.github.com",
+        validation_alias=AliasChoices("github_api_url", "GITHUB_API_URL"),
+        description="GitHub (Enterprise) API base; only called when a GitHub source is configured.",
+    )
+    brevo_api_url: str = Field(
+        default="https://api.brevo.com/v3/smtp/email",
+        validation_alias=AliasChoices("brevo_api_url", "BREVO_API_URL"),
+        description="Only called when EMAIL_PROVIDER=brevo.",
+    )
+    azure_openai_token_scope: str = Field(
+        default="https://cognitiveservices.azure.com/.default",
+        validation_alias=AliasChoices("azure_openai_token_scope", "AZURE_OPENAI_TOKEN_SCOPE"),
+        description="Entra token scope for managed identity (change for sovereign clouds).",
+    )
     github_app_id: str | None = None
     github_client_id: str | None = None
     github_client_secret: str | None = None
@@ -393,15 +468,31 @@ class Settings(BaseSettings):
                     f"Production refuses unknown LLM_PROVIDER={provider!r}. "
                     "Use azure (recommended), openai, or gateway. Mock providers are not allowed."
                 )
-            if not (self.azure_storage_connection_string or "").strip() and not _is_local_prod_lab():
+            if not self.use_azure_blob_storage and not _is_local_prod_lab():
                 raise ValueError(
-                    "Production requires blob storage (AZURE_STORAGE_CONNECTION_STRING); local disk uploads are forbidden."
+                    "Production requires blob storage (AZURE_STORAGE_ACCOUNT_URL with managed identity, "
+                    "or AZURE_STORAGE_CONNECTION_STRING); local disk uploads are forbidden."
+                )
+            cs = (self.azure_storage_connection_string or "").lower()
+            if not _is_local_prod_lab() and ("devstoreaccount1" in cs or "azurite" in cs or "usedevelopmentstorage" in cs):
+                raise ValueError(
+                    "Production refuses the Azurite development storage emulator. Configure a real storage account."
                 )
         return self
 
     @property
     def use_azure_blob_storage(self) -> bool:
-        return bool((self.azure_storage_connection_string or "").strip())
+        return bool((self.azure_storage_connection_string or "").strip() or (self.azure_storage_account_url or "").strip())
+
+    @property
+    def broker_url(self) -> str:
+        return (self.celery_broker_url or "").strip() or self.redis_url
+
+    @property
+    def tls_required_for_db(self) -> bool:
+        if self.database_require_tls is not None:
+            return self.database_require_tls
+        return self.app_env == "production" and not _is_local_prod_lab()
 
     @property
     def resolved_email_provider(self) -> str:
@@ -443,4 +534,9 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    # Optional: pull secrets from Azure Key Vault (managed identity) into the environment
+    # before settings are parsed. Values already present in the environment win.
+    from app.core.keyvault import load_key_vault_secrets
+
+    load_key_vault_secrets()
     return Settings()

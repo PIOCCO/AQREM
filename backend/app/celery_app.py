@@ -9,7 +9,7 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-celery_app = Celery("aqrem", broker=settings.redis_url, backend=settings.redis_url)
+celery_app = Celery("aqrem", broker=settings.broker_url, backend=settings.broker_url)
 # Beat runs as non-root in Docker; default cwd (/app/backend) is not writable.
 celery_app.conf.beat_schedule_filename = os.environ.get(
     "CELERY_BEAT_SCHEDULE_FILE",

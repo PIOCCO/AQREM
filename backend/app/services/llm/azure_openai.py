@@ -225,7 +225,7 @@ class AzureOpenAIProvider(LLMProvider):
             from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
             credential = DefaultAzureCredential()
-            token_provider = get_bearer_token_provider(credential, _COGNITIVE_SCOPE)
+            token_provider = get_bearer_token_provider(credential, settings.azure_openai_token_scope or _COGNITIVE_SCOPE)
             return AsyncAzureOpenAI(azure_ad_token_provider=token_provider, **common)
         return AsyncAzureOpenAI(api_key=settings.azure_openai_api_key, **common)
 

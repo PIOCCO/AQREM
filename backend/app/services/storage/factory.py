@@ -15,9 +15,10 @@ def get_blob_storage() -> BlobStorage:
         from app.services.storage.azure import AzureBlobStorage
 
         return AzureBlobStorage(
-            connection_string=(settings.azure_storage_connection_string or "").strip(),
+            connection_string=(settings.azure_storage_connection_string or "").strip() or None,
             container=settings.azure_storage_container,
             api_version=settings.azure_storage_blob_api_version,
+            account_url=settings.azure_storage_account_url,
         )
     return LocalBlobStorage(settings.local_upload_dir)
 

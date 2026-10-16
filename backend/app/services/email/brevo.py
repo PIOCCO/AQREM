@@ -38,7 +38,9 @@ class BrevoProvider:
         headers = {"api-key": self._api_key, "accept": "application/json", "content-type": "application/json"}
         try:
             with httpx.Client(timeout=self._timeout) as client:
-                response = client.post(BREVO_SEND_URL, headers=headers, json=payload)
+                from app.core.config import get_settings
+
+                response = client.post(get_settings().brevo_api_url or BREVO_SEND_URL, headers=headers, json=payload)
         except httpx.TimeoutException:
             return SendResult(ok=False, error_message="Brevo request timed out")
         except httpx.HTTPError as exc:
