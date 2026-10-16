@@ -52,5 +52,7 @@ module "env" {
   document_intelligence_account_id = var.document_intelligence_account_id
   document_intelligence_endpoint   = var.document_intelligence_endpoint
   deployer_ip_cidrs                = var.deployer_ip_cidrs
+  setup_allowed_cidrs              = var.setup_allowed_cidrs
+  setup_token_ttl_minutes          = var.setup_token_ttl_minutes
   tags                             = local.tags
 }

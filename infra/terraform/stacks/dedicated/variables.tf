@@ -124,3 +124,15 @@ variable "existing_has_migration_url" {
   default     = false
   description = "existing db_mode: true when existing_migration_database_url (owner role) is supplied."
 }
+
+variable "setup_allowed_cidrs" {
+  type        = list(string)
+  default     = []
+  description = "Client networks allowed to open /setup (e.g. the client admin's office IP). Empty = loopback/private ranges only, i.e. /setup is NOT reachable from the internet."
+}
+
+variable "setup_token_ttl_minutes" {
+  type        = number
+  default     = 60
+  description = "Lifetime of the one-time setup token from first api start (or operator reset)."
+}

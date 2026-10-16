@@ -41,7 +41,8 @@ Then:
    (the Key Vault firewall only admits `deployer_ip_cidrs`), then restart the api revision.
 3. Give the client admin the URL and the setup token
    (`az keyvault secret show --vault-name <kv> -n setup-token --query value -o tsv`). They open `/setup`,
-   create the first administrator, and sign in. The platform console is disabled in dedicated mode
+   create the first administrator, and sign in. Read **First-run setup security** below first: by
+   default `/setup` is not reachable from the internet. The platform console is disabled in dedicated mode
    (`DEDICATED_SUPPORT_ACCESS=true` re-enables read-only GET access for platform staff).
 4. Add the environment to the fleet list of the platform console: `FLEET_ENVIRONMENTS=contoso=https://<web-fqdn>,...`.
 
@@ -91,3 +92,42 @@ written by the new version must be discarded (below).
 * `GET /api/v1/version` — version, mode, schema version (used by the Fleet page).
 * Startup log prints one line per dependency and the database checks (TLS, pgvector, permissions).
 * Org admin (dedicated) → Setup page → **Test database** / **Download diagnostics** (zip without secrets or content).
+
+## First-run setup security (`/setup`)
+The setup screen creates the first organization administrator. Its rules:
+
+* **One-time, short-lived token.** On the first api start of an environment without an administrator,
+  the api records `sha256(SETUP_TOKEN)` with `issued_at` in `setup_tokens` (the token itself is never
+  stored or logged). It is valid for `SETUP_TOKEN_TTL_MINUTES` (default **60**) and is marked
+  `consumed_at` by the first successful use. Comparison is constant-time on the hash.
+* **Closed = 404.** Once an administrator exists (or in shared mode) `GET /api/v1/setup/status` and
+  `POST /api/v1/setup/first-admin` return the same `404 {"detail":"Not Found"}` as an unknown route, and
+  the `/setup` page redirects like an unknown route. Before that, an expired/used token gives
+  `410 SETUP_TOKEN_EXPIRED` and the page tells the user to contact the operator.
+* **No re-activation by API or environment.** After the bootstrap row exists, `SETUP_TOKEN` is ignored;
+  changing it (Key Vault, env, restart) does not re-open setup. The only way is the operator CLI inside
+  the api container:
+  ```bash
+  az containerapp exec -n <client>-api -g rg-aqrem-<client> --command "python -m app.setup status"
+  az containerapp exec -n <client>-api -g rg-aqrem-<client> --command "python -m app.setup reset --confirm"
+  ```
+  `reset --confirm` revokes any unused token, generates a new one (printed **once** on your terminal;
+  `--token-stdin` reads your own instead, min. 24 chars, never a previously used one), audit-logs
+  `setup_reopened_by_operator`, and opens setup for one TTL even if an administrator exists (account
+  recovery: the form then creates an additional org admin or resets that user's password).
+* **Network gate.** The client address must be inside `SETUP_ALLOWED_CIDRS` (default: loopback and
+  private ranges `127.0.0.0/8, ::1/128, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7`), otherwise 404.
+  The `web` app is public, so on a fresh Azure environment `/setup` is **not** reachable from the
+  internet until you set Terraform `setup_allowed_cidrs = ["<client admin IP>/32"]` (re-apply), or the
+  admin connects through a private network/VPN. Remove the CIDR after setup.
+  The client address is taken from `X-Forwarded-For` after stripping `SETUP_TRUSTED_PROXY_HOPS`
+  trusted proxies (Terraform sets **2**: Container Apps ingress + the web nginx). With hops=0 any
+  request carrying `X-Forwarded-For` is refused (fail closed), so an undeclared proxy can't make every
+  caller look private.
+* **Rate limit.** Failed token attempts are stored in `setup_attempts`. `SETUP_MAX_ATTEMPTS_PER_IP`
+  (default 5) failures from one address, or `SETUP_MAX_ATTEMPTS_GLOBAL` (default 20) from all addresses,
+  within `SETUP_LOCKOUT_MINUTES` (default 15) lock setup with `429` + `Retry-After` until the oldest
+  failure leaves the window. While locked, even the correct token is refused. Requests outside the
+  allowed networks are rejected before they count.
+* **Logs.** `setup_token` keys and `setup_token=` values are redacted by the log filter, and the live
+  token value is registered for literal redaction in every log line (app, uvicorn, uvicorn.access, celery).

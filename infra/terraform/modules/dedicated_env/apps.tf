@@ -84,7 +84,7 @@ resource "azurerm_container_app" "api" {
       memory = local.s.api_memory
 
       dynamic "env" {
-        for_each = merge(local.common_env, { CONTAINER_ROLE = "api" })
+        for_each = merge(local.common_env, local.setup_env, { CONTAINER_ROLE = "api" })
         content {
           name  = env.key
           value = env.value

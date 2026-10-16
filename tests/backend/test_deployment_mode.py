@@ -26,10 +26,10 @@ def test_invalid_mode_rejected():
 
 
 def test_shared_mode_unchanged(client: TestClient):
+    # Setup does not exist in shared mode: 404 like an unknown route (CHECK 3).
     r = client.get("/api/v1/setup/status")
-    assert r.status_code == 200
-    assert r.json() == {"deployment_mode": "shared", "setup_required": False, "organization_name": None,
-                        "setup_token_configured": False, "license_state": None, "license_message": None}
+    assert r.status_code == 404
+    assert client.get("/api/v1/version").json()["deployment_mode"] == "shared"
     r = client.post("/api/v1/setup/first-admin", json={"setup_token": "x", "email": "a@b.co",
                                                         "full_name": "A", "password": "x" * 12})
     assert r.status_code == 404
@@ -44,7 +44,7 @@ def test_dedicated_first_admin_flow(dedicated, db_session):
     app = create_app()
     app.dependency_overrides[get_db] = lambda: db_session
     app.dependency_overrides[get_tenant_db] = lambda: db_session
-    with TestClient(app) as c:
+    with TestClient(app, client=("10.0.0.5", 50000)) as c:  # private network (SETUP_ALLOWED_CIDRS)
         # db_session already may contain orgs from other tests in same tx: start clean view
         s = c.get("/api/v1/setup/status").json()
         assert s["deployment_mode"] == "dedicated"
@@ -57,8 +57,9 @@ def test_dedicated_first_admin_flow(dedicated, db_session):
         r = c.post("/api/v1/setup/first-admin", json=body)
         assert r.status_code == 201, r.text
         assert r.json()["organization_name"] == "Contoso Dedicated"
-        assert c.get("/api/v1/setup/status").json()["setup_required"] is False
-        assert c.post("/api/v1/setup/first-admin", json=body).status_code == 409
+        # setup closed once the admin exists: page/API 404 (CHECK 3)
+        assert c.get("/api/v1/setup/status").status_code == 404
+        assert c.post("/api/v1/setup/first-admin", json=body).status_code == 404
         org = db_session.query(Organization).one()
         m = db_session.query(OrganizationMembership).filter_by(organization_id=org.id).one()
         assert m.role == "ORG_ADMIN"
