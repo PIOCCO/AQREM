@@ -1,3 +1,4 @@
+from app.services.storage.path_utils import org_blob_path
 """Client organization admin console (private assistant dashboard)."""
 
 import hashlib
@@ -465,7 +466,7 @@ async def upload_documents(
                 message="This file was already uploaded.",
                 field="file",
             )
-        blob_path = f"{tenant.organization_id}/{source.id}/{safe_name}"
+        blob_path = org_blob_path(tenant.organization_id, str(source.id), safe_name)
         try:
             storage.upload_bytes(blob_path, data, upload.content_type or "application/octet-stream")
             uploaded_blob_paths.append(blob_path)
@@ -585,7 +586,9 @@ def remove_document(
             db.delete(job)
     if doc.blob_path:
         try:
-            get_blob_storage().delete(doc.blob_path)
+            from app.services.storage.path_utils import assert_blob_in_org
+
+            get_blob_storage().delete(assert_blob_in_org(doc.blob_path, tenant.organization_id))
         except Exception:
             pass
     from app.models.evidence import EvidenceItem

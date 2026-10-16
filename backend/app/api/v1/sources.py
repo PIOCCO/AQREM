@@ -1,3 +1,4 @@
+from app.services.storage.path_utils import org_blob_path
 from pathlib import Path
 from uuid import UUID
 
@@ -78,7 +79,7 @@ async def upload_files(
         data = await upload.read()
         if len(data) > settings.max_upload_bytes:
             raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File too large")
-        blob_path = f"{tenant.organization_id}/{source.id}/{safe_name}"
+        blob_path = org_blob_path(tenant.organization_id, str(source.id), safe_name)
         storage.upload_bytes(blob_path, data, upload.content_type or "application/octet-stream")
         uploaded_paths.append(blob_path)
 

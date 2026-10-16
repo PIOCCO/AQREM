@@ -1,3 +1,4 @@
+from app.services.storage.path_utils import org_blob_path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
@@ -326,7 +327,7 @@ async def upload_questionnaire(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No questions extracted")
 
     storage = get_blob_storage()
-    blob_path = f"{tenant.organization_id}/questionnaires/{questionnaire.id}/{filename}"
+    blob_path = org_blob_path(tenant.organization_id, "questionnaires", str(questionnaire.id), filename)
     storage.upload_bytes(blob_path, data, file.content_type or "application/octet-stream")
 
     db.query(Question).filter(Question.questionnaire_id == questionnaire.id).delete()

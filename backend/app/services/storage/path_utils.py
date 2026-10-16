@@ -49,3 +49,27 @@ def safe_archive_member_path(name: str) -> str | None:
     if not parts or any(p == ".." for p in parts):
         return None
     return "/".join(parts)
+
+
+def org_blob_prefix(organization_id) -> str:
+    """Every tenant object lives under '<organization_id>/' in the container."""
+    return f"{organization_id}/"
+
+
+def org_blob_path(organization_id, *parts: str) -> str:
+    clean = []
+    for part in parts:
+        seg = str(part).strip("/")
+        if not seg or ".." in seg.split("/") or "\0" in seg:
+            raise ValueError("Invalid blob path segment")
+        clean.append(seg)
+    return org_blob_prefix(organization_id) + "/".join(clean)
+
+
+def assert_blob_in_org(blob_path: str, organization_id) -> str:
+    """Raise ValueError unless blob_path is inside the organization's prefix."""
+    if not isinstance(blob_path, str) or "\0" in blob_path or ".." in blob_path.split("/"):
+        raise ValueError("invalid blob path")
+    if not blob_path.startswith(org_blob_prefix(organization_id)):
+        raise ValueError("blob path outside organization scope")
+    return blob_path

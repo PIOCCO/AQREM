@@ -33,14 +33,12 @@ from app.celery_app import celery_app
 
 
 def _validate_blob_paths_for_org(blob_paths: list, organization_id: UUID) -> None:
-    prefix = f"{organization_id}/"
+    from app.services.storage.path_utils import assert_blob_in_org
+
     for raw in blob_paths:
         if not isinstance(raw, str):
             raise ValueError("invalid blob reference")
-        if ".." in raw or "\0" in raw:
-            raise ValueError("invalid blob path")
-        if not raw.startswith(prefix):
-            raise ValueError("blob path outside organization scope")
+        assert_blob_in_org(raw, organization_id)
 
 
 def _touch_job(db: Session, job: SourceSyncJob) -> None:

@@ -173,7 +173,14 @@ def purge_organization_tenant_data(db: Session, organization_id: UUID) -> None:
             from app.services.storage.factory import get_blob_storage
 
             storage = get_blob_storage()
+            from app.services.storage.path_utils import assert_blob_in_org
+
             for path in blob_paths:
+                try:
+                    assert_blob_in_org(path, organization_id)
+                except ValueError:
+                    logger.error("Refusing to delete blob outside org prefix during purge org=%s", organization_id)
+                    continue
                 try:
                     storage.delete(path)
                 except OSError:

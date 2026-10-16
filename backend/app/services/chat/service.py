@@ -43,11 +43,16 @@ def _behavior_payload(behavior: BehaviorResult) -> dict:
     }
 
 
-def _project_label(db: Session, project_id: UUID | None) -> str | None:
+def _project_label(db: Session, project_id: UUID | None, organization_id: UUID | None = None) -> str | None:
+    """Project display name, only when the project belongs to the caller's organization."""
     if project_id is None:
         return None
     project = db.get(Project, project_id)
-    return project.name if project else None
+    if project is None:
+        return None
+    if organization_id is not None and project.organization_id != organization_id:
+        return None
+    return project.name
 
 
 def _count_project_sources(db: Session, organization_id: UUID, project_id: UUID | None) -> int:
@@ -170,7 +175,7 @@ class ChatAskService:
         access = self._resolve_access(
             organization_id=organization_id, user_id=user_id, access=access
         )
-        project_name = _project_label(self.db, project_id)
+        project_name = _project_label(self.db, project_id, organization_id)
         sources_searched = _count_project_sources(self.db, organization_id, project_id)
 
         intent = classify_chat_intent(safe_query)
@@ -280,7 +285,7 @@ class ChatAskService:
         access = self._resolve_access(
             organization_id=organization_id, user_id=user_id, access=access
         )
-        project_name = _project_label(self.db, project_id)
+        project_name = _project_label(self.db, project_id, organization_id)
         sources_searched = _count_project_sources(self.db, organization_id, project_id)
 
         async def _stream_text(text: str, meta: dict) -> AsyncIterator[dict]:

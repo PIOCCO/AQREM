@@ -13,7 +13,8 @@ from app.services.llm.factory import get_llm_provider
 from app.services.llm.guardrails import clamp_question
 from app.services.retrieval.debug_log import log_rag_event
 from app.services.retrieval.keywords import extract_keyword_terms
-from app.services.retrieval.scope import count_org_evidence_chunks
+from app.services.access_control.policy import acl_bind_params, acl_sql_fragment, evidence_acl_filter
+from app.services.retrieval.scope import apply_evidence_scope_filter, count_org_evidence_chunks
 
 logger = logging.getLogger("aqrem.rag")
 
@@ -28,9 +29,18 @@ class RetrievalService:
         organization_id: UUID,
         limit: int,
         query: str,
+        project_id: UUID | None = None,
+        source_id: UUID | None = None,
+        access: UserAccessContext | None = None,
     ) -> list[EvidenceItem]:
-        """Keyword fallback. The only filter is the organization."""
+        """Keyword fallback. Always org-scoped; project/source/ACL narrowing only outside PRODUCT_V1."""
         q = self.db.query(EvidenceItem).filter(EvidenceItem.organization_id == organization_id)
+        if not get_settings().product_v1:
+            q = apply_evidence_scope_filter(q, project_id)
+            if source_id:
+                q = q.filter(EvidenceItem.source_id == source_id)
+            if access is not None:
+                q = evidence_acl_filter(q, access, EvidenceItem)
 
         terms = extract_keyword_terms(query)
         if terms:
@@ -83,6 +93,7 @@ class RetrievalService:
             is_org_admin=getattr(access, "is_org_admin", None),
         )
 
+        narrow = {"project_id": project_id, "source_id": source_id, "access": access}
         query_embedding = (await llm.embed([safe_query]))[0]
         if len(query_embedding) != settings.embedding_dimensions:
             logger.warning(
@@ -97,14 +108,29 @@ class RetrievalService:
                     organization_id=organization_id,
                     limit=limit,
                     query=safe_query,
+                    **narrow,
                 ),
                 scores=[],
                 method="keyword_dimension_mismatch",
             )
         embedding_literal = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
+        scope_filter = "organization_id = :org_id"
+        extra_params: dict = {}
+        if not settings.product_v1:
+            if project_id:
+                scope_filter += (
+                    " AND (project_id = :project_id OR (project_id IS NULL AND scope = 'organization'))"
+                )
+                extra_params["project_id"] = str(project_id)
+            if source_id:
+                scope_filter += " AND source_id = :source_id"
+                extra_params["source_id"] = str(source_id)
+            if access is not None:
+                scope_filter += f" AND ({acl_sql_fragment().strip()})"
+                extra_params.update(acl_bind_params(access))
         vector_sql = text(
-            """
+            f"""
             SELECT id, file_name, (
                 CASE WHEN COALESCE(metadata->>'embedding_model', '') = :model
                      THEN COALESCE(1 - (embedding <=> CAST(:embedding AS vector)), 0)
@@ -112,7 +138,7 @@ class RetrievalService:
                 COALESCE(ts_rank(search_vector, plainto_tsquery('english', :query)), 0) * 0.4
             ) AS score
             FROM evidence_items
-            WHERE organization_id = :org_id AND embedding IS NOT NULL
+            WHERE {scope_filter} AND embedding IS NOT NULL
             ORDER BY score DESC
             LIMIT :limit
             """
@@ -123,6 +149,7 @@ class RetrievalService:
             "query": safe_query,
             "embedding": embedding_literal,
             "model": llm.embedding_model_id,
+            **extra_params,
         }
         try:
             with self.db.begin_nested():
@@ -160,6 +187,7 @@ class RetrievalService:
             organization_id=organization_id,
             limit=limit,
             query=safe_query,
+            **narrow,
         )
         keyword_scores = [
             {"id": str(item.id), "file_name": item.file_name, "score": None}
