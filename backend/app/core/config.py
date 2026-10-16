@@ -390,6 +390,29 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("setup_token", "SETUP_TOKEN"),
         description="One-time secret required by the dedicated first-admin setup screen.",
     )
+    setup_token_ttl_minutes: int = Field(
+        default=60, ge=1, le=7 * 24 * 60,
+        validation_alias=AliasChoices("setup_token_ttl_minutes", "SETUP_TOKEN_TTL_MINUTES"),
+        description="Setup token lifetime, measured from issuance (first app start, or operator reset).",
+    )
+    setup_allowed_cidrs: str = Field(
+        default="127.0.0.0/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7",
+        validation_alias=AliasChoices("setup_allowed_cidrs", "SETUP_ALLOWED_CIDRS"),
+        description="Comma-separated client networks allowed to reach /setup (others get 404). "
+                    "Default: loopback + private ranges only.",
+    )
+    setup_trusted_proxy_hops: int = Field(
+        default=0, ge=0, le=5,
+        validation_alias=AliasChoices("setup_trusted_proxy_hops", "SETUP_TRUSTED_PROXY_HOPS"),
+        description="Number of trusted reverse proxies in front of the API (Azure: ingress + web nginx = 2). "
+                    "0 = use the TCP peer and refuse setup requests that carry X-Forwarded-For.",
+    )
+    setup_max_attempts_per_ip: int = Field(default=5, ge=1,
+                                           validation_alias=AliasChoices("setup_max_attempts_per_ip", "SETUP_MAX_ATTEMPTS_PER_IP"))
+    setup_max_attempts_global: int = Field(default=20, ge=1,
+                                           validation_alias=AliasChoices("setup_max_attempts_global", "SETUP_MAX_ATTEMPTS_GLOBAL"))
+    setup_lockout_minutes: int = Field(default=15, ge=1,
+                                       validation_alias=AliasChoices("setup_lockout_minutes", "SETUP_LOCKOUT_MINUTES"))
     dedicated_support_access: bool = Field(
         default=False,
         validation_alias=AliasChoices("dedicated_support_access", "DEDICATED_SUPPORT_ACCESS"),

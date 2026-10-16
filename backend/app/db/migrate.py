@@ -80,6 +80,25 @@ def _m4_chat_strictness(conn: Connection) -> None:
     ))
 
 
+def _m5_setup_tokens(conn: Connection) -> None:
+    from app.models.setup_token import SetupAttempt, SetupToken
+
+    SetupToken.__table__.create(bind=conn, checkfirst=True)
+    SetupAttempt.__table__.create(bind=conn, checkfirst=True)
+    # Control-plane only: the tenant/support roles have no business reading setup state.
+    conn.execute(text("""
+DO $$
+DECLARE r text;
+BEGIN
+  FOREACH r IN ARRAY ARRAY['aqrem_tenant', 'aqrem_support'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+      EXECUTE format('REVOKE ALL ON setup_tokens, setup_attempts FROM %I', r);
+    END IF;
+  END LOOP;
+END $$;
+"""))
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "baseline (models + idempotent schema patches)", _m1_baseline,
               "Baseline; rollback = restore the pre-upgrade database backup."),
@@ -92,6 +111,10 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(4, "organizations.chat_strictness (chat guardrails)", _m4_chat_strictness,
               "Additive column with default; older images ignore it. Optional removal (two-release rule): "
               "ALTER TABLE organizations DROP COLUMN chat_strictness."),
+    Migration(5, "setup_tokens + setup_attempts (one-time dedicated setup)", _m5_setup_tokens,
+              "Older images ignore both tables (they read SETUP_TOKEN directly, i.e. lose the one-time/expiry "
+              "guarantees). Optional cleanup after rolling back: DROP TABLE setup_attempts, setup_tokens "
+              "(separately reviewed)."),
 )
 
 LATEST_VERSION = MIGRATIONS[-1].version

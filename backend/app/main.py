@@ -121,8 +121,13 @@ async def lifespan(_: FastAPI):
             ensure_dedicated_organization(session, settings)
             session.flush()
             sync_license_to_org(session, settings)
+            from app.services.setup_guard import ensure_bootstrap_token
+
+            # Token lifetime starts here (first start of an environment without an admin).
+            ensure_bootstrap_token(session, settings)
             if dedicated_setup_required(session):
-                logger.warning("Dedicated environment: first admin not created yet; open /setup (SETUP_TOKEN required)")
+                logger.warning("Dedicated environment: first admin not created yet; open /setup from an allowed "
+                               "network (SETUP_ALLOWED_CIDRS) within SETUP_TOKEN_TTL_MINUTES")
         from app.services.setup_checklist import backfill_local_prod_managed_storage_validation
 
         if backfill_local_prod_managed_storage_validation(session):
@@ -270,6 +275,7 @@ def create_app() -> FastAPI:
         return JSONResponse(
             status_code=exc.status_code,
             content={"message": message, "detail": detail},
+            headers=getattr(exc, "headers", None),
         )
 
     @app.exception_handler(Exception)

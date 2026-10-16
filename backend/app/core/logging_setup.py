@@ -35,12 +35,29 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"), "[redacted-jwt]"),
     (re.compile(r"((?:api[-_]?key|password|passwd|pwd|secret|token|client_secret)[\"']?\s*[:=]\s*[\"']?)[^\s\"',;&]+", re.I), r"\1***"),
     (re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"), "[redacted-key]"),
+    (re.compile(r"(setup[-_]?token[\"']?\s*[:=]\s*[\"']?)[^\s\"',;&]+", re.I), r"\1***"),
 ]
+
+
+_LITERAL_SECRETS: set[str] = set()
+_literal_lock = threading.Lock()
+
+
+def register_secret(value: str | None) -> None:
+    """Redact this exact value wherever it appears in a log line (e.g. the live setup token)."""
+    v = (value or "").strip()
+    if len(v) >= 8:
+        with _literal_lock:
+            _LITERAL_SECRETS.add(v)
 
 
 def redact_text(value: str) -> str:
     for pat, repl in _PATTERNS:
         value = pat.sub(repl, value)
+    if _LITERAL_SECRETS:
+        for secret in tuple(_LITERAL_SECRETS):
+            if secret in value:
+                value = value.replace(secret, "***")
     return value
 
 
