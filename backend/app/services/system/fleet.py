@@ -1,6 +1,6 @@
 """Fleet view: poll dedicated environments' public /api/v1/version and /health.
 
-FLEET_ENVIRONMENTS="contoso=https://contoso.aqrem.example,fabrikam=https://..."
+FLEET_ENVIRONMENTS="contoso=https://contoso.example.com,fabrikam=https://..."
 Only metadata is read (version, status, dependency states); the endpoints are unauthenticated
 and contain no tenant data or secrets. Last results are kept in memory.
 """

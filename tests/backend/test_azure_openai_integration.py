@@ -288,7 +288,7 @@ def test_production_accepts_complete_azure():
         azure_openai_chat_deployment="c",
         azure_openai_embedding_deployment="e",
         embedding_dimensions=1536,
-        azure_storage_connection_string="UseDevelopmentStorage=true",
+        azure_storage_connection_string="DefaultEndpointsProtocol=https;AccountName=acct;AccountKey=dGVzdA==;EndpointSuffix=core.windows.net",
     )
     validate_llm_startup(s)
 
