@@ -98,7 +98,18 @@ function AccountMenuItems({
       >
         Theme: {resolved === "dark" ? "Dark" : "Light"}
       </button>
-      <button type="button" className="chat-menu-item w-full text-left text-red-600" role="menuitem" onClick={onLogout}>
+      <button
+        type="button"
+        className="chat-menu-item w-full text-left text-red-600"
+        role="menuitem"
+        // Fire on mousedown so no outside-click/close handler can unmount the menu first.
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onLogout();
+        }}
+        onClick={onLogout}
+      >
         Sign out
       </button>
     </>
