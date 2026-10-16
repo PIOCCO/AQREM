@@ -1,5 +1,7 @@
 # Azure OpenAI integration
 
+> Step-by-step setup (resources, env vars, Pi rebuild, troubleshooting): **[azure-openai-setup.md](azure-openai-setup.md)**.
+
 AQREM uses **Azure OpenAI** for embeddings (ingestion + retrieval) and structured answer generation (questionnaires). The backend never exposes credentials to the browser.
 
 ## SDK and API
