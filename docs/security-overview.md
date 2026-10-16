@@ -58,9 +58,9 @@ This describes what is implemented in the code and infrastructure definitions to
 * Licensing in dedicated mode: offline Ed25519-signed license file verified locally (seats, expiry, features).
 
 ## Audit logs
-Security-relevant actions (sign-in related events, invitations, membership/role changes, document
-upload/delete, settings changes, first-admin setup) are written to an audit log per organization, viewable
-and exportable by org admins. Optional retention (`AUDIT_RETENTION_DAYS`).
+Security-relevant actions (invitations and joins, membership/role changes, password-reset requests, admin console entry, document
+upload/delete and visibility changes, chat-share create/view/revoke, settings changes, first-admin setup) are written to an audit log per organization, viewable
+and exportable by org admins. Optional retention (`AUDIT_RETENTION_DAYS`). Successful and failed sign-ins are not yet audited (*planned*).
 
 ## Network (dedicated)
 VNet-integrated Container Apps; Key Vault, Storage, Azure OpenAI and Document Intelligence via private
