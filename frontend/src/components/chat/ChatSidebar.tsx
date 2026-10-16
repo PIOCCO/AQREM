@@ -124,9 +124,13 @@ function SidebarUserFooter({
 }) {
   const { openMenuId, setOpenMenuId } = useSidebarMenu();
   const anchorRef = useRef<HTMLButtonElement>(null);
-  const open = openMenuId === SIDEBAR_USER_MENU_ID;
+  // Compact rail and expanded footer are both mounted; each needs its own id,
+  // otherwise both menus open at once and the hidden one's outside-click
+  // handler closes the menu on mousedown before "Sign out" receives its click.
+  const menuId = compact ? `${SIDEBAR_USER_MENU_ID}-compact` : SIDEBAR_USER_MENU_ID;
+  const open = openMenuId === menuId;
   const close = () => setOpenMenuId(null);
-  const toggle = () => setOpenMenuId(open ? null : SIDEBAR_USER_MENU_ID);
+  const toggle = () => setOpenMenuId(open ? null : menuId);
 
   if (compact) {
     return (
@@ -144,7 +148,7 @@ function SidebarUserFooter({
             <span className="ref-user-avatar">{initials}</span>
           </button>
         </Tooltip>
-        <AnchoredMenu open={open} onOpenChange={(v) => setOpenMenuId(v ? SIDEBAR_USER_MENU_ID : null)} anchorRef={anchorRef} className="w-44" minWidth={176}>
+        <AnchoredMenu open={open} onOpenChange={(v) => setOpenMenuId(v ? menuId : null)} anchorRef={anchorRef} className="w-44" minWidth={176}>
           <AccountMenuItems email={email} showAdminConsole={showAdminConsole} onClose={close} onLogout={onLogout} />
         </AnchoredMenu>
       </div>
@@ -171,7 +175,7 @@ function SidebarUserFooter({
           <IconChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
         </button>
       </div>
-      <AnchoredMenu open={open} onOpenChange={(v) => setOpenMenuId(v ? SIDEBAR_USER_MENU_ID : null)} anchorRef={anchorRef} className="w-44" minWidth={176}>
+      <AnchoredMenu open={open} onOpenChange={(v) => setOpenMenuId(v ? menuId : null)} anchorRef={anchorRef} className="w-44" minWidth={176}>
         <AccountMenuItems email={email} showAdminConsole={showAdminConsole} onClose={close} onLogout={onLogout} />
       </AnchoredMenu>
     </div>
@@ -430,7 +434,7 @@ export default function ChatSidebar({
             email={user?.email}
             onLogout={() => {
               clearSession();
-              navigate("/login", { replace: true });
+              window.location.replace("/login");
             }}
             showAdminConsole={showAdminConsole}
           />
@@ -555,7 +559,7 @@ export default function ChatSidebar({
               email={user?.email}
               onLogout={() => {
                 clearSession();
-                navigate("/login", { replace: true });
+                window.location.replace("/login");
               }}
               showAdminConsole={showAdminConsole}
             />
