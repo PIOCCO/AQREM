@@ -11,6 +11,15 @@ from app.models.project import Project
 from app.models.source import Source
 from app.schemas.evidence import EvidenceItemSummaryResponse
 from app.services.chat.intent import build_conversational_answer, classify_chat_intent
+from app.services.chat.scope_guard import (
+    STRICT,
+    STRICT_CONVERSATIONAL,
+    classify_scope,
+    normalize_strictness,
+    relevance_threshold,
+)
+from app.services.llm.guardrails import scrub_prompt_leak
+from app.models.organization import Organization
 from app.services.chat.messages import format_empty_retrieval_message
 from app.services.library.service import AnswerLibraryService
 from app.core.config import get_settings
@@ -28,6 +37,49 @@ from app.core.roles import Role
 from app.core.tenant import TenantContext
 from app.models.organization import OrganizationMembership
 from app.services.access_control.context import UserAccessContext, build_access_context
+
+
+def _org_strictness(db: Session, organization_id: UUID) -> str:
+    org = db.get(Organization, organization_id)
+    return normalize_strictness(getattr(org, "chat_strictness", None))
+
+
+def _guardrail_reply(*, query: str, answer: str, outcome: str, intent: str, project_name, sources_searched) -> dict:
+    return {
+        "query": query,
+        "answer": answer,
+        "confidence": "high",
+        "evidence_sufficiency": "not_applicable",
+        "reasoning_summary": None,
+        "is_draft": False,
+        "from_library": False,
+        "library_entry_id": None,
+        "citations": [],
+        "outcome": outcome,
+        "intent": intent,
+        "conversational": True,
+        "missing_information": [],
+        "next_steps": [],
+        "needs_review": False,
+        "conflicts": [],
+        "project_name": project_name,
+        "sources_searched": sources_searched,
+        "query_time_ms": 0,
+    }
+
+
+def pre_retrieval_guard(db: Session, organization_id: UUID, query: str) -> tuple[str, dict | None]:
+    """Return (strictness, reply-or-None). Reply set => answer without retrieval/LLM."""
+    strictness = _org_strictness(db, organization_id)
+    decision = classify_scope(query)
+    if decision.blocked:
+        outcome = "refused_injection" if decision.category == "injection" else "out_of_scope"
+        return strictness, {"answer": decision.message, "outcome": outcome, "intent": decision.category}
+    intent = classify_chat_intent(query)
+    if intent:
+        text = STRICT_CONVERSATIONAL if strictness == STRICT else build_conversational_answer(intent)
+        return strictness, {"answer": text, "outcome": "conversational", "intent": intent}
+    return strictness, None
 
 
 def _behavior_payload(behavior: BehaviorResult) -> dict:
@@ -178,29 +230,10 @@ class ChatAskService:
         project_name = _project_label(self.db, project_id, organization_id)
         sources_searched = _count_project_sources(self.db, organization_id, project_id)
 
-        intent = classify_chat_intent(safe_query)
-        if intent:
-            return {
-                "query": safe_query,
-                "answer": build_conversational_answer(intent),
-                "confidence": "high",
-                "evidence_sufficiency": "not_applicable",
-                "reasoning_summary": None,
-                "is_draft": False,
-                "from_library": False,
-                "library_entry_id": None,
-                "citations": [],
-                "outcome": "conversational",
-                "intent": intent,
-                "conversational": True,
-                "missing_information": [],
-                "next_steps": [],
-                "needs_review": False,
-                "conflicts": [],
-                "project_name": project_name,
-                "sources_searched": sources_searched,
-                "query_time_ms": 0,
-            }
+        strictness, guard = pre_retrieval_guard(self.db, organization_id, safe_query)
+        if guard:
+            return _guardrail_reply(query=safe_query, project_name=project_name,
+                                    sources_searched=sources_searched, **guard)
 
         library = AnswerLibraryService(self.db)
         entries = library.search_entries(
@@ -240,6 +273,8 @@ class ChatAskService:
             question=safe_query,
             project_id=project_id,
             access=access,
+            min_score=relevance_threshold(get_settings().chat_min_relevance_score,
+                                          strictness=strictness, query=safe_query),
         )
         query_time_ms = int((time.perf_counter() - started) * 1000)
 
@@ -251,7 +286,7 @@ class ChatAskService:
             selected = selected_evidence_ids(structured, items, behavior)
 
         citations = self._build_citations(items, selected)
-        answer = grounded.composed_answer
+        answer = scrub_prompt_leak(grounded.composed_answer)
 
         return {
             "query": safe_query,
@@ -295,15 +330,14 @@ class ChatAskService:
                 yield {"type": "token", "text": ch}
             yield {"type": "meta", **meta}
 
-        intent = classify_chat_intent(safe_query)
-        if intent:
-            text = build_conversational_answer(intent)
+        strictness, guard = pre_retrieval_guard(self.db, organization_id, safe_query)
+        if guard:
             async for ev in _stream_text(
-                text,
+                guard["answer"],
                 {
                     "conversational": True,
-                    "outcome": "conversational",
-                    "intent": intent,
+                    "outcome": guard["outcome"],
+                    "intent": guard["intent"],
                     "citations": [],
                     "is_draft": False,
                 },
@@ -343,6 +377,10 @@ class ChatAskService:
             access=access,
         )
         items = [i for i in items if i.organization_id == organization_id]
+        from app.services.rag.grounding import filter_relevant
+
+        items = filter_relevant(items, relevance_threshold(settings.chat_min_relevance_score,
+                                                           strictness=strictness, query=safe_query))
         if not items:
             payload = _empty_retrieval_payload(
                 db=self.db,
@@ -395,6 +433,9 @@ class ChatAskService:
             yield {"type": "error", "code": exc.code, "message": exc.user_message, "retryable": exc.retryable}
             return
 
+        if scrub_prompt_leak(buffer) != buffer:
+            # Tokens already streamed; tell the client to replace the message.
+            yield {"type": "replace", "text": scrub_prompt_leak(buffer)}
         mentioned = evidence_ids_mentioned(buffer, allowed)
         selected = {UUID(x) for x in mentioned}
         if not selected:

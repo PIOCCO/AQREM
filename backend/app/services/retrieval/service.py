@@ -175,6 +175,11 @@ class RetrievalService:
             order = {item_id: idx for idx, item_id in enumerate(ids)}
             ordered = sorted(items, key=lambda i: order.get(i.id, 999))
             ordered = [i for i in ordered if i.organization_id == organization_id]
+            score_by_id = {row[0]: (float(row[2]) if row[2] is not None else 0.0) for row in rows}
+            semantic = llm.provider_name not in {"mock", "local"}  # hash embeddings carry no meaning
+            for item in ordered:
+                # transient (not persisted): used by the chat relevance threshold
+                item.__dict__["_retrieval_score"] = score_by_id.get(item.id) if semantic else None
             return self._finish(
                 organization_id=organization_id,
                 question=safe_query,

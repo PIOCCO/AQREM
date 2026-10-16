@@ -339,6 +339,12 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("llm_max_retries", "LLM_MAX_RETRIES"),
     )
     llm_max_retrieval_results: int = 12
+    chat_min_relevance_score: float = Field(
+        default=0.2,
+        validation_alias=AliasChoices("chat_min_relevance_score", "CHAT_MIN_RELEVANCE_SCORE"),
+        description="Chat grounded-only threshold on the hybrid retrieval score (0.6*cosine + 0.4*ts_rank). "
+        "Chunks below it are ignored; if none remain the assistant replies 'not found'. 0 disables.",
+    )
     rate_limit_enabled: bool = True
     allow_public_registration: bool = False
     licensing_test_mode: bool = Field(

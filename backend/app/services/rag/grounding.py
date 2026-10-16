@@ -65,6 +65,19 @@ def append_source_references(answer: str, items: list, selected_ids: set) -> str
     return answer.rstrip() + "\n\nSources: " + "; ".join(refs)
 
 
+def filter_relevant(items: list, min_score: float) -> list:
+    """Grounded-only: drop vector hits below the relevance threshold. Keyword-only hits (no score)
+    matched the query terms and are kept."""
+    if not min_score or min_score <= 0:
+        return items
+    kept = []
+    for i in items:
+        score = i.__dict__.get("_retrieval_score")
+        if score is None or score >= min_score:
+            kept.append(i)
+    return kept
+
+
 def evidence_blocks(items: list[EvidenceItem]) -> list[dict]:
     blocks: list[dict] = []
     for item in items:
@@ -161,6 +174,7 @@ async def generate_grounded_answer(
     project_id: UUID | None,
     limit: int | None = None,
     access: UserAccessContext | None = None,
+    min_score: float | None = None,
 ) -> GroundedAnswer:
     safe_query = clamp_question(question)
     settings = get_settings()
@@ -177,6 +191,8 @@ async def generate_grounded_answer(
             access=access,
         )
         items = [i for i in items if i.organization_id == organization_id]
+        if min_score:
+            items = filter_relevant(items, min_score)
     except ModelServiceError as exc:
         logger.error(
             "Query embedding failed org=%s code=%s: %s", organization_id, exc.code, exc.admin_message
