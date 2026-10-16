@@ -56,3 +56,14 @@ def require_dedicated() -> None:
     if not get_settings().is_dedicated:
         # In the shared tier the database belongs to the platform, not to one org admin.
         raise HTTPException(status_code=404, detail="Only available in dedicated environments")
+
+
+@platform_router.get("/fleet")
+async def fleet(refresh: bool = True, _: User = Depends(require_platform_permission("deployment:read"))) -> dict:
+    """Dedicated environments from FLEET_ENVIRONMENTS with version + last health check."""
+    from app.services.system.fleet import last_results, parse_fleet, poll_fleet
+
+    s = get_settings()
+    rows = await poll_fleet(s) if refresh else last_results()
+    return {"configured": len(parse_fleet(s.fleet_environments)), "environments": rows,
+            "this_environment": {"version": app_version(s), "deployment_mode": s.deployment_mode}}

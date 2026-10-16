@@ -7,6 +7,7 @@ const NAV = [
   { to: "/super-admin/organizations", label: "Organizations" },
   { to: "/super-admin/licenses", label: "Licenses" },
   { to: "/super-admin/deployments", label: "Deployments" },
+  { to: "/super-admin/fleet", label: "Fleet" },
   { to: "/super-admin/usage", label: "Usage" },
   { to: "/super-admin/audit", label: "Audit" },
   { to: "/super-admin/settings", label: "Settings" },

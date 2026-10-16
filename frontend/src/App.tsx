@@ -23,6 +23,7 @@ import SuperAdminShell from "./pages/super-admin/SuperAdminShell";
 import SuperAdminOrganizationsPage from "./pages/super-admin/SuperAdminOrganizationsPage";
 import SuperAdminLicensesPage from "./pages/super-admin/SuperAdminLicensesPage";
 import SuperAdminDeploymentsPage from "./pages/super-admin/SuperAdminDeploymentsPage";
+import SuperAdminFleetPage from "./pages/super-admin/SuperAdminFleetPage";
 import SuperAdminUsagePage from "./pages/super-admin/SuperAdminUsagePage";
 import SuperAdminAuditPage from "./pages/super-admin/SuperAdminAuditPage";
 import SuperAdminSettingsPage from "./pages/super-admin/SuperAdminSettingsPage";
@@ -256,6 +257,7 @@ export default function App() {
         <Route path="organizations" element={<SuperAdminOrganizationsPage />} />
         <Route path="licenses" element={<SuperAdminLicensesPage />} />
         <Route path="deployments" element={<SuperAdminDeploymentsPage />} />
+        <Route path="fleet" element={<SuperAdminFleetPage />} />
         <Route path="usage" element={<SuperAdminUsagePage />} />
         <Route path="audit" element={<SuperAdminAuditPage />} />
         <Route path="settings" element={<SuperAdminSettingsPage />} />
