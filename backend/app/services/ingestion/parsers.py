@@ -9,6 +9,9 @@ from openpyxl import load_workbook
 from pypdf import PdfReader
 
 
+PDF_PAGE_BREAK = "\n\f\n"
+
+
 def parse_bytes(file_path: str, data: bytes) -> tuple[str, str]:
     suffix = Path(file_path).suffix.lower()
     if suffix in {".txt", ".md", ".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".tf", ".hcl"}:
@@ -27,7 +30,8 @@ def parse_bytes(file_path: str, data: bytes) -> tuple[str, str]:
     if suffix == ".pdf":
         reader = PdfReader(io.BytesIO(data))
         pages = [page.extract_text() or "" for page in reader.pages]
-        return "\n\n".join(pages), "application/pdf"
+        # Form feed between pages lets the indexer record a page number per chunk.
+        return PDF_PAGE_BREAK.join(pages), "application/pdf"
     if suffix == ".docx":
         doc = Document(io.BytesIO(data))
         return "\n".join(p.text for p in doc.paragraphs if p.text.strip()), "application/vnd.openxmlformats"

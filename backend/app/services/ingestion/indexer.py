@@ -16,6 +16,7 @@ from app.services.ingestion.ignore import build_pathspec, should_ignore
 from app.services.ingestion.parsers import parse_bytes
 from app.services.ingestion.strength import classify_evidence_strength
 from app.services.access_control.document_acl import resolve_document_acl
+from app.services.ingestion.chunking import page_break_lines, page_for_line
 from app.services.ingestion.embedding_health import embedding_is_current, stamp_embedding
 from app.services.library.invalidate import mark_evidence_changed
 from app.core.config import get_settings
@@ -56,6 +57,18 @@ def content_hash(content: str) -> str:
 
 ProgressFn = Callable[[str, int, int | None], None]
 
+
+
+def _stamp_page(item: EvidenceItem, breaks: list[int], line_start: int | None, content_type: str) -> None:
+    if content_type != "application/pdf":
+        return
+    page = page_for_line(breaks, line_start)
+    if page is None:
+        return
+    meta = dict(item.item_metadata or {})
+    if meta.get("page") != page:
+        meta["page"] = page
+        item.item_metadata = meta
 
 async def index_files(
     db: Session,
@@ -110,6 +123,9 @@ async def index_files(
         chunks = chunk_text(text_content)
         if not chunks:
             continue
+        breaks = page_break_lines(text_content) if content_type == "application/pdf" else []
+        for chunk in chunks:
+            chunk.content = chunk.content.replace("\f", "").strip() or chunk.content
 
         chunk_texts = [c.content for c in chunks]
         report("embedding", 0, len(chunks))
@@ -148,6 +164,7 @@ async def index_files(
                 _apply_chunk_visibility(db, source=source, file_name=rel.split("/")[-1], item=existing)
                 if not embedding_is_current(existing, model_id, expected_dim):
                     stamp_embedding(existing, embedding, model_id, expected_dim)
+                _stamp_page(existing, breaks, chunk.line_start, content_type)
                 indexed += 1
                 embedded += 1
                 continue
@@ -187,6 +204,7 @@ async def index_files(
                 existing.symbol_kind = symbol.kind if symbol else None
                 existing.evidence_strength = strength
                 stamp_embedding(existing, embedding, model_id, expected_dim)
+                _stamp_page(existing, breaks, chunk.line_start, content_type)
                 _apply_chunk_visibility(db, source=source, file_name=rel.split("/")[-1], item=existing)
                 db.execute(
                     text(
@@ -223,6 +241,7 @@ async def index_files(
                 evidence_strength=strength,
             )
             stamp_embedding(item, embedding, model_id, expected_dim)
+            _stamp_page(item, breaks, chunk.line_start, content_type)
             db.add(item)
             db.flush()
             _apply_chunk_visibility(db, source=source, file_name=rel.split("/")[-1], item=item)

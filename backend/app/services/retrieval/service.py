@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.evidence import EvidenceItem
 from app.services.access_control.context import UserAccessContext
-from app.services.ingestion.embedding_health import reembed_stale_chunks
+from app.services.ingestion.embedding_health import reembed_stale_chunks, warn_on_stale_embeddings
 from app.services.llm.factory import get_llm_provider
 from app.services.llm.guardrails import clamp_question
 from app.services.retrieval.debug_log import log_rag_event
@@ -61,7 +61,12 @@ class RetrievalService:
         settings = get_settings()
         limit = min(max(limit, 1), settings.llm_max_retrieval_results)
         safe_query = clamp_question(query)
-        await reembed_stale_chunks(self.db, organization_id)
+        llm = get_llm_provider(organization_id)
+        if llm.provider_name in {"mock", "local"}:
+            # Cheap deterministic embeddings: heal stale vectors inline (dev/tests only).
+            await reembed_stale_chunks(self.db, organization_id)
+        else:
+            warn_on_stale_embeddings(self.db, organization_id, llm.embedding_model_id, settings.embedding_dimensions)
         org_chunk_count = count_org_evidence_chunks(
             self.db, organization_id=organization_id, project_id=None
         )
@@ -78,7 +83,6 @@ class RetrievalService:
             is_org_admin=getattr(access, "is_org_admin", None),
         )
 
-        llm = get_llm_provider(organization_id)
         query_embedding = (await llm.embed([safe_query]))[0]
         if len(query_embedding) != settings.embedding_dimensions:
             logger.warning(
@@ -102,7 +106,9 @@ class RetrievalService:
         vector_sql = text(
             """
             SELECT id, file_name, (
-                COALESCE(1 - (embedding <=> CAST(:embedding AS vector)), 0) * 0.6 +
+                CASE WHEN COALESCE(metadata->>'embedding_model', '') = :model
+                     THEN COALESCE(1 - (embedding <=> CAST(:embedding AS vector)), 0)
+                     ELSE 0 END * 0.6 +
                 COALESCE(ts_rank(search_vector, plainto_tsquery('english', :query)), 0) * 0.4
             ) AS score
             FROM evidence_items
@@ -116,6 +122,7 @@ class RetrievalService:
             "limit": limit,
             "query": safe_query,
             "embedding": embedding_literal,
+            "model": llm.embedding_model_id,
         }
         try:
             with self.db.begin_nested():

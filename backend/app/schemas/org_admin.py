@@ -42,6 +42,8 @@ class DocumentRowResponse(BaseModel):
     chunks_with_embedding: int = 0
     embedding_dimensions: int | None = None
     search_ready: bool = False
+    embedding_model: str | None = None
+    embedding_mismatch: bool = False
     leftover_project_ids: list[str] = Field(default_factory=list)
     leftover_visibility_modes: list[str] = Field(default_factory=list)
 

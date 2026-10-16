@@ -41,6 +41,54 @@ def embedding_is_current(item: EvidenceItem, model_id: str, dimensions: int) -> 
     return meta.get("embedding_model") == model_id and int(meta.get("embedding_dimensions") or 0) == dimensions
 
 
+def count_stale_chunks(db: Session, organization_id: UUID, model_id: str, dimensions: int) -> int:
+    """Chunks whose stored embedding was built with another deployment/size (or is missing)."""
+    row = db.execute(
+        text(
+            """
+            SELECT COUNT(*)::int FROM evidence_items
+            WHERE organization_id = :org
+              AND (
+                embedding IS NULL
+                OR COALESCE(metadata->>'embedding_model', '') <> :model
+                OR COALESCE(metadata->>'embedding_dimensions', '') <> :dim_text
+              )
+            """
+        ),
+        {"org": str(organization_id), "model": model_id, "dim_text": str(dimensions)},
+    ).scalar()
+    return int(row or 0)
+
+
+def warn_on_stale_embeddings(db: Session, organization_id: UUID, model_id: str, dimensions: int) -> int:
+    try:
+        stale = count_stale_chunks(db, organization_id, model_id, dimensions)
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not count stale embeddings org=%s", organization_id)
+        return 0
+    if stale:
+        logger.warning(
+            "EMBEDDING MISMATCH org=%s: %s chunks were indexed with a different embedding deployment/size "
+            "than the current config (%s). They are only keyword-searchable until an admin runs "
+            "'Re-index all documents' (Documents page or POST /api/v1/org-admin/documents/reindex-all).",
+            organization_id,
+            stale,
+            model_id,
+        )
+    return stale
+
+
+def document_embedding_mismatch(doc: ClientDocument, model_id: str, dimensions: int) -> bool:
+    """True when an indexed document was embedded with another deployment or vector size."""
+    if doc.status != "indexed":
+        return False
+    stored_model = getattr(doc, "embedding_model", None)
+    stored_dim = getattr(doc, "embedding_dimensions", None)
+    if not stored_model and not stored_dim:
+        return False  # indexed before this was tracked; chunk-level health covers it
+    return stored_model != model_id or int(stored_dim or 0) != dimensions
+
+
 async def reembed_stale_chunks(db: Session, organization_id: UUID) -> int:
     """Re-embed chunks in this organization that are missing a vector or were built with another model."""
     settings = get_settings()
@@ -171,6 +219,8 @@ def apply_index_truth(doc: ClientDocument, health: dict) -> None:
         return
     if health["search_ready"]:
         doc.status = "indexed"
+        doc.embedding_model = health.get("embedding_model")
+        doc.embedding_dimensions = int(health.get("embedding_dimensions") or 0) or None
         doc.index_stage = "indexed"
         doc.index_progress = 100
         doc.indexed_chunk_count = int(health["chunks_with_embedding"])

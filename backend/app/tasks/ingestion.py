@@ -196,6 +196,8 @@ def run_source_sync(job_id: str, organization_id: str) -> dict:
                     total_units=embedded_count,
                     indexed_chunk_count=embedded_count,
                 )
+                doc.embedding_model = stats.get("embedding_model")
+                doc.embedding_dimensions = stats.get("embedding_dimensions")
         record_audit(
             db,
             organization_id=source.organization_id,
@@ -212,7 +214,13 @@ def run_source_sync(job_id: str, organization_id: str) -> dict:
             db.rollback()
             job = db.get(SourceSyncJob, UUID(job_id))
             if job:
-                safe_msg = str(exc).splitlines()[0][:500]
+                from app.services.llm.errors import ModelServiceError
+
+                if isinstance(exc, ModelServiceError):
+                    # Readable, admin-facing reason (never the key), e.g. DeploymentNotFound / 401.
+                    safe_msg = f"Indexing failed: {exc.admin_message}"[:500]
+                else:
+                    safe_msg = (str(exc).splitlines() or ["Indexing failed"])[0][:500]
                 job.status = SyncJobStatus.FAILED.value
                 job.error_message = safe_msg
                 job.completed_at = datetime.now(UTC)

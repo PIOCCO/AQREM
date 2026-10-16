@@ -228,7 +228,13 @@ def list_documents(
     from app.services.ingestion.embedding_health import apply_index_truth, document_search_health, reembed_stale_chunks
 
     health_log = logging.getLogger("aqrem.rag")
-    asyncio.run(reembed_stale_chunks(db, tenant.organization_id))
+    from app.services.ingestion.embedding_health import document_embedding_mismatch
+    from app.services.llm.factory import get_llm_provider
+
+    _llm = get_llm_provider(tenant.organization_id)
+    _model_id = _llm.embedding_model_id
+    if _llm.provider_name in {"mock", "local"}:
+        asyncio.run(reembed_stale_chunks(db, tenant.organization_id))
     health_by_id: dict = {}
     for doc in rows:
         job = db.get(SourceSyncJob, doc.sync_job_id) if doc.sync_job_id else None
@@ -312,6 +318,8 @@ def list_documents(
                 chunks_with_embedding=health_by_id.get(r.id, {}).get("chunks_with_embedding", 0),
                 embedding_dimensions=health_by_id.get(r.id, {}).get("embedding_dimensions"),
                 search_ready=bool(health_by_id.get(r.id, {}).get("search_ready", False)),
+                embedding_model=r.embedding_model,
+                embedding_mismatch=document_embedding_mismatch(r, _model_id, settings.embedding_dimensions),
                 leftover_project_ids=health_by_id.get(r.id, {}).get("leftover_project_ids", []),
                 leftover_visibility_modes=health_by_id.get(r.id, {}).get("leftover_visibility_modes", []),
             )
@@ -603,24 +611,16 @@ def remove_document(
     return {"deleted": True, "document_id": doc_id}
 
 
-@router.post("/documents/{document_id}/retry")
-def retry_document(
-    document_id: UUID,
-    tenant: TenantContext = Depends(_require_org_admin_surface),
-    db: Session = Depends(get_tenant_db),
-) -> dict:
-    doc = db.get(ClientDocument, document_id)
-    if doc is None or doc.organization_id != tenant.organization_id:
-        raise org_admin_error(code="NOT_FOUND", message="Document not found.", status_code=404)
-    if not doc.source_id:
-        raise org_admin_error(code="INVALID_STATE", message="Document has no source.")
+def _queue_document_reindex(db: Session, organization_id: UUID, doc: ClientDocument) -> SourceSyncJob:
+    """Reset a document to queued and enqueue a fresh sync job for it."""
     job = SourceSyncJob(
-        organization_id=tenant.organization_id,
+        organization_id=organization_id,
         source_id=doc.source_id,
         status=SyncJobStatus.QUEUED.value,
         stats={"uploaded_blobs": [doc.blob_path], "client_document_id": str(doc.id)},
     )
     db.add(job)
+    db.flush()
     doc.sync_job_id = job.id
     doc.status = "indexing"
     doc.index_stage = "queued"
@@ -637,9 +637,134 @@ def retry_document(
     try:
         from app.services.ingestion.enqueue import IngestionEnqueueError, enqueue_source_sync_for_job
 
-        enqueue_source_sync_for_job(db, job=job, organization_id=tenant.organization_id, document_ids=[doc.id])
+        enqueue_source_sync_for_job(db, job=job, organization_id=organization_id, document_ids=[doc.id])
     except IngestionEnqueueError as exc:
         raise org_admin_error(code=exc.code, message=exc.message, status_code=503) from exc
+    return job
+
+
+@router.post("/documents/reindex-all")
+def reindex_all_documents(
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    db: Session = Depends(get_tenant_db),
+) -> dict:
+    """Re-embed every document with the currently configured embedding deployment and size."""
+    assert_org_admin_action(tenant, action="write", resource_type="document", resource_org_id=tenant.organization_id)
+    docs = (
+        db.query(ClientDocument)
+        .filter(ClientDocument.organization_id == tenant.organization_id, ClientDocument.source_id.isnot(None))
+        .all()
+    )
+    queued: list[str] = []
+    skipped = 0
+    for doc in docs:
+        if doc.status in {"uploading"} or doc.index_stage in {"queued", "parsing", "chunking", "embedding"}:
+            skipped += 1
+            continue
+        job = _queue_document_reindex(db, tenant.organization_id, doc)
+        queued.append(str(job.id))
+    record_audit(
+        db,
+        organization_id=tenant.organization_id,
+        user_id=tenant.user_id,
+        action="documents_reindex_all",
+        resource_type="document",
+        resource_id=str(tenant.organization_id),
+        metadata={"queued": len(queued), "skipped_in_progress": skipped},
+    )
+    db.commit()
+    return {"queued": len(queued), "skipped_in_progress": skipped, "job_ids": queued}
+
+
+@router.get("/ai/status")
+def org_admin_ai_status(
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    db: Session = Depends(get_tenant_db),
+) -> dict:
+    """Active provider/deployments (no secrets) and embedding consistency for this organization."""
+    from app.core.llm_config import llm_provider_summary
+    from app.services.ingestion.embedding_health import count_stale_chunks, document_embedding_mismatch
+    from app.services.ingestion.vector_schema import find_vector_mismatches, vector_mismatch_message
+
+    settings = get_settings()
+    summary = llm_provider_summary(settings)
+    model_id = str(summary.get("embedding_model") or "")
+    dim = settings.embedding_dimensions
+    try:
+        from app.services.llm.factory import get_llm_provider
+
+        model_id = get_llm_provider(tenant.organization_id).embedding_model_id
+    except Exception:  # noqa: BLE001
+        pass
+    docs = db.query(ClientDocument).filter(ClientDocument.organization_id == tenant.organization_id).all()
+    mismatched = [d.file_name for d in docs if document_embedding_mismatch(d, model_id, dim)]
+    try:
+        stale_chunks = count_stale_chunks(db, tenant.organization_id, model_id, dim)
+    except Exception:  # noqa: BLE001
+        stale_chunks = 0
+    try:
+        vector_issues = [vector_mismatch_message(t, c, d, dim) for t, c, d in find_vector_mismatches(db, dim)]
+    except Exception:  # noqa: BLE001
+        vector_issues = []
+    warning = None
+    if vector_issues:
+        warning = vector_issues[0]
+    elif mismatched or stale_chunks:
+        warning = (
+            f"{len(mismatched) or 'Some'} document(s) were indexed with a different embedding deployment or "
+            f"vector size than the current configuration ({model_id}). They are only keyword-searchable "
+            "until you click 'Re-index all documents'."
+        )
+    safe_summary = {k: v for k, v in summary.items() if "key" not in k.lower()}
+    return {
+        **safe_summary,
+        "embedding_model_id": model_id,
+        "mismatched_documents": mismatched,
+        "stale_chunks": stale_chunks,
+        "vector_column_issues": vector_issues,
+        "embedding_warning": warning,
+    }
+
+
+@router.post("/ai/test-connection")
+async def org_admin_test_ai_connection(
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+) -> dict:
+    """Send one tiny chat and one tiny embedding request; readable results, never secrets."""
+    from app.services.llm.factory import get_llm_provider
+
+    try:
+        llm = get_llm_provider(tenant.organization_id)
+    except RuntimeError as exc:
+        return {"ok": False, "provider": get_settings().llm_provider, "error": str(exc)}
+    tester = getattr(llm, "test_connection", None)
+    if tester is not None:
+        return await tester()
+    from app.services.llm.errors import ModelServiceError
+
+    result: dict = {"provider": llm.provider_name}
+    try:
+        vec = await llm.embed(["connection test"])
+        result["embeddings"] = {"ok": True, "message": f"Embedding returned {len(vec[0])} dimensions."}
+    except ModelServiceError as exc:
+        result["embeddings"] = {"ok": False, "code": exc.code, "message": exc.admin_message}
+    result["chat"] = {"ok": True, "message": f"{llm.provider_name} provider has no remote chat endpoint to test."}
+    result["ok"] = result["embeddings"]["ok"]
+    return result
+
+
+@router.post("/documents/{document_id}/retry")
+def retry_document(
+    document_id: UUID,
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    db: Session = Depends(get_tenant_db),
+) -> dict:
+    doc = db.get(ClientDocument, document_id)
+    if doc is None or doc.organization_id != tenant.organization_id:
+        raise org_admin_error(code="NOT_FOUND", message="Document not found.", status_code=404)
+    if not doc.source_id:
+        raise org_admin_error(code="INVALID_STATE", message="Document has no source.")
+    job = _queue_document_reindex(db, tenant.organization_id, doc)
     return {"job_id": str(job.id)}
 
 

@@ -53,3 +53,14 @@ def chunk_text(content: str, max_chars: int = 1200, overlap: int = 150) -> list[
     if buffer.strip():
         flush(current_line - 1)
     return chunks
+
+
+def page_break_lines(content: str) -> list[int]:
+    """1-based line numbers (as counted by chunk_text) that are PDF page breaks."""
+    return [idx for idx, line in enumerate(content.splitlines(keepends=True), start=1) if line.strip("\r\n") == "\f"]
+
+
+def page_for_line(breaks: list[int], line: int | None) -> int | None:
+    if line is None:
+        return None
+    return 1 + sum(1 for b in breaks if b < line)

@@ -56,6 +56,9 @@ class ClientDocument(TenantBase):
     indexed_chunk_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     stall_retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Embedding deployment id + vector size used when this document was indexed.
+    embedding_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    embedding_dimensions: Mapped[int | None] = mapped_column(Integer, nullable=True)
     malware_scan_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     visibility_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="admins_only")

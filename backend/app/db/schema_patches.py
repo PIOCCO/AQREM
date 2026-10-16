@@ -54,6 +54,8 @@ _ACL_PATCHES = (
     "ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS visibility_group_ids UUID[] NOT NULL DEFAULT '{}'",
     "ALTER TABLE evidence_items ADD COLUMN IF NOT EXISTS visibility_user_ids UUID[] NOT NULL DEFAULT '{}'",
     "UPDATE client_documents SET visibility_mode = 'admins_only', acl_reviewed = false WHERE visibility_mode IS NULL OR visibility_mode = 'unset'",
+    "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS embedding_model VARCHAR(255)",
+    "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS embedding_dimensions INTEGER",
     "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS index_stage VARCHAR(32) NOT NULL DEFAULT 'queued'",
     "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS processed_units INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE client_documents ADD COLUMN IF NOT EXISTS total_units INTEGER",
