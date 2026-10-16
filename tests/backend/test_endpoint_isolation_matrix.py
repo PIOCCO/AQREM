@@ -173,6 +173,8 @@ ROUTE_POLICY: dict[str, tuple[str, object]] = {
     "GET /api/v1/org-admin/audit/export": (TENANT, None),
     "GET /api/v1/org-admin/chat-sharing": (TENANT, None),
     "PUT /api/v1/org-admin/chat-sharing": (TENANT, None),
+    "GET /api/v1/org-admin/chat-guardrails": (TENANT, None),
+    "PUT /api/v1/org-admin/chat-guardrails": (TENANT, {"strictness": "strict"}),
     "GET /api/v1/org-admin/console-enter": (TENANT, None),
     "GET /api/v1/org-admin/data-storage": (TENANT, None),
     "PUT /api/v1/org-admin/data-storage": (TENANT, None),

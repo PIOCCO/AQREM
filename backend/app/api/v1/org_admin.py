@@ -1241,6 +1241,56 @@ def update_chat_sharing(
     return {"enabled": org.chat_shares_enabled, "default_ttl_days": org.chat_share_ttl_days}
 
 
+@router.get("/chat-guardrails")
+def get_chat_guardrails(
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    control_db: Session = Depends(get_db),
+) -> dict:
+    from app.core.config import get_settings
+    from app.services.chat.scope_guard import STRICTNESS_LEVELS, normalize_strictness
+
+    org = control_db.get(Organization, tenant.organization_id)
+    if org is None:
+        raise org_admin_error(code="NOT_FOUND", message="Organization not found", status_code=404)
+    return {
+        "strictness": normalize_strictness(org.chat_strictness),
+        "levels": list(STRICTNESS_LEVELS),
+        "min_relevance_score": get_settings().chat_min_relevance_score,
+    }
+
+
+@router.put("/chat-guardrails")
+def update_chat_guardrails(
+    payload: dict,
+    tenant: TenantContext = Depends(_require_org_admin_surface),
+    control_db: Session = Depends(get_db),
+    tenant_db: Session = Depends(get_tenant_db),
+) -> dict:
+    from app.services.chat.scope_guard import STRICTNESS_LEVELS, normalize_strictness
+
+    value = str(payload.get("strictness") or "").strip().lower()
+    if value not in STRICTNESS_LEVELS:
+        raise org_admin_error(code="INVALID_STRICTNESS", message="strictness must be 'strict' or 'balanced'",
+                              status_code=422, field="strictness")
+    org = control_db.get(Organization, tenant.organization_id)
+    if org is None:
+        raise org_admin_error(code="NOT_FOUND", message="Organization not found", status_code=404)
+    before = normalize_strictness(org.chat_strictness)
+    org.chat_strictness = value
+    record_audit(
+        tenant_db,
+        organization_id=tenant.organization_id,
+        user_id=tenant.user_id,
+        action="chat_guardrails_updated",
+        resource_type="organization",
+        resource_id=str(org.id),
+        metadata={"before": before, "after": value},
+    )
+    control_db.commit()
+    tenant_db.commit()
+    return {"strictness": value, "levels": list(STRICTNESS_LEVELS)}
+
+
 @router.post("/members/{membership_id}/password-reset", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def admin_trigger_password_reset(
     membership_id: UUID,

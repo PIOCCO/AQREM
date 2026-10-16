@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../lib/authContext";
-import { fetchChatSharing, fetchTelemetrySchema, updateChatSharing } from "../lib/orgAdminApi";
+import {
+  fetchChatGuardrails,
+  fetchChatSharing,
+  fetchTelemetrySchema,
+  updateChatGuardrails,
+  updateChatSharing,
+  type ChatStrictness,
+} from "../lib/orgAdminApi";
 
 export default function ClientAdminPrivacyPage() {
   const { session } = useAuth();
@@ -9,6 +16,8 @@ export default function ClientAdminPrivacyPage() {
   const [error, setError] = useState<string | null>(null);
   const [sharingEnabled, setSharingEnabled] = useState(false);
   const [sharingBusy, setSharingBusy] = useState(false);
+  const [strictness, setStrictness] = useState<ChatStrictness>("balanced");
+  const [strictBusy, setStrictBusy] = useState(false);
 
   useEffect(() => {
     if (!session) return;
@@ -18,7 +27,24 @@ export default function ClientAdminPrivacyPage() {
     fetchChatSharing(session)
       .then((s) => setSharingEnabled(s.enabled))
       .catch(() => undefined);
+    fetchChatGuardrails(session)
+      .then((g) => setStrictness(g.strictness))
+      .catch(() => undefined);
   }, [session]);
+
+  async function changeStrictness(next: ChatStrictness) {
+    if (!session || next === strictness) return;
+    setStrictBusy(true);
+    setError(null);
+    try {
+      const saved = await updateChatGuardrails(session, { strictness: next });
+      setStrictness(saved.strictness);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update guardrails");
+    } finally {
+      setStrictBusy(false);
+    }
+  }
 
   async function toggleSharing() {
     if (!session) return;
@@ -45,6 +71,29 @@ export default function ClientAdminPrivacyPage() {
         <button type="button" className="admin-btn-secondary" disabled={sharingBusy} onClick={() => void toggleSharing()}>
           {sharingEnabled ? "Disable share links" : "Enable share links"}
         </button>
+      </section>
+      <section className="admin-card p-6 mt-6 space-y-3 text-sm">
+        <h2 className="font-medium">Assistant answer strictness</h2>
+        <p className="text-chat-muted">
+          The assistant only answers from your documents and refuses off-topic requests in both modes.
+          Strict requires stronger document matches and skips small talk; balanced allows greetings and
+          looser matching for summary requests.
+        </p>
+        <div className="flex gap-4" role="radiogroup" aria-label="Assistant strictness">
+          {(["balanced", "strict"] as ChatStrictness[]).map((level) => (
+            <label key={level} className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="chat-strictness"
+                value={level}
+                checked={strictness === level}
+                disabled={strictBusy}
+                onChange={() => void changeStrictness(level)}
+              />
+              {level === "strict" ? "Strict" : "Balanced"}
+            </label>
+          ))}
+        </div>
       </section>
       <section className="admin-card p-6 mt-6 space-y-3 text-sm">
         <h2 className="font-medium">Your data stays in your environment</h2>

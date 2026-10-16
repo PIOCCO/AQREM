@@ -26,6 +26,7 @@ tracked in table `aqrem_schema_versions`. Per-tenant BYO databases additionally 
 | enterprise-tenancy (this branch) | 1 baseline (existing create_all + schema patches, unchanged DDL) | Previous app image works on this schema (no columns removed). The `aqrem_schema_versions` table is ignored by older images. |
 | | 2 composite indexes `ix_evidence_items_org_source`, `ix_client_documents_org_created` | Harmless to older images; optional `DROP INDEX IF EXISTS ...`. |
 | rls (CHECK 1) | 3 row-level security: group roles `aqrem_rls_control`, `aqrem_rls_bypass`, NOLOGIN `aqrem_support`; `ix_rls_<table>_org` indexes; policies `aqrem_org_isolation` / `aqrem_control_plane` / `aqrem_platform_audit` / `aqrem_bypass`; `ENABLE` + `FORCE ROW LEVEL SECURITY` on the 36 tables in `backend/app/db/rls.py` | **Not transparent to older images** (they never set `app.current_org`, so a non-superuser role sees no tenant rows). See "Rolling back migration 3" below. |
+| chat guardrails | 4 `organizations.chat_strictness VARCHAR(16) NOT NULL DEFAULT 'balanced'` (additive, `ADD COLUMN IF NOT EXISTS`) | Transparent to older images (they ignore the column). Optional: `ALTER TABLE organizations DROP COLUMN IF EXISTS chat_strictness;` and delete version 4 from `aqrem_schema_versions`. Table is already RLS-covered (control-plane policy). |
 
 Because migrations are additive, application rollback = redeploy the previous image tag
 (exception: migration 3, see the RLS row above).

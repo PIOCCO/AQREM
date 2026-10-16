@@ -407,3 +407,26 @@ export async function reindexAllDocuments(
   if (!res.ok) throw new Error(await readApiError(res, "Re-index failed"));
   return res.json();
 }
+
+export type ChatStrictness = "strict" | "balanced";
+
+export async function fetchChatGuardrails(
+  session: AuthSession,
+): Promise<{ strictness: ChatStrictness; levels: ChatStrictness[]; min_relevance_score: number }> {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/chat-guardrails`), { headers: headers(session) });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to load chat guardrail settings"));
+  return res.json();
+}
+
+export async function updateChatGuardrails(
+  session: AuthSession,
+  payload: { strictness: ChatStrictness },
+): Promise<{ strictness: ChatStrictness; levels: ChatStrictness[] }> {
+  const res = await fetch(apiUrl(`/api/v1/org-admin/chat-guardrails`), {
+    method: "PUT",
+    headers: headers(session),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Failed to update chat guardrails"));
+  return res.json();
+}

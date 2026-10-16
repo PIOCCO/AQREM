@@ -74,6 +74,12 @@ def _m3_row_level_security(conn: Connection) -> None:
     apply_rls(conn)
 
 
+def _m4_chat_strictness(conn: Connection) -> None:
+    conn.execute(text(
+        "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS chat_strictness VARCHAR(16) NOT NULL DEFAULT 'balanced'"
+    ))
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "baseline (models + idempotent schema patches)", _m1_baseline,
               "Baseline; rollback = restore the pre-upgrade database backup."),
@@ -83,6 +89,9 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(3, "row-level security (org isolation, fail closed)", _m3_row_level_security,
               "No data change. Emergency rollback (per table, as owner): ALTER TABLE <t> NO FORCE ROW LEVEL "
               "SECURITY; ALTER TABLE <t> DISABLE ROW LEVEL SECURITY; policies may stay. See docs/migrations.md."),
+    Migration(4, "organizations.chat_strictness (chat guardrails)", _m4_chat_strictness,
+              "Additive column with default; older images ignore it. Optional removal (two-release rule): "
+              "ALTER TABLE organizations DROP COLUMN chat_strictness."),
 )
 
 LATEST_VERSION = MIGRATIONS[-1].version
