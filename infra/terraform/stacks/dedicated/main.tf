@@ -53,6 +53,7 @@ module "env" {
   document_intelligence_endpoint   = var.document_intelligence_endpoint
   deployer_ip_cidrs                = var.deployer_ip_cidrs
   setup_allowed_cidrs              = var.setup_allowed_cidrs
+  trusted_proxy_cidrs              = [cidrsubnet(local.cidr, 7, 0)] # Container Apps infrastructure subnet
   setup_token_ttl_minutes          = var.setup_token_ttl_minutes
   tags                             = local.tags
 }

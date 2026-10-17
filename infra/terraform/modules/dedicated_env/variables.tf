@@ -187,3 +187,8 @@ variable "setup_token_ttl_minutes" {
   default     = 60
   description = "Lifetime of the one-time setup token from first api start (or operator reset)."
 }
+
+variable "trusted_proxy_cidrs" {
+  type        = list(string)
+  description = "Networks whose X-Forwarded-For the api trusts (the Container Apps infrastructure subnet)."
+}

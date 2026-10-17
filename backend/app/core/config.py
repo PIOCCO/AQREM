@@ -401,11 +401,12 @@ class Settings(BaseSettings):
         description="Comma-separated client networks allowed to reach /setup (others get 404). "
                     "Default: loopback + private ranges only.",
     )
-    setup_trusted_proxy_hops: int = Field(
-        default=0, ge=0, le=5,
-        validation_alias=AliasChoices("setup_trusted_proxy_hops", "SETUP_TRUSTED_PROXY_HOPS"),
-        description="Number of trusted reverse proxies in front of the API (Azure: ingress + web nginx = 2). "
-                    "0 = use the TCP peer and refuse setup requests that carry X-Forwarded-For.",
+    trusted_proxy_cidrs: str = Field(
+        default="",
+        validation_alias=AliasChoices("trusted_proxy_cidrs", "TRUSTED_PROXY_CIDRS"),
+        description="Comma-separated networks of reverse proxies whose X-Forwarded-For is honoured "
+                    "(Azure: the Container Apps infrastructure subnet). Empty = never trust X-Forwarded-For; "
+                    "the TCP peer address is the client.",
     )
     setup_max_attempts_per_ip: int = Field(default=5, ge=1,
                                            validation_alias=AliasChoices("setup_max_attempts_per_ip", "SETUP_MAX_ATTEMPTS_PER_IP"))

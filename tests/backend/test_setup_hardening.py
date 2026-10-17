@@ -177,23 +177,48 @@ def test_public_client_gets_404(make_client, db_session):
     assert db_session.query(SetupAttempt).count() == 0  # blocked before any token handling
 
 
-def test_forwarded_for_without_declared_proxy_fails_closed(make_client):
-    c = make_client()
-    assert c.get("/api/v1/setup/status", headers={"X-Forwarded-For": "10.0.0.1"}).status_code == 404
+def test_forwarded_for_from_untrusted_peer_is_ignored(make_client):
+    # No TRUSTED_PROXY_CIDRS: the header is ignored and the socket peer is the client.
+    pub = make_client(("203.0.113.7", 50000))
+    assert pub.get("/api/v1/setup/status", headers={"X-Forwarded-For": "10.0.0.1"}).status_code == 404
+    priv = make_client()
+    assert priv.get("/api/v1/setup/status", headers={"X-Forwarded-For": "203.0.113.9"}).status_code == 200
 
 
-def test_trusted_proxy_hops_and_spoofing(dedicated_env, make_client):
-    dedicated_env.setenv("SETUP_TRUSTED_PROXY_HOPS", "2")
+INFRA = "10.50.0.0/23"  # Container Apps infrastructure subnet (ingress envoy + replicas incl. web nginx)
+
+
+def test_trusted_proxy_cidrs_and_spoofing(dedicated_env, make_client):
+    dedicated_env.setenv("TRUSTED_PROXY_CIDRS", INFRA)
     get_settings.cache_clear()
-    c = make_client(("10.0.0.4", 50000))  # web nginx; Azure ingress appended 10.0.0.9
-    assert c.get("/api/v1/setup/status", headers={"X-Forwarded-For": "203.0.113.5, 10.0.0.9"}).status_code == 404
-    # attacker prepends a private address: still resolves to the real public client
-    spoof = {"X-Forwarded-For": "10.1.1.1, 203.0.113.5, 10.0.0.9"}
+    c = make_client(("10.50.0.4", 50000))  # peer = ingress/nginx inside the infra subnet
+    # Azure appends the address it saw as the RIGHTMOST entry; nginx then appends the envoy address.
+    assert c.get("/api/v1/setup/status", headers={"X-Forwarded-For": "203.0.113.5, 10.50.0.9"}).status_code == 404
+    # attacker prepends a private address: ignored, the real client (rightmost untrusted) is public
+    spoof = {"X-Forwarded-For": "10.1.1.1, 203.0.113.5, 10.50.0.9"}
     assert c.get("/api/v1/setup/status", headers=spoof).status_code == 404
-    assert c.get("/api/v1/setup/status", headers={"X-Forwarded-For": "192.168.1.20, 10.0.0.9"}).status_code == 200
+    assert c.get("/api/v1/setup/status", headers={"X-Forwarded-For": "192.168.1.20, 10.50.0.9"}).status_code == 200
+    assert c.get("/api/v1/setup/status", headers={"X-Forwarded-For": "not-an-ip, 10.50.0.9"}).status_code == 404
     dedicated_env.setenv("SETUP_ALLOWED_CIDRS", "203.0.113.5/32")
     get_settings.cache_clear()
     assert c.get("/api/v1/setup/status", headers=spoof).status_code == 200
+
+
+def test_untrusted_peer_cannot_inject_forwarded(dedicated_env, make_client):
+    dedicated_env.setenv("TRUSTED_PROXY_CIDRS", INFRA)
+    dedicated_env.setenv("SETUP_ALLOWED_CIDRS", "203.0.113.5/32")
+    get_settings.cache_clear()
+    direct = make_client(("198.51.100.1", 50000))  # not a trusted proxy
+    assert direct.get("/api/v1/setup/status", headers={"X-Forwarded-For": "203.0.113.5"}).status_code == 404
+
+
+def test_gate_logs_the_evaluated_ip(dedicated_env, make_client, caplog):
+    dedicated_env.setenv("TRUSTED_PROXY_CIDRS", INFRA)
+    get_settings.cache_clear()
+    caplog.set_level(logging.INFO, logger="aqrem.setup")
+    make_client(("10.50.0.4", 1)).get("/api/v1/setup/status", headers={"X-Forwarded-For": "203.0.113.5, 10.50.0.9"})
+    lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("setup gate:")]
+    assert lines == ["setup gate: client_ip=203.0.113.5 via=forwarded peer=10.50.0.4 forwarded_entries=2 allowed=False"]
 
 
 def test_shared_mode_has_no_setup(client: TestClient):
@@ -228,29 +253,56 @@ def test_existing_environment_without_token_rows_stays_closed(make_client, db_se
     assert db_session.query(SetupToken).count() == 0
 
 
-def test_reactivation_only_via_operator_cli(dedicated_env, make_client, db_session, capsys):
+def test_reset_refused_once_admin_exists(dedicated_env, make_client, db_session, capsys):
     c = make_client()
     assert c.post("/api/v1/setup/first-admin", json=_body()).status_code == 201
-    assert c.get("/api/v1/setup/status").status_code == 404
-
     assert _cli(dedicated_env, db_session, ["reset"]) == 2  # --confirm required
+    assert _cli(dedicated_env, db_session, ["reset", "--confirm"]) == 3
+    err = capsys.readouterr().err
+    assert "single-use" in err and "app.ops recover-admin" in err
+    assert db_session.query(SetupToken).filter_by(source="operator_reset").count() == 0
+    with pytest.raises(PermissionError):
+        setup_guard.operator_reset(db_session, get_settings(), "x" * 40)
     assert c.get("/api/v1/setup/status").status_code == 404
-    # the old (consumed) token can't be re-issued
-    assert _cli(dedicated_env, db_session, ["reset", "--confirm", "--token-stdin"], stdin=TOKEN) == 2
-    capsys.readouterr()
 
+
+def test_reset_reissues_expired_token_before_first_admin(dedicated_env, make_client, db_session, capsys):
+    c = make_client()
+    assert c.get("/api/v1/setup/status").status_code == 200
+    row = db_session.query(SetupToken).one()
+    row.issued_at = datetime.now(UTC) - timedelta(hours=3)
+    db_session.flush()
+    assert c.get("/api/v1/setup/status").status_code == 410
+    assert _cli(dedicated_env, db_session, ["reset", "--confirm", "--token-stdin"], stdin=TOKEN) == 2  # reused
+    capsys.readouterr()
     assert _cli(dedicated_env, db_session, ["reset", "--confirm"]) == 0
     new_token = capsys.readouterr().out.strip().splitlines()[-1]
     assert len(new_token) >= 24 and new_token != TOKEN
-    assert c.get("/api/v1/setup/status").status_code == 200
-    assert c.post("/api/v1/setup/first-admin", json=_body(token=TOKEN, email="r@contoso.example.com")).status_code == 403
-    assert c.post("/api/v1/setup/first-admin", json=_body(token=new_token, email="r@contoso.example.com")).status_code == 201
-    assert _admins(db_session) == 2
-    assert c.get("/api/v1/setup/status").status_code == 404
+    assert c.post("/api/v1/setup/first-admin", json=_body(token=TOKEN)).status_code == 403
+    assert c.post("/api/v1/setup/first-admin", json=_body(token=new_token)).status_code == 201
     assert c.post("/api/v1/setup/first-admin", json=_body(token=new_token, email="z@contoso.example.com")).status_code == 404
-
     assert _cli(dedicated_env, db_session, ["status"]) == 0
     assert new_token not in capsys.readouterr().out
+    from app.models.audit import AuditEvent as AuditLog
+    assert db_session.query(AuditLog).filter_by(action="setup_reopened_by_operator").count() == 1
+
+
+def test_clear_lockout_cli(dedicated_env, make_client, db_session, capsys):
+    c = make_client()
+    other = make_client(("10.20.30.99", 1))
+    for _ in range(3):
+        c.post("/api/v1/setup/first-admin", json=_body(token="wrong-token-xx"))
+    other.post("/api/v1/setup/first-admin", json=_body(token="wrong-token-xx"))
+    assert c.get("/api/v1/setup/status").status_code == 429
+    assert _cli(dedicated_env, db_session, ["clear-lockout", "--ip", "not-an-ip"]) == 2
+    assert _cli(dedicated_env, db_session, ["clear-lockout", "--ip", PRIVATE[0]]) == 0
+    assert "Cleared 3" in capsys.readouterr().out
+    assert db_session.query(SetupAttempt).filter_by(success=False).count() == 1  # other IP untouched
+    assert _cli(dedicated_env, db_session, ["clear-lockout"]) == 0
+    assert db_session.query(SetupAttempt).filter_by(success=False).count() == 0
+    from app.models.audit import AuditEvent as AuditLog
+    assert db_session.query(AuditLog).filter_by(action="setup_lockout_cleared_by_operator").count() == 2
+    assert c.post("/api/v1/setup/first-admin", json=_body()).status_code == 201
 
 
 def test_cli_reset_revokes_unused_token(dedicated_env, make_client, db_session, capsys):

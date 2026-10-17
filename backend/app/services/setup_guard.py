@@ -5,8 +5,8 @@
   admin). After that the env var is ignored: changing SETUP_TOKEN never re-opens setup. Only the
   operator CLI (``python -m app.setup reset --confirm``) can issue a new token.
 * Lifetime: SETUP_TOKEN_TTL_MINUTES from issued_at.
-* Closed => 404, identical to an unknown route. Open requires a live token AND (no admin yet OR an
-  operator reset).
+* Closed => 404, identical to an unknown route. Open requires a live token AND no administrator yet:
+  setup is single-use. Recovering an admin later is a separate operator CLI (``python -m app.ops``).
 * Network: client IP must be inside SETUP_ALLOWED_CIDRS (default loopback/private), else 404.
 * Rate limit: failed attempts per IP and globally within SETUP_LOCKOUT_MINUTES (DB-backed, so it
   survives restarts and works across replicas).
@@ -100,8 +100,8 @@ def setup_state(db: Session, settings: Settings) -> SetupState:
         if admin_missing and not has_any:
             return SetupState(UNCONFIGURED)
         return SetupState(EXPIRED if admin_missing else CLOSED)
-    if row.source == BOOTSTRAP and not admin_missing:
-        return SetupState(CLOSED)
+    if not admin_missing:
+        return SetupState(CLOSED)  # setup is single-use: never open once an administrator exists
     live = row.consumed_at is None and token_expires_at(row, settings) > _now()
     if live:
         return SetupState(OPEN, row, token_expires_at(row, settings))
@@ -115,40 +115,68 @@ def verify_token(row: SetupToken, presented: str) -> bool:
 # ------------------------------------------------------------------ network gate
 
 
-def client_ip(peer: str | None, forwarded_for: str | None, settings: Settings) -> str | None:
-    """Client address after stripping exactly SETUP_TRUSTED_PROXY_HOPS trusted proxies. None = untrusted."""
-    hops = settings.setup_trusted_proxy_hops
-    xff = [p.strip() for p in (forwarded_for or "").split(",") if p.strip()]
-    if hops == 0:
-        if xff:
-            # A proxy is in front but not declared: the peer would be the proxy's private address.
-            return None
-        chain = [peer or ""]
-    else:
-        chain = xff + [peer or ""]
-        if len(chain) < hops + 1:
-            return None
-    candidate = chain[-(hops + 1)]
+def _networks(spec: str | None) -> list:
+    nets = []
+    for part in (spec or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            nets.append(ipaddress.ip_network(part, strict=False))
+        except ValueError:
+            logger.error("Ignoring invalid CIDR entry in configuration")
+    return nets
+
+
+def _parse_ip(value: str | None):
     try:
-        return str(ipaddress.ip_address(candidate))
+        return ipaddress.ip_address((value or "").strip())
     except ValueError:
         return None
+
+
+@dataclass
+class ClientAddress:
+    ip: str | None
+    peer: str | None
+    via: str  # "peer" | "forwarded" | "invalid"
+    forwarded_entries: int
+
+
+def resolve_client(peer: str | None, forwarded_for: str | None, settings: Settings) -> ClientAddress:
+    """Client IP for the setup gate.
+
+    X-Forwarded-For is honoured only when the immediate TCP peer is inside TRUSTED_PROXY_CIDRS. Then the
+    header is walked from the right (Azure Container Apps appends the address it saw as the RIGHTMOST
+    entry; everything left of that is client-supplied and spoofable), skipping entries that are
+    themselves trusted proxies; the first untrusted entry is the client. Otherwise the peer is the client.
+    """
+    trusted = _networks(settings.trusted_proxy_cidrs)
+    entries = [p.strip() for p in (forwarded_for or "").split(",") if p.strip()]
+    peer_ip = _parse_ip(peer)
+    if peer_ip is None:
+        return ClientAddress(None, peer, "invalid", len(entries))
+    if not entries or not any(peer_ip in n for n in trusted):
+        return ClientAddress(str(peer_ip), peer, "peer", len(entries))
+    for raw in reversed(entries):
+        ip = _parse_ip(raw)
+        if ip is None:
+            return ClientAddress(None, peer, "invalid", len(entries))  # garbage where Azure writes: fail closed
+        if not any(ip in n for n in trusted):
+            return ClientAddress(str(ip), peer, "forwarded", len(entries))
+    # every hop is a trusted proxy (in-environment call): the leftmost one originated it
+    return ClientAddress(str(_parse_ip(entries[0])), peer, "forwarded", len(entries))
+
+
+def client_ip(peer: str | None, forwarded_for: str | None, settings: Settings) -> str | None:
+    return resolve_client(peer, forwarded_for, settings).ip
 
 
 def ip_allowed(ip: str | None, settings: Settings) -> bool:
     if ip is None:
         return False
     addr = ipaddress.ip_address(ip)
-    for part in (settings.setup_allowed_cidrs or "").split(","):
-        part = part.strip()
-        if not part:
-            continue
-        try:
-            if addr in ipaddress.ip_network(part, strict=False):
-                return True
-        except ValueError:
-            logger.error("Ignoring invalid SETUP_ALLOWED_CIDRS entry")
-    return False
+    return any(addr in n for n in _networks(settings.setup_allowed_cidrs))
 
 
 # ------------------------------------------------------------------ rate limit
@@ -180,6 +208,10 @@ def record_attempt(db: Session, ip: str, *, success: bool) -> None:
 
 def operator_reset(db: Session, settings: Settings, new_token: str) -> SetupToken:
     """Revoke every unconsumed token and issue a new one (source=operator_reset). Token must be new."""
+    from app.core.deployment import dedicated_setup_required
+
+    if not dedicated_setup_required(db):
+        raise PermissionError("An administrator already exists; setup is single-use.")
     new_token = (new_token or "").strip()
     if len(new_token) < 24:
         raise ValueError("New setup token must be at least 24 characters.")
@@ -195,3 +227,13 @@ def operator_reset(db: Session, settings: Settings, new_token: str) -> SetupToke
     db.flush()
     register_secret(new_token)
     return row
+
+
+def clear_lockout(db: Session, ip: str | None = None) -> int:
+    """Delete recorded FAILED attempts (all, or for one IP). Returns the number removed."""
+    q = db.query(SetupAttempt).filter(SetupAttempt.success.is_(False))
+    if ip:
+        q = q.filter(SetupAttempt.client_ip == str(ipaddress.ip_address(ip.strip())))
+    n = q.delete(synchronize_session=False)
+    db.flush()
+    return int(n or 0)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
@@ -15,6 +17,7 @@ from app.db.session import get_db
 from app.services import setup_guard
 from app.models.organization import Organization, OrganizationMembership, User
 
+logger = logging.getLogger("aqrem.setup")
 router = APIRouter()
 
 
@@ -54,9 +57,14 @@ def _gate(request: Request, db: Session):
     settings = get_settings()
     if not settings.is_dedicated:
         raise NOT_FOUND
-    ip = setup_guard.client_ip(request.client.host if request.client else None,
-                               request.headers.get("x-forwarded-for"), settings)
-    if not setup_guard.ip_allowed(ip, settings):
+    addr = setup_guard.resolve_client(request.client.host if request.client else None,
+                                      request.headers.get("x-forwarded-for"), settings)
+    ip = addr.ip
+    allowed = setup_guard.ip_allowed(ip, settings)
+    # Safe diagnostic line (addresses only, never headers/body): shows which IP the gate evaluated.
+    logger.info("setup gate: client_ip=%s via=%s peer=%s forwarded_entries=%d allowed=%s",
+                ip or "-", addr.via, addr.peer or "-", addr.forwarded_entries, allowed)
+    if not allowed:
         raise NOT_FOUND
     st = setup_guard.setup_state(db, settings)
     db.commit()  # persist a freshly issued bootstrap token row

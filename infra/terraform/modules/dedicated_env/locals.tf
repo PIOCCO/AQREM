@@ -27,12 +27,13 @@ locals {
   tags = merge({ client = var.client, tier = "dedicated", size = var.size, managedBy = "terraform" }, var.tags)
 
   # Non-secret runtime config. Secrets come from Key Vault via managed identity (KEY_VAULT_URL loader).
-  # First-run /setup hardening (CHECK 3). The api sits behind two proxies: Container Apps ingress
-  # (appends the client IP to X-Forwarded-For) and the web nginx (appends the ingress IP).
+  # First-run /setup hardening. X-Forwarded-For is honoured only from peers inside the Container Apps
+  # infrastructure subnet (ingress envoy + app replicas, incl. the web nginx); see
+  # docs/operations-dedicated.md "Which client IP the app sees".
   setup_env = merge(
     {
-      SETUP_TRUSTED_PROXY_HOPS = "2"
-      SETUP_TOKEN_TTL_MINUTES  = tostring(var.setup_token_ttl_minutes)
+      SETUP_TOKEN_TTL_MINUTES = tostring(var.setup_token_ttl_minutes)
+      TRUSTED_PROXY_CIDRS     = join(",", var.trusted_proxy_cidrs)
     },
     length(var.setup_allowed_cidrs) > 0 ? { SETUP_ALLOWED_CIDRS = join(",", var.setup_allowed_cidrs) } : {},
   )
