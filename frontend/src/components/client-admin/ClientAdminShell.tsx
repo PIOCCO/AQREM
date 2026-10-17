@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { LogoHomeLink } from "../brand/LogoHomeLink";
 import { useAuth } from "../../lib/authContext";
+import LicenseBanner from "../layout/LicenseBanner";
 import { roleDisplayLabel } from "../../lib/roleLabels";
 import { clearSession } from "../../lib/api";
 import { fetchOrgOverview } from "../../lib/orgAdminApi";
@@ -96,6 +97,7 @@ export default function ClientAdminShell() {
         </div>
       </aside>
       <main className="flex-1 min-w-0 overflow-y-auto">
+        <LicenseBanner />
         <Outlet />
       </main>
     </div>

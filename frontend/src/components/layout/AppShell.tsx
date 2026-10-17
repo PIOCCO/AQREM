@@ -5,6 +5,7 @@ import { ChatMobileMenuButton } from "../../pages/ChatPage";
 import CommandPalette from "../ui/CommandPalette";
 import { Logo } from "../brand/Logo";
 import RouteErrorBoundary from "../ui/RouteErrorBoundary";
+import LicenseBanner from "./LicenseBanner";
 import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
 import { pageTitleForPath } from "../../lib/routeMeta";
 import { useSidebar } from "../../lib/sidebarContext";
@@ -57,6 +58,7 @@ export default function AppShell() {
       />
 
       <div className="app-main flex min-w-0 min-h-0 flex-col overflow-hidden">
+        <LicenseBanner />
         {!chatMode ? (
           <header className="chat-topbar flex h-14 shrink-0 items-center gap-3 px-4 lg:px-6 max-w-[var(--workspace-column-max)] w-full mx-auto">
             <ChatMobileMenuButton onClick={() => setMobileOpen(true)} />
