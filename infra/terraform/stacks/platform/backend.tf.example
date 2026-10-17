@@ -1,10 +1,13 @@
-# Copy to backend.tf and fill before terraform init -apply.
+# Copy to backend.tf before terraform init. State storage: infra/terraform/stacks/state.
+# Entra ID auth only (shared keys are disabled on the account); principal needs
+# "Storage Blob Data Contributor" on the tfstate-platform container.
 #
 # terraform {
 #   backend "azurerm" {
-#     resource_group_name  = "aqrem-tfstate-rg"
-#     storage_account_name = "aqremtfstate001"
-#     container_name       = "tfstate"
+#     resource_group_name  = "rg-aqrem-tfstate"
+#     storage_account_name = "staqremtfstate01"
+#     container_name       = "tfstate-platform"
 #     key                  = "platform/production.tfstate"
+#     use_azuread_auth     = true
 #   }
 # }

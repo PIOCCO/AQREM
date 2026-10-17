@@ -12,22 +12,28 @@
 #   --plan-only    stop after `terraform plan`.
 #   --yes          skip the interactive confirmation before apply.
 #   --validate-only  init -backend=false + validate the generated workspace (no Azure calls).
+#   --allow-local-state  explicitly allow local state (sandbox only; state holds infrastructure details).
+#
+# Remote state (required by default): AQREM_TFSTATE_RG + AQREM_TFSTATE_ACCOUNT (created by
+#   scripts/tfstate-bootstrap.sh). Each client has its OWN container tfstate-<client> (RBAC per container,
+#   Entra ID auth, no storage keys) and key dedicated/<client>.tfstate.
 #
 # Prerequisites: az login (subscription selected), terraform >= 1.11,
 #   infra/terraform/stacks/dedicated/platform.auto.tfvars (copy platform.auto.tfvars.example),
-#   AQREM_TFSTATE_RG / AQREM_TFSTATE_ACCOUNT (remote state; optional: falls back to local state).
+#   AQREM_TFSTATE_RG / AQREM_TFSTATE_ACCOUNT (remote state, see above).
 set -euo pipefail
 
 usage() { sed -n '2,20p' "$0"; exit 1; }
 [[ $# -ge 3 ]] || usage
 CLIENT="$1"; REGION="$2"; SIZE="$3"; shift 3
-DB_MODE=new; PLAN_ONLY=0; YES=0; VALIDATE_ONLY=0
+DB_MODE=new; PLAN_ONLY=0; YES=0; VALIDATE_ONLY=0; ALLOW_LOCAL=0
 for a in "$@"; do
   case "$a" in
     --existing-db) DB_MODE=existing ;;
     --plan-only) PLAN_ONLY=1 ;;
     --yes) YES=1 ;;
     --validate-only) VALIDATE_ONLY=1 ;;
+    --allow-local-state) ALLOW_LOCAL=1 ;;
     *) usage ;;
   esac
 done
@@ -62,30 +68,41 @@ if [[ $VALIDATE_ONLY == 1 ]]; then
   terraform validate
   exit 0
 fi
+umask 077  # plan/local state files: operator-only
 if [[ -n "${AQREM_TFSTATE_RG:-}" && -n "${AQREM_TFSTATE_ACCOUNT:-}" ]]; then
+  # Separate state per client: own container (RBAC boundary) + own key. Entra ID auth only.
   cat > backend.tf <<BE
 terraform {
   backend "azurerm" {
     resource_group_name  = "$AQREM_TFSTATE_RG"
     storage_account_name = "$AQREM_TFSTATE_ACCOUNT"
-    container_name       = "${AQREM_TFSTATE_CONTAINER:-tfstate}"
+    container_name       = "tfstate-$CLIENT"
     key                  = "dedicated/$CLIENT.tfstate"
     use_azuread_auth     = true
   }
 }
 BE
+  export ARM_USE_AZUREAD=true
+elif [[ $ALLOW_LOCAL == 1 ]]; then
+  rm -f backend.tf
+  echo "WARNING: --allow-local-state: state stays in $WORK/terraform.tfstate (gitignored). Sandbox only." >&2
 else
-  echo "WARNING: AQREM_TFSTATE_RG/AQREM_TFSTATE_ACCOUNT not set; using LOCAL state in $WORK" >&2
+  echo "Remote state required: export AQREM_TFSTATE_RG and AQREM_TFSTATE_ACCOUNT (scripts/tfstate-bootstrap.sh)," >&2
+  echo "and add '$CLIENT' to 'clients' in stacks/state so container tfstate-$CLIENT exists. Or pass --allow-local-state." >&2
+  exit 2
 fi
 
 terraform init -input=false
+# Plan files can contain sensitive values (Terraform masks them on screen, not in the file):
+# keep it 0600 in the gitignored client dir and delete it after apply/abort.
 terraform plan -input=false -out=tfplan
-[[ $PLAN_ONLY == 1 ]] && { echo "Plan saved to $WORK/tfplan (not applied)."; exit 0; }
+[[ $PLAN_ONLY == 1 ]] && { echo "Plan saved to $WORK/tfplan (not applied; contains infrastructure details — delete it when done)."; exit 0; }
 if [[ $YES != 1 ]]; then
   read -r -p "Apply this plan for client '$CLIENT' (creates billable Azure resources)? [y/N] " ok
-  [[ "$ok" == y || "$ok" == Y ]] || { echo "Aborted."; exit 1; }
+  [[ "$ok" == y || "$ok" == Y ]] || { rm -f tfplan; echo "Aborted."; exit 1; }
 fi
 terraform apply -input=false tfplan
+rm -f tfplan
 
 RG="$(terraform output -raw resource_group_name)"
 JOB="$(terraform output -raw migration_job_name)"

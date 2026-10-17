@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars (gitignored). Object ids are identifiers, not secrets.
+subscription_id      = "00000000-0000-0000-0000-000000000000"
+tenant_id            = "00000000-0000-0000-0000-000000000000"
+storage_account_name = "staqremtfstate01"
+clients              = ["contoso"]
+
+platform_state_principal_ids = {
+  platform-pipeline = "00000000-0000-0000-0000-000000000001"
+}
+all_clients_principal_ids = {
+  rollout-pipeline = "00000000-0000-0000-0000-000000000002"
+}
+client_state_principal_ids = {
+  contoso = { contoso-operator = "00000000-0000-0000-0000-000000000003" }
+}
+# allowed_ip_cidrs = ["203.0.113.10/32"]

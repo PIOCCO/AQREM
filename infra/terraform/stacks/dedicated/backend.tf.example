@@ -1,9 +1,10 @@
-# Copy to backend.tf (scripts/new-client-env.sh does this). One state file per client.
+# Copy to backend.tf (scripts/new-client-env.sh does this). Separate state per client:
+# own container tfstate-CLIENT (RBAC scope) + own key. Entra ID auth only (shared keys are disabled).
 terraform {
   backend "azurerm" {
     resource_group_name  = "rg-aqrem-tfstate"
-    storage_account_name = "staqremtfstate"
-    container_name       = "tfstate"
+    storage_account_name = "staqremtfstate01"
+    container_name       = "tfstate-CLIENT"
     key                  = "dedicated/CLIENT.tfstate"
     use_azuread_auth     = true
   }
