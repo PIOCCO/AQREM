@@ -59,11 +59,9 @@ def org_allows_sign_in(org: Organization, settings: Settings | None = None) -> t
 
 
 def _dedicated_allows_sign_in(settings: Settings) -> tuple[bool, str]:
-    from app.services.offline_license import VALID, load_license
-
-    res = load_license(settings)
-    if res.state != VALID:
-        return False, res.message
+    # Dedicated: sign-in never depends on the license. A missing/expired/invalid license puts the
+    # environment into read-only mode instead (license_enforcement.py), so customers keep access to
+    # their data and administrators can see what is wrong.
     return True, ""
 
 
@@ -71,16 +69,19 @@ def assert_can_add_seat(db: Session, org: Organization, settings: Settings | Non
     settings = settings or get_settings()
     db.refresh(org)
     if settings.is_dedicated:
-        from app.services.offline_license import VALID, load_license
+        from app.services import license_enforcement as le
 
-        res = load_license(settings)
-        if res.state != VALID:
-            raise LicenseDenied(res.message)
-        usage = get_seat_usage(db, org)
-        if usage.seats_used >= res.seats:
+        enf = le.evaluate(db, settings, use_cache=False, persist=False)
+        if enf.read_only:
+            raise LicenseDenied(enf.message)
+        if enf.seats is None:
             raise LicenseDenied(
-                f"Seat limit reached: the license allows {res.seats} users and {usage.seats_used} are in use. "
-                "Remove a user or ask your AQREM vendor for more seats."
+                "Users cannot be added until a valid license is installed. Contact your AQREM vendor."
+            )
+        if (enf.seats_used or 0) >= enf.seats:
+            raise LicenseDenied(
+                f"Seat limit reached: the license allows {enf.seats} users and {enf.seats_used} are in use. "
+                "Deactivate a user or ask your AQREM vendor for more seats."
             )
         return
     allowed, reason = org_allows_sign_in(org, settings)

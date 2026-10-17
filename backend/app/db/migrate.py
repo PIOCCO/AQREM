@@ -130,6 +130,42 @@ END $$;
 """))
 
 
+# Tables whose runtime-role privileges are narrower than the blanket DML grant of ensure_app_role.
+_RESTRICTED_FOR_RUNTIME = {
+    GUARD_TABLE: "INSERT, UPDATE, DELETE, TRUNCATE",       # marker: read-only for runtime roles
+    "license_runtime_state": "DELETE, TRUNCATE",          # evidence: never erased by the app
+}
+
+
+def restrict_runtime_role(conn: Connection, role: str) -> None:
+    """Re-apply per-table restrictions after a blanket GRANT ... ON ALL TABLES (idempotent)."""
+    for table, privs in _RESTRICTED_FOR_RUNTIME.items():
+        if conn.execute(text("SELECT to_regclass(:t)"), {"t": table}).scalar() is not None:
+            conn.execute(text(f'REVOKE {privs} ON {table} FROM "{role}"'))
+
+
+def _m7_license_runtime_state(conn: Connection) -> None:
+    from app.models.license_state import LicenseRuntimeState
+
+    LicenseRuntimeState.__table__.create(bind=conn, checkfirst=True)
+    # The app role keeps the row current (no DELETE: rollback/grace evidence is never erased by the app).
+    conn.execute(text("""
+DO $$
+DECLARE r text;
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aqrem_app') THEN
+    REVOKE ALL ON license_runtime_state FROM aqrem_app;
+    GRANT SELECT, INSERT, UPDATE ON license_runtime_state TO aqrem_app;
+  END IF;
+  FOREACH r IN ARRAY ARRAY['aqrem_tenant', 'aqrem_support'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+      EXECUTE format('REVOKE ALL ON license_runtime_state FROM %I', r);
+    END IF;
+  END LOOP;
+END $$;
+"""))
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "baseline (models + idempotent schema patches)", _m1_baseline,
               "Baseline; rollback = restore the pre-upgrade database backup."),
@@ -151,6 +187,9 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(6, "aqrem_schema_guard (image/schema compatibility marker)", _m6_schema_guard,
               "Images built before this migration ignore the table (they cannot enforce it). Rolling back to "
               "such an image requires the manual check in docs/migrations.md. Do not drop the table."),
+    Migration(7, "license_runtime_state (clock-rollback + license grace tracking)", _m7_license_runtime_state,
+              "Older images ignore the table (they apply their own, stricter license rules). Do not drop it: "
+              "it holds the clock-rollback and grace-period evidence."),
 )
 
 LATEST_VERSION = MIGRATIONS[-1].version
@@ -287,6 +326,8 @@ def _ensure_app_role(engine: Engine, role: str, password: str) -> None:
             f"GRANT aqrem_rls_control TO {role}",
         ):
             conn.execute(text(q))
+        # The blanket grant above re-opened write access to the schema guard / license evidence.
+        restrict_runtime_role(conn, role)
         bad = conn.execute(
             text("SELECT rolbypassrls OR rolsuper FROM pg_roles WHERE rolname = :r"), {"r": role}
         ).scalar()

@@ -19,6 +19,7 @@ from app.models.employee_join import (
 from app.models.organization import Organization, OrganizationMembership, User
 from app.models.project import Project
 from app.models.setup_token import SetupAttempt, SetupToken  # noqa: F401
+from app.models.license_state import LicenseRuntimeState  # noqa: F401
 from app.models.questionnaire import Answer, AnswerEvidenceLink, Question, Questionnaire
 from app.models.staleness import AnswerStalenessEvent
 from app.models.source import (

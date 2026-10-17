@@ -42,6 +42,7 @@ locals {
     APP_ENV                           = "production"
     DEPLOYMENT_MODE                   = "dedicated"
     DEDICATED_ORG_NAME                = var.organization_name
+    DEDICATED_ORG_SLUG                = var.client
     ENVIRONMENT_NAME                  = var.client
     APP_VERSION                       = var.image_tag
     KEY_VAULT_URL                     = azurerm_key_vault.this.vault_uri

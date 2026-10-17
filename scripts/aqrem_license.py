@@ -2,12 +2,14 @@
 """AQREM offline license tool (operator side). Requires: pip install cryptography
 
   keygen  --out-dir DIR            create Ed25519 keypair (private key 0600; NEVER commit it)
-  sign    --key PRIV --org NAME --seats N --expires YYYY-MM-DD [--features a,b] [--slug s] [--out F]
-  verify  --license F [--public-key B64]
+  sign    --key PRIV --org NAME --slug ORG_SLUG --environment ENV --seats N --expires YYYY-MM-DD
+          [--not-before YYYY-MM-DD] [--grace-days N] [--features a,b] [--out F]
+  verify  --license F [--public-key B64] [--slug ORG_SLUG] [--environment ENV]
 
-Paste the printed public key into backend/app/services/offline_license.py (EMBEDDED_PUBLIC_KEY_B64)
-or set LICENSE_PUBLIC_KEY on the environment. Install a license with LICENSE_FILE=/path or
-LICENSE_KEY=<file contents> (e.g. Key Vault secret 'license-key').
+--slug must equal the dedicated organization's slug and --environment the environment's
+ENVIRONMENT_NAME (Terraform sets it to the client id); otherwise the environment reports a mismatch.
+Add the printed public key to EMBEDDED_PUBLIC_KEYS in backend/app/services/offline_license.py and
+build a new image (docs/licensing.md). Install a license as Key Vault secret 'license-key'.
 """
 
 from __future__ import annotations
@@ -55,17 +57,28 @@ def sign(args) -> None:
 
     priv = serialization.load_pem_private_key(Path(args.key).expanduser().read_bytes(), password=None)
     expires = datetime.strptime(args.expires, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=UTC)
+    now = datetime.now(UTC)
+    if expires <= now:
+        sys.exit("--expires must be in the future")
+    if args.seats <= 0:
+        sys.exit("--seats must be positive")
     payload = {
         "license_id": str(uuid.uuid4()),
         "organization": args.org,
-        "organization_slug": args.slug or "",
+        "organization_slug": args.slug,
+        "environment": args.environment,
         "seats": int(args.seats),
         "features": [f.strip() for f in (args.features or "").split(",") if f.strip()],
-        "issued_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "issued_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "expires_at": expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "deployment_mode": "dedicated",
-        "version": 1,
+        "version": 2,
     }
+    if args.not_before:
+        nb = datetime.strptime(args.not_before, "%Y-%m-%d").replace(tzinfo=UTC)
+        payload["not_before"] = nb.strftime("%Y-%m-%dT%H:%M:%SZ")
+    if args.grace_days is not None:
+        payload["grace_days"] = max(0, min(90, int(args.grace_days)))
     sig = priv.sign(_canonical(payload))
     doc = {"payload": payload, "signature": base64.b64encode(sig).decode(), "alg": "Ed25519"}
     text = json.dumps(doc, indent=2) + "\n"
@@ -79,8 +92,10 @@ def sign(args) -> None:
 def verify(args) -> None:
     from app.services.offline_license import verify_license_text
 
-    res = verify_license_text(Path(args.license).read_text(), public_key_b64=args.public_key)
-    print(json.dumps({"state": res.state, "message": res.message, "payload": res.payload}, indent=2))
+    res = verify_license_text(Path(args.license).read_text(), public_key_b64=args.public_key,
+                              expected_org_slug=args.slug, expected_environment=args.environment)
+    print(json.dumps({"state": res.state, "reason": res.reason, "message": res.message, "payload": res.payload},
+                     indent=2))
     sys.exit(0 if res.state == "valid" else 1)
 
 
@@ -92,14 +107,19 @@ def main() -> None:
     s = sub.add_parser("sign")
     s.add_argument("--key", required=True)
     s.add_argument("--org", required=True)
-    s.add_argument("--slug")
+    s.add_argument("--slug", required=True)
+    s.add_argument("--environment", required=True)
     s.add_argument("--seats", required=True, type=int)
+    s.add_argument("--not-before")
+    s.add_argument("--grace-days", type=int)
     s.add_argument("--expires", required=True)
     s.add_argument("--features")
     s.add_argument("--out")
     v = sub.add_parser("verify")
     v.add_argument("--license", required=True)
     v.add_argument("--public-key")
+    v.add_argument("--slug")
+    v.add_argument("--environment")
     a = p.parse_args()
     if a.cmd == "keygen":
         keygen(a.out_dir)

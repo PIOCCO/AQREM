@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.api.v1 import (
     admin,
@@ -23,7 +23,12 @@ from app.api.v1 import (
     meta,
 )
 
-api_router = APIRouter(prefix="/api/v1")
+from app.api.v1 import license as license_api  # noqa: E402
+
+# Dedicated tier: content-creating writes are refused while the license puts the environment in
+# read-only mode (app/services/license_enforcement.py). Shared mode: no-op.
+api_router = APIRouter(prefix="/api/v1", dependencies=[Depends(license_api.license_write_gate)])
+api_router.include_router(license_api.router, prefix="/license", tags=["license"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(public_join.router, prefix="/public/join", tags=["public-join"])
 from app.api.v1 import setup as setup_api  # noqa: E402

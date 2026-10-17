@@ -145,6 +145,7 @@ ROUTE_POLICY: dict[str, tuple[str, object]] = {
     "POST /api/v1/auth/change-password": (TENANT, {"current_password": "x", "new_password": "yyyyyyyyyyyy"}),
     "GET /api/v1/auth/me": (TENANT, None),
     "GET /api/v1/auth/me/tenant": (TENANT, None),
+    "GET /api/v1/license/status": (TENANT, None),
     "POST /api/v1/chat/ask": (TENANT, {"query": "retention policy", "project_id": "@project"}),
     "POST /api/v1/chat/ask/stream": (TENANT, {"query": "retention policy", "project_id": "@project"}),
     "POST /api/v1/chat/shares": (TENANT, {"client_conversation_id": "conv-1", "title": "t", "messages": []}),

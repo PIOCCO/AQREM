@@ -106,14 +106,20 @@ def sync_license_to_org(db: Session, settings: Settings | None = None) -> None:
     settings = settings or get_settings()
     if not settings.is_dedicated:
         return
-    from app.services.offline_license import VALID, load_license
+    from app.services import license_enforcement as le
+    from app.services.offline_license import EXPIRED, VALID, trusted_keys, DEVELOPMENT_KEY_IDS
 
     org = get_dedicated_org(db)
     if org is None:
         return
-    res = load_license(settings)
-    if res.state == VALID:
-        org.license_limit = res.seats
-        org.license_expires_at = res.expires_at
-        org.license_status = "active"
-    logger.log(logging.INFO if res.state == VALID else logging.ERROR, "License: %s %s", res.state, res.message)
+    if settings.app_env == "production" and set(trusted_keys(settings)) <= DEVELOPMENT_KEY_IDS:
+        logger.warning("License verification in this image uses the development key only; "
+                       "production images must embed a production license key (docs/licensing.md).")
+    # Read-only evaluation here: the caller owns the transaction (no commit from inside).
+    enf = le.evaluate(db, settings, use_cache=False, persist=False)
+    if enf.code in {VALID, EXPIRED, "seats_exceeded"} and enf.seats is not None:
+        org.license_limit = enf.seats
+        org.license_expires_at = enf.expires_at
+        org.license_status = "active" if enf.code != EXPIRED else "expired"
+    logger.log(logging.INFO if enf.level == le.OK else logging.WARNING,
+               "License: level=%s code=%s", enf.level, enf.code)

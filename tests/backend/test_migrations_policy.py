@@ -44,6 +44,15 @@ def test_ensure_app_role_creates_least_privilege_role(engine):
         checks = {c.name: c.status for c in r.checks}
         assert checks["permissions"] == "ok", r.to_dict()
         assert checks["least_privilege"] == "ok", r.to_dict()
+        # The blanket DML grant must not re-open the schema guard (read-only) or license evidence (no DELETE).
+        with engine.connect() as conn:
+            def privs(table):
+                return set(conn.execute(text(
+                    "SELECT privilege_type FROM information_schema.role_table_grants "
+                    "WHERE grantee = :r AND table_name = :t"), {"r": role, "t": table}).scalars())
+            if conn.execute(text("SELECT to_regclass('aqrem_schema_guard')")).scalar():
+                assert privs("aqrem_schema_guard") == {"SELECT"}
+            assert privs("license_runtime_state") == {"SELECT", "INSERT", "UPDATE"}
     finally:
         with engine.begin() as conn:
             conn.execute(text(f"ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM {role}"))

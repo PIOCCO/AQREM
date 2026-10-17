@@ -1,8 +1,15 @@
 """Offline, signed license for dedicated environments.
 
 License file = JSON {"payload": {...}, "signature": base64(Ed25519(canonical_json(payload))), "alg": "Ed25519"}.
-Verified locally with the embedded public key (or LICENSE_PUBLIC_KEY override); no network call.
+Verified locally against the public keys embedded in this image; no network call.
 Sources (first found): LICENSE_KEY (file contents, e.g. from Key Vault) then LICENSE_FILE (path).
+
+This module answers "is this license authentic and does it apply here, at time T". What the
+application does about it (warning, grace period, read-only) is decided in license_enforcement.py,
+which also supplies T (clock-rollback safe).
+
+Messages produced here are shown to organization administrators. They say what is wrong and what
+to do (contact the vendor); they deliberately never mention keys, file locations or settings.
 
 Shared mode does not use this module: it keeps the per-organization seat licensing in licensing.py.
 """
@@ -10,7 +17,9 @@ Shared mode does not use this module: it keeps the per-organization seat licensi
 from __future__ import annotations
 
 import base64
+import binascii
 import json
+import logging
 import os
 import threading
 from dataclasses import dataclass, field
@@ -19,14 +28,41 @@ from pathlib import Path
 
 from app.core.config import Settings, get_settings
 
-# Production verification key. The matching private key is kept offline by the vendor
-# (generated with scripts/aqrem_license.py keygen). Rotate by replacing this value.
-EMBEDDED_PUBLIC_KEY_B64 = "pe8ErPz0vca5I+8nbSHB+lgNj8T4/aWbZIp2S/Dtx5E="
+logger = logging.getLogger("aqrem.license")
+
+# Verification keys trusted by this image (key id -> base64 raw Ed25519 public key). A license is
+# accepted if it verifies against any of them, so a key rotation ships the new key alongside the old
+# one for one release. The matching private keys never enter the repository or the image.
+# "dev-2026-10" is the DEVELOPMENT key; production builds must embed a production key generated
+# offline (docs/licensing.md "Production signing key").
+EMBEDDED_PUBLIC_KEYS: dict[str, str] = {
+    "dev-2026-10": "pe8ErPz0vca5I+8nbSHB+lgNj8T4/aWbZIp2S/Dtx5E=",
+}
+DEVELOPMENT_KEY_IDS = frozenset({"dev-2026-10"})
+# Back-compat alias (older imports / docs).
+EMBEDDED_PUBLIC_KEY_B64 = EMBEDDED_PUBLIC_KEYS["dev-2026-10"]
+
+# Environments in which LICENSE_PUBLIC_KEY (a test-only verification-key override) is honoured.
+# Everything else (production, staging, typos) ignores it.
+_KEY_OVERRIDE_ENVS = frozenset({"development", "test"})
+
+LICENSE_FORMAT_VERSION = 2
+REQUIRED_FIELDS = ("license_id", "organization", "organization_slug", "environment", "deployment_mode",
+                   "seats", "issued_at", "expires_at")
 
 VALID = "valid"
 MISSING = "missing"
 INVALID = "invalid"
 EXPIRED = "expired"
+NOT_YET_VALID = "not_yet_valid"
+MISMATCH = "mismatch"
+
+CONTACT = "Contact your AQREM vendor"
+
+MSG_MISSING = f"No license is installed for this environment. {CONTACT} to obtain one."
+MSG_INVALID = f"The installed license is not valid. {CONTACT} for a replacement license file."
+MSG_MISMATCH = (f"The installed license was issued for a different organization or environment. "
+                f"{CONTACT} for the license that belongs to this environment.")
 
 
 @dataclass
@@ -34,93 +70,204 @@ class LicenseResult:
     state: str
     message: str
     payload: dict = field(default_factory=dict)
+    # Operator-facing reason code for logs (never shown to end users, never contains secrets/paths).
+    reason: str = ""
 
     @property
     def seats(self) -> int:
-        return int(self.payload.get("seats") or 0)
+        try:
+            return int(self.payload.get("seats") or 0)
+        except (TypeError, ValueError):
+            return 0
 
     @property
     def features(self) -> list[str]:
         return list(self.payload.get("features") or [])
 
+    def _dt(self, key: str) -> datetime | None:
+        return parse_time(self.payload.get(key))
+
     @property
     def expires_at(self) -> datetime | None:
-        raw = self.payload.get("expires_at")
-        if not raw:
+        return self._dt("expires_at")
+
+    @property
+    def issued_at(self) -> datetime | None:
+        return self._dt("issued_at")
+
+    @property
+    def not_before(self) -> datetime | None:
+        return self._dt("not_before")
+
+    @property
+    def grace_days(self) -> int | None:
+        raw = self.payload.get("grace_days")
+        if raw is None:
             return None
         try:
-            return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-        except ValueError:
+            return max(0, min(90, int(raw)))
+        except (TypeError, ValueError):
             return None
+
+
+def parse_time(raw) -> datetime | None:
+    if not raw or not isinstance(raw, str):
+        return None
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else None
 
 
 def canonical(payload: dict) -> bytes:
     return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
 
 
-def verify_license_text(text: str, *, public_key_b64: str | None = None, now: datetime | None = None) -> LicenseResult:
+def trusted_keys(settings: Settings | None = None) -> dict[str, str]:
+    """Verification keys for this process. The override exists for automated tests only."""
+    settings = settings or get_settings()
+    override = (settings.license_public_key or "").strip()
+    if override:
+        if settings.app_env in _KEY_OVERRIDE_ENVS:
+            return {"override": override}
+        _warn_once("license_key_override_ignored",
+                   "A license verification override is configured but ignored in app_env=%s.", settings.app_env)
+    return dict(EMBEDDED_PUBLIC_KEYS)
+
+
+_warned: set[str] = set()
+
+
+def _warn_once(code: str, msg: str, *args) -> None:
+    if code not in _warned:
+        _warned.add(code)
+        logger.warning(msg, *args)
+
+
+def _verify_signature(payload: dict, sig: bytes, keys: dict[str, str]) -> str | None:
+    """Return the id of the key that verifies, or None."""
     from cryptography.exceptions import InvalidSignature
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
+    msg = canonical(payload)
+    for kid, b64 in keys.items():
+        try:
+            Ed25519PublicKey.from_public_bytes(base64.b64decode(b64, validate=True)).verify(sig, msg)
+            return kid
+        except (InvalidSignature, ValueError, binascii.Error):
+            continue
+    return None
+
+
+def verify_license_text(
+    text: str,
+    *,
+    public_key_b64: str | None = None,
+    keys: dict[str, str] | None = None,
+    now: datetime | None = None,
+    expected_org_slug: str | None = None,
+    expected_environment: str | None = None,
+    expected_mode: str | None = "dedicated",
+) -> LicenseResult:
+    """Authenticate the license and check it against this environment at time ``now``.
+
+    Order: format -> signature (any change to the payload invalidates it) -> required fields ->
+    binding (mode, environment, organization) -> not_before -> expiry.
+    ``expected_*=None`` skips that binding (offline CLI verification of a file).
+    """
     try:
         doc = json.loads(text)
         payload = doc["payload"]
         sig = base64.b64decode(doc["signature"], validate=True)
-        if not isinstance(payload, dict):
+        if not isinstance(payload, dict) or doc.get("alg", "Ed25519") != "Ed25519" or len(sig) != 64:
             raise ValueError
     except Exception:
-        return LicenseResult(INVALID, "The license file is not valid JSON in the AQREM license format.")
-    try:
-        key = Ed25519PublicKey.from_public_bytes(base64.b64decode(public_key_b64 or EMBEDDED_PUBLIC_KEY_B64))
-        key.verify(sig, canonical(payload))
-    except InvalidSignature:
-        return LicenseResult(INVALID, "The license signature is invalid (file modified or issued for another key).")
-    except Exception:
-        return LicenseResult(INVALID, "The license could not be verified (bad public key configuration).")
-    res = LicenseResult(VALID, "", payload)
-    exp = res.expires_at
-    if exp is None:
-        return LicenseResult(INVALID, "The license has no valid expiry date.", payload)
+        return LicenseResult(INVALID, MSG_INVALID, reason="format_invalid")
+    if keys is None:
+        keys = {"explicit": public_key_b64} if public_key_b64 else trusted_keys()
+    kid = _verify_signature(payload, sig, keys)
+    if kid is None:
+        return LicenseResult(INVALID, MSG_INVALID, reason="signature_invalid")
+    res = LicenseResult(VALID, "", payload, reason=f"key={kid}")
+    missing = [f for f in REQUIRED_FIELDS if payload.get(f) in (None, "")]
+    if missing or res.expires_at is None or res.issued_at is None or res.seats <= 0 \
+            or ("not_before" in payload and res.not_before is None):
+        return LicenseResult(INVALID, MSG_INVALID, payload, reason="fields_invalid")
+    if expected_mode is not None and payload.get("deployment_mode") != expected_mode:
+        return LicenseResult(MISMATCH, MSG_MISMATCH, payload, reason="mode_mismatch")
+    if expected_environment is not None and str(payload.get("environment")) != expected_environment:
+        return LicenseResult(MISMATCH, MSG_MISMATCH, payload, reason="environment_mismatch")
+    if expected_org_slug is not None and str(payload.get("organization_slug")) != expected_org_slug:
+        return LicenseResult(MISMATCH, MSG_MISMATCH, payload, reason="organization_mismatch")
     now = now or datetime.now(UTC)
-    if exp < now:
-        return LicenseResult(EXPIRED, f"The license expired on {exp.date().isoformat()}. Contact your AQREM vendor to renew.", payload)
-    if res.seats <= 0:
-        return LicenseResult(INVALID, "The license grants no seats.", payload)
-    res.message = (f"Licensed to {payload.get('organization')}: {res.seats} seats until {exp.date().isoformat()}.")
+    nb = res.not_before
+    if nb is not None and now < nb:
+        return LicenseResult(
+            NOT_YET_VALID,
+            f"The installed license is valid from {nb.date().isoformat()} only. "
+            f"{CONTACT} if you need it to start earlier.",
+            payload, reason="not_yet_valid")
+    exp = res.expires_at
+    if exp <= now:
+        return LicenseResult(EXPIRED, f"The license expired on {exp.date().isoformat()}. {CONTACT} to renew.",
+                             payload, reason="expired")
+    res.message = f"Licensed to {payload.get('organization')}: {res.seats} seats until {exp.date().isoformat()}."
     return res
 
 
-_cache: dict[str, tuple[object, LicenseResult]] = {}
+_cache: dict[str, tuple[object, str | None]] = {}
 _lock = threading.Lock()
 
 
-def load_license(settings: Settings | None = None) -> LicenseResult:
+def read_license_text(settings: Settings | None = None) -> str | None:
+    """Raw license text from LICENSE_KEY or LICENSE_FILE, or None when no license is installed."""
     settings = settings or get_settings()
     inline = (os.environ.get("LICENSE_KEY") or "").strip()
-    path = (settings.license_file or "").strip()
     if inline:
-        text, cache_key = inline, ("env", hash(inline))
-    elif path:
-        p = Path(path)
+        return inline
+    path = (settings.license_file or "").strip()
+    if not path:
+        return None
+    p = Path(path)
+    try:
         if not p.is_file():
-            return LicenseResult(MISSING, f"No license file found at LICENSE_FILE={path}. Install the license file you received.")
+            return None
         st = p.stat()
-        cache_key = ("file", path, st.st_mtime_ns, st.st_size)
+        key = (path, st.st_mtime_ns, st.st_size)
         with _lock:
-            hit = _cache.get("lic")
-            if hit and hit[0] == cache_key and hit[1].state == VALID and hit[1].expires_at and hit[1].expires_at > datetime.now(UTC):
+            hit = _cache.get("file")
+            if hit and hit[0] == key:
                 return hit[1]
         text = p.read_text(encoding="utf-8")
-    else:
-        return LicenseResult(MISSING, "No license is installed. Set LICENSE_FILE (path) or LICENSE_KEY (contents).")
-    res = verify_license_text(text, public_key_b64=(settings.license_public_key or None))
+    except (OSError, UnicodeDecodeError):
+        return ""  # unreadable -> treated as invalid, not as "missing"
     with _lock:
-        _cache["lic"] = (cache_key, res)
-    return res
+        _cache["file"] = (key, text)
+    return text
+
+
+def load_license(
+    settings: Settings | None = None,
+    *,
+    now: datetime | None = None,
+    expected_org_slug: str | None = None,
+    expected_environment: str | None = None,
+) -> LicenseResult:
+    settings = settings or get_settings()
+    text = read_license_text(settings)
+    if text is None:
+        return LicenseResult(MISSING, MSG_MISSING, reason="missing")
+    return verify_license_text(
+        text, keys=trusted_keys(settings), now=now,
+        expected_org_slug=expected_org_slug, expected_environment=expected_environment,
+        expected_mode="dedicated",
+    )
 
 
 def license_status_summary(settings: Settings | None = None) -> dict:
-    res = load_license(settings)
+    """Health/diagnostics view (no signature, no key material)."""
+    res = load_license(settings, expected_environment=(settings or get_settings()).environment_name or None)
     exp = res.expires_at
     return {
         "status": res.state,

@@ -1,4 +1,8 @@
-"""Single source of truth: seats used = active members + pending invitations."""
+"""Single source of truth: seats used = active members + pending invitations + pending employee joins.
+
+A seat is an *active* membership of an *active* user. Deactivated memberships and deactivated user
+accounts do not count; neither do expired, revoked or used invitations.
+"""
 
 from __future__ import annotations
 
@@ -37,11 +41,15 @@ def _utcnow() -> datetime:
 
 
 def count_active_members(db: Session, organization_id: UUID) -> int:
+    from app.models.organization import User
+
     return (
         db.query(OrganizationMembership)
+        .join(User, User.id == OrganizationMembership.user_id)
         .filter(
             OrganizationMembership.organization_id == organization_id,
             OrganizationMembership.is_active.is_(True),
+            User.is_active.is_(True),
         )
         .count()
     )
