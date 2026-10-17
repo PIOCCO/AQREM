@@ -26,5 +26,9 @@ override.tf.json
 *_override.tf.json
 
 # Keep .terraform.lock.hcl committed (provider pinning).
-clients/
+/clients/   # per-client workspaces (state, plans, backend.tf); anchored so parameters/clients/ stays tracked
 stacks/dedicated/platform.auto.tfvars
+tfplan
+*.tfplan
+state.tfplan
+stacks/state/backend.tf

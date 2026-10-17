@@ -17,3 +17,40 @@ upload_data/
 *license-private*.pem
 aqrem-license-keys/
 *.license.json
+
+# ---- Secrets & infrastructure state (repo-wide; see docs/terraform-state-security.md) ----
+# Terraform state, plans, crash logs, working dirs (anywhere in the repo)
+**/.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+*.tfplan
+*.tfplan.json
+tfplan
+tfplan.json
+crash.log
+crash.*.log
+# Variable/backends with real values (committed examples are re-included)
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+!infra/terraform/envs/*.tfvars
+!infra/terraform/parameters/clients/*.sample.tfvars.json
+backend.hcl
+!backend.hcl.example
+# Environment files (examples are committed)
+.env.*
+!.env.example
+!**/.env.example
+# Keys, certificates, credentials
+*.pem
+*.key
+*.pfx
+*.p12
+*.jks
+id_rsa*
+id_ed25519*
+*.kubeconfig
+.azure/
+credentials.json
+service-account*.json
