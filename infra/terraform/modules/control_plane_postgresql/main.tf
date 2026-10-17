@@ -1,4 +1,5 @@
-resource "random_password" "admin" {
+# Ephemeral + write-only: the admin password is never stored in state or plan.
+ephemeral "random_password" "admin" {
   count = var.password_auth_enabled ? 1 : 0
 
   length  = 32
@@ -18,8 +19,9 @@ resource "azurerm_postgresql_flexible_server" "this" {
   private_dns_zone_id           = var.private_dns_zone_id
   public_network_access_enabled = false
 
-  administrator_login    = var.password_auth_enabled ? var.administrator_login : null
-  administrator_password = var.password_auth_enabled ? random_password.admin[0].result : null
+  administrator_login               = var.password_auth_enabled ? var.administrator_login : null
+  administrator_password_wo         = var.password_auth_enabled ? ephemeral.random_password.admin[0].result : null
+  administrator_password_wo_version = var.password_auth_enabled ? var.secrets_version : null
 
   authentication {
     active_directory_auth_enabled = var.entra_auth_enabled
@@ -77,9 +79,10 @@ resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure" {
 resource "azurerm_key_vault_secret" "admin_password" {
   count = var.key_vault_id != null && var.password_auth_enabled ? 1 : 0
 
-  name         = var.key_vault_secret_name
-  value        = random_password.admin[0].result
-  key_vault_id = var.key_vault_id
-  content_type = "application/x-postgresql-password"
-  tags         = var.tags
+  name             = var.key_vault_secret_name
+  value_wo         = ephemeral.random_password.admin[0].result
+  value_wo_version = var.secrets_version
+  key_vault_id     = var.key_vault_id
+  content_type     = "application/x-postgresql-password"
+  tags             = var.tags
 }

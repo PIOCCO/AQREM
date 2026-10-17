@@ -20,12 +20,23 @@ resource "azurerm_container_app_environment" "this" {
   }
 }
 
+# Read access to exactly the provisioning-token secret (RBAC scope = the secret).
+resource "azurerm_role_assignment" "token_secret_user" {
+  count = var.internal_provisioning_token_kv_secret_id != null ? 1 : 0
+
+  scope                = var.internal_provisioning_token_kv_secret_scope
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.gateway.principal_id
+}
+
 resource "azurerm_container_app" "gateway" {
   name                         = var.container_app_name
   container_app_environment_id = azurerm_container_app_environment.this.id
   resource_group_name          = var.resource_group_name
   revision_mode                = "Single"
   tags                         = var.tags
+
+  depends_on = [azurerm_role_assignment.token_secret_user]
 
   identity {
     type         = "UserAssigned"
@@ -122,9 +133,23 @@ resource "azurerm_container_app" "gateway" {
     value = coalesce(var.applicationinsights_connection_string, "disabled")
   }
 
-  secret {
-    name  = "internal-provisioning-token"
-    value = coalesce(var.internal_provisioning_token, "unset")
+  # Preferred: Key Vault reference (the value never enters Terraform state).
+  dynamic "secret" {
+    for_each = var.internal_provisioning_token_kv_secret_id != null ? [1] : []
+    content {
+      name                = "internal-provisioning-token"
+      key_vault_secret_id = var.internal_provisioning_token_kv_secret_id
+      identity            = azurerm_user_assigned_identity.gateway.id
+    }
+  }
+
+  # Legacy: inline value (stored in state as secret.value).
+  dynamic "secret" {
+    for_each = var.internal_provisioning_token_kv_secret_id == null ? [1] : []
+    content {
+      name  = "internal-provisioning-token"
+      value = coalesce(var.internal_provisioning_token, "unset")
+    }
   }
 
   ingress {

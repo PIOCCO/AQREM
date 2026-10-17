@@ -34,10 +34,25 @@ variable "zone_redundant" {
 }
 
 variable "internal_provisioning_token" {
-  type      = string
-  default   = null
-  nullable  = true
-  sensitive = true
+  type        = string
+  default     = null
+  nullable    = true
+  sensitive   = true
+  description = "Legacy inline token (lands in state). Prefer internal_provisioning_token_kv_secret_id."
+}
+
+variable "internal_provisioning_token_kv_secret_id" {
+  type        = string
+  default     = null
+  nullable    = true
+  description = "Versionless Key Vault secret ID holding the token; referenced by the Container App via managed identity (not in state)."
+}
+
+variable "internal_provisioning_token_kv_secret_scope" {
+  type        = string
+  default     = null
+  nullable    = true
+  description = "RBAC scope (resource ID of the secret) for the gateway identity's Key Vault Secrets User role."
 }
 
 variable "limit_db_stale_seconds" {

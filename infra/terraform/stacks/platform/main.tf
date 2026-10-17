@@ -131,17 +131,31 @@ module "model_gateway_custom" {
   deployment_name_embeddings            = var.embedding_deployment_name
   control_plane_postgresql_host         = module.control_plane_postgresql.fqdn
   applicationinsights_connection_string = module.monitoring.application_insights_connection_string
-  internal_provisioning_token           = var.gateway_internal_provisioning_token != null ? var.gateway_internal_provisioning_token : random_password.gateway_internal[0].result
-  tags                                  = local.common_tags
+  # Token lives only in Key Vault (write-only from an ephemeral value); the app references it.
+  internal_provisioning_token_kv_secret_id    = azurerm_key_vault_secret.gateway_internal[0].versionless_id
+  internal_provisioning_token_kv_secret_scope = azurerm_key_vault_secret.gateway_internal[0].resource_versionless_id
+  tags                                        = local.common_tags
 
   depends_on = [module.control_plane_postgresql, module.openai]
 }
 
-resource "random_password" "gateway_internal" {
-  count = var.enable_custom_gateway && var.gateway_internal_provisioning_token == null ? 1 : 0
+ephemeral "random_password" "gateway_internal" {
+  count = var.enable_custom_gateway ? 1 : 0
 
   length  = 48
-  special = true
+  special = false # URL/header safe
+}
+
+resource "azurerm_key_vault_secret" "gateway_internal" {
+  count = var.enable_custom_gateway ? 1 : 0
+
+  name         = "gateway-internal-provisioning-token"
+  key_vault_id = module.platform_key_vault.id
+  content_type = "text/plain"
+  # Write-only: neither the ephemeral value nor an operator-supplied one is stored in state or plan.
+  value_wo         = var.gateway_internal_provisioning_token != null ? var.gateway_internal_provisioning_token : ephemeral.random_password.gateway_internal[0].result
+  value_wo_version = var.secrets_version
+  tags             = local.common_tags
 }
 
 # Gateway connects via Entra + role membership in aqrem_gateway_app (see infra/platform/db/migrations/003_*).

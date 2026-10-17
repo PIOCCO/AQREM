@@ -91,10 +91,18 @@ variable "gateway_zone_redundant" {
 }
 
 variable "gateway_internal_provisioning_token" {
-  type      = string
-  default   = null
-  nullable  = true
-  sensitive = true
+  type        = string
+  default     = null
+  nullable    = true
+  sensitive   = true
+  ephemeral   = true
+  description = "Optional operator-supplied token (otherwise generated). Written to Key Vault write-only; never stored in state."
+}
+
+variable "secrets_version" {
+  type        = number
+  default     = 1
+  description = "Bump to re-write write-only Key Vault secrets (rotation)."
 }
 
 variable "platform_pg_bootstrap_entra_admin_object_id" {

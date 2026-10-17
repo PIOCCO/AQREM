@@ -104,3 +104,9 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+variable "secrets_version" {
+  type        = number
+  default     = 1
+  description = "Bump to rotate the write-only admin password (server + Key Vault secret)."
+}
