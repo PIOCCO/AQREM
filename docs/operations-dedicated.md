@@ -36,9 +36,13 @@ available (Azure Flexible Server: `azure.extensions=VECTOR`), app role with DML 
 DNS are the client's/operator's job; not automated).
 
 Then:
-1. Issue a license: `python scripts/aqrem_license.py sign --key <offline private key> --org "Contoso" --seats 50 --expires 2027-10-31 --out contoso.license.json`
+1. Issue a license bound to this environment (slug and environment are both the client id; see
+   `docs/licensing.md`): `python scripts/aqrem_license.py sign --key <offline private key> --org "Contoso"
+   --slug contoso --environment contoso --seats 50 --expires 2027-10-31 --out contoso.license.json`
 2. Store it: `az keyvault secret set --vault-name <kv> -n license-key --file contoso.license.json`
-   (the Key Vault firewall only admits `deployer_ip_cidrs`), then restart the api revision.
+   (the Key Vault firewall only admits `deployer_ip_cidrs`), then restart the api revision. Without a valid
+   license the environment runs **read-only** (sign-in and reading work; uploads, chats, new users are
+   refused) — states, grace periods and customer messages are in `docs/licensing.md`.
 3. Give the client admin the URL and the setup token
    (`az keyvault secret show --vault-name <kv> -n setup-token --query value -o tsv`). They open `/setup`,
    create the first administrator, and sign in. Read **First-run setup security** below first: by
