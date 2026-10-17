@@ -30,6 +30,21 @@ import app.tasks.ingestion
 import app.tasks.maintenance  # noqa: F401
 
 
+def _check_schema_guard(**_kwargs: object) -> None:
+    """Worker/beat refuse to start when the database requires a newer image (see app.db.migrate)."""
+    from app.db.migrate import check_image_compatible
+    from app.db.session import engine
+
+    with engine.connect() as conn:
+        check_image_compatible(conn)
+
+
+from celery.signals import beat_init, worker_init  # noqa: E402
+
+worker_init.connect(_check_schema_guard, weak=False)
+beat_init.connect(_check_schema_guard, weak=False)
+
+
 @worker_process_init.connect
 def _log_worker_providers(**_kwargs: object) -> None:
     from app.core.llm_config import log_active_providers

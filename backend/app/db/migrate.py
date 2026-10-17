@@ -32,6 +32,11 @@ logger = logging.getLogger("aqrem.migrate")
 
 LOCK_KEY = 915_001_001
 TABLE = "aqrem_schema_versions"
+GUARD_TABLE = "aqrem_schema_guard"
+
+
+class ImageTooOldError(RuntimeError):
+    """The database was migrated by a newer image whose changes this image cannot honour."""
 
 
 @dataclass(frozen=True)
@@ -40,6 +45,10 @@ class Migration:
     name: str
     apply: Callable[[Connection], None]
     rollback_note: str
+    # Set when images WITHOUT this migration must not run on a database that has it (e.g. RLS: an old
+    # image would see no rows; setup_tokens: an old image would lose the one-time token guarantee).
+    # Recorded in aqrem_schema_guard; images check it at startup (check_image_compatible).
+    requires_image_feature: str | None = None
 
 
 def _m1_baseline(conn: Connection) -> None:
@@ -99,6 +108,28 @@ END $$;
 """))
 
 
+def _m6_schema_guard(conn: Connection) -> None:
+    conn.execute(text(
+        f"CREATE TABLE IF NOT EXISTS {GUARD_TABLE} (key TEXT PRIMARY KEY, value TEXT NOT NULL, "
+        "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
+    ))
+    conn.execute(text(f"REVOKE ALL ON {GUARD_TABLE} FROM PUBLIC"))
+    conn.execute(text(f"GRANT SELECT ON {GUARD_TABLE} TO PUBLIC"))
+    # Runtime roles may read the marker but never lower it (only the migration/owner role writes).
+    conn.execute(text(f"""
+DO $$
+DECLARE r text;
+BEGIN
+  FOREACH r IN ARRAY ARRAY['aqrem_app', 'aqrem_tenant', 'aqrem_support'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+      EXECUTE format('REVOKE ALL ON {GUARD_TABLE} FROM %I', r);
+      EXECUTE format('GRANT SELECT ON {GUARD_TABLE} TO %I', r);
+    END IF;
+  END LOOP;
+END $$;
+"""))
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "baseline (models + idempotent schema patches)", _m1_baseline,
               "Baseline; rollback = restore the pre-upgrade database backup."),
@@ -107,17 +138,75 @@ MIGRATIONS: tuple[Migration, ...] = (
               "ix_client_documents_org_created."),
     Migration(3, "row-level security (org isolation, fail closed)", _m3_row_level_security,
               "No data change. Emergency rollback (per table, as owner): ALTER TABLE <t> NO FORCE ROW LEVEL "
-              "SECURITY; ALTER TABLE <t> DISABLE ROW LEVEL SECURITY; policies may stay. See docs/migrations.md."),
+              "SECURITY; ALTER TABLE <t> DISABLE ROW LEVEL SECURITY; policies may stay. See docs/migrations.md.",
+              requires_image_feature="rls_org_isolation"),
     Migration(4, "organizations.chat_strictness (chat guardrails)", _m4_chat_strictness,
               "Additive column with default; older images ignore it. Optional removal (two-release rule): "
               "ALTER TABLE organizations DROP COLUMN chat_strictness."),
     Migration(5, "setup_tokens + setup_attempts (one-time dedicated setup)", _m5_setup_tokens,
               "Older images ignore both tables (they read SETUP_TOKEN directly, i.e. lose the one-time/expiry "
               "guarantees). Optional cleanup after rolling back: DROP TABLE setup_attempts, setup_tokens "
-              "(separately reviewed)."),
+              "(separately reviewed).",
+              requires_image_feature="setup_tokens_v1"),
+    Migration(6, "aqrem_schema_guard (image/schema compatibility marker)", _m6_schema_guard,
+              "Images built before this migration ignore the table (they cannot enforce it). Rolling back to "
+              "such an image requires the manual check in docs/migrations.md. Do not drop the table."),
 )
 
 LATEST_VERSION = MIGRATIONS[-1].version
+
+
+SUPPORTED_FEATURES = frozenset(m.requires_image_feature for m in MIGRATIONS if m.requires_image_feature)
+
+
+def _guard_exists(conn: Connection) -> bool:
+    return bool(conn.execute(text("SELECT to_regclass(:t) IS NOT NULL"), {"t": GUARD_TABLE}).scalar())
+
+
+def read_guard(conn: Connection) -> dict[str, str]:
+    if not _guard_exists(conn):
+        return {}
+    return {str(k): str(v) for k, v in conn.execute(text(f"SELECT key, value FROM {GUARD_TABLE}"))}
+
+
+def check_image_compatible(conn: Connection) -> None:
+    """Raise ImageTooOldError when the database requires a newer image than this one."""
+    guard = read_guard(conn)
+    if not guard:
+        return
+    try:
+        min_schema = int(guard.get("min_image_schema", "0") or 0)
+    except ValueError:
+        min_schema = 10**9  # unreadable marker: fail closed
+    required = {f for f in (guard.get("required_features", "") or "").split(",") if f}
+    missing = sorted(required - SUPPORTED_FEATURES)
+    if min_schema > LATEST_VERSION or missing:
+        raise ImageTooOldError(
+            f"This image (schema {LATEST_VERSION}) is older than the database requires "
+            f"(min_image_schema={min_schema}, missing features={missing or '-'}). Refusing to start: running it "
+            "could bypass row-level security or one-time setup. Deploy an image at or above the database's "
+            "schema, or follow 'Rolling back below a guarded migration' in docs/migrations.md."
+        )
+
+
+def _write_guard(conn: Connection, done: set[int]) -> None:
+    if not _guard_exists(conn):
+        return
+    current = read_guard(conn)
+    flagged = [m for m in MIGRATIONS if m.version in done and m.requires_image_feature]
+    min_schema = max([m.version for m in flagged], default=0)
+    try:
+        min_schema = max(min_schema, int(current.get("min_image_schema", "0") or 0))  # never lowered
+    except ValueError:
+        pass
+    feats = {m.requires_image_feature for m in flagged} | {
+        f for f in (current.get("required_features", "") or "").split(",") if f}
+    for key, value in (("min_image_schema", str(min_schema)), ("required_features", ",".join(sorted(feats)))):
+        conn.execute(
+            text(f"INSERT INTO {GUARD_TABLE} (key, value) VALUES (:k, :v) "
+                 "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()"),
+            {"k": key, "v": value},
+        )
 
 
 def _ensure_table(conn: Connection) -> None:
@@ -144,6 +233,7 @@ def run_migrations(engine: Engine, *, app_version: str = "") -> list[int]:
     applied: list[int] = []
     with engine.begin() as conn:
         conn.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": LOCK_KEY})
+        check_image_compatible(conn)  # never let an older migrator touch a newer database
         _ensure_table(conn)
         done = applied_versions(conn)
         for m in MIGRATIONS:
@@ -157,6 +247,7 @@ def run_migrations(engine: Engine, *, app_version: str = "") -> list[int]:
                     {"v": m.version, "n": m.name, "a": app_version or None},
                 )
             applied.append(m.version)
+        _write_guard(conn, applied_versions(conn))
     if applied:
         logger.info("Migrations applied: %s", applied)
     return applied

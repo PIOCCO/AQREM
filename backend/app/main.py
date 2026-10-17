@@ -88,7 +88,16 @@ async def lifespan(_: FastAPI):
         from app.core.broker_health import assert_broker_available
 
         assert_broker_available()
-    from app.db.migrate import LATEST_VERSION, migration_engine, pending, run_migrations
+    from app.db.migrate import (
+        LATEST_VERSION,
+        check_image_compatible,
+        migration_engine,
+        pending,
+        run_migrations,
+    )
+
+    with engine.connect() as _conn:
+        check_image_compatible(_conn)  # refuse to start an image older than the database requires
 
     if settings.run_migrations_on_startup:
         mig_engine = migration_engine() if (settings.migration_database_url or "").strip() else engine
