@@ -104,26 +104,31 @@ The setup screen creates the first organization administrator. Its rules:
   `POST /api/v1/setup/first-admin` return the same `404 {"detail":"Not Found"}` as an unknown route, and
   the `/setup` page redirects like an unknown route. Before that, an expired/used token gives
   `410 SETUP_TOKEN_EXPIRED` and the page tells the user to contact the operator.
-* **No re-activation by API or environment.** After the bootstrap row exists, `SETUP_TOKEN` is ignored;
-  changing it (Key Vault, env, restart) does not re-open setup. The only way is the operator CLI inside
-  the api container:
+* **Single-use; no re-activation by API or environment.** After the bootstrap row exists, `SETUP_TOKEN`
+  is ignored; changing it (Key Vault, env, restart) does not re-open setup. Setup never opens again once
+  an administrator exists. Operator CLIs inside the api container (no web route exists for any of them):
   ```bash
   az containerapp exec -n <client>-api -g rg-aqrem-<client> --command "python -m app.setup status"
+  # token expired/lost BEFORE the first admin was created (refused once an admin exists):
   az containerapp exec -n <client>-api -g rg-aqrem-<client> --command "python -m app.setup reset --confirm"
+  # forget failed attempts (lockout), all or one address:
+  az containerapp exec -n <client>-api -g rg-aqrem-<client> --command "python -m app.setup clear-lockout --ip 203.0.113.5"
+  # lost admin access AFTER setup (grants ORG_ADMIN; temp password printed once, must be changed):
+  az containerapp exec -n <client>-api -g rg-aqrem-<client> --command \
+    "python -m app.ops recover-admin --org <slug> --email admin@client.example --reset-password"
   ```
-  `reset --confirm` revokes any unused token, generates a new one (printed **once** on your terminal;
-  `--token-stdin` reads your own instead, min. 24 chars, never a previously used one), audit-logs
-  `setup_reopened_by_operator`, and opens setup for one TTL even if an administrator exists (account
-  recovery: the form then creates an additional org admin or resets that user's password).
+  `reset --confirm` revokes any unused token and generates a new one (printed **once** on your terminal;
+  `--token-stdin` reads your own instead, min. 24 chars, never a previously used one). All three
+  commands are audit-logged in the organization (`setup_reopened_by_operator`,
+  `setup_lockout_cleared_by_operator`, `admin_recovered_by_operator`). `recover-admin` without
+  `--reset-password` only grants the role to an existing user; for a new user it always creates a
+  temporary password. Nothing is emailed.
 * **Network gate.** The client address must be inside `SETUP_ALLOWED_CIDRS` (default: loopback and
   private ranges `127.0.0.0/8, ::1/128, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7`), otherwise 404.
   The `web` app is public, so on a fresh Azure environment `/setup` is **not** reachable from the
   internet until you set Terraform `setup_allowed_cidrs = ["<client admin IP>/32"]` (re-apply), or the
   admin connects through a private network/VPN. Remove the CIDR after setup.
-  The client address is taken from `X-Forwarded-For` after stripping `SETUP_TRUSTED_PROXY_HOPS`
-  trusted proxies (Terraform sets **2**: Container Apps ingress + the web nginx). With hops=0 any
-  request carrying `X-Forwarded-For` is refused (fail closed), so an undeclared proxy can't make every
-  caller look private.
+  Which address counts: see "Which client IP the app sees" below.
 * **Rate limit.** Failed token attempts are stored in `setup_attempts`. `SETUP_MAX_ATTEMPTS_PER_IP`
   (default 5) failures from one address, or `SETUP_MAX_ATTEMPTS_GLOBAL` (default 20) from all addresses,
   within `SETUP_LOCKOUT_MINUTES` (default 15) lock setup with `429` + `Retry-After` until the oldest
@@ -131,3 +136,75 @@ The setup screen creates the first organization administrator. Its rules:
   allowed networks are rejected before they count.
 * **Logs.** `setup_token` keys and `setup_token=` values are redacted by the log filter, and the live
   token value is registered for literal redaction in every log line (app, uvicorn, uvicorn.access, celery).
+
+### Which client IP the app sees
+Azure documents for Container Apps HTTP ingress: *"X-Forwarded-For — The IP addresses of the client and/or
+intermediate proxies that sent the request. If specified in initial request, it is appended to. Only the
+rightmost IP is provided by Azure Container Apps. Any other values must be validated by the user to prevent
+IP spoofing."* ([Ingress in Azure Container Apps → HTTP headers](https://learn.microsoft.com/en-us/azure/container-apps/ingress-overview#http-headers),
+read 2026-10-17). The same page notes that `X-Forwarded-Proto` is overwritten, but `X-Forwarded-For` is only
+appended to.
+
+Request path in a dedicated environment: client → Container Apps ingress (envoy, appends the address it
+saw) → `web` nginx (`proxy_add_x_forwarded_for` appends its peer, the envoy) → internal ingress → `api`.
+The api therefore uses **`TRUSTED_PROXY_CIDRS`** (Terraform sets it to the environment's infrastructure
+subnet, where ingress and replicas live):
+
+* if the TCP peer is **not** in `TRUSTED_PROXY_CIDRS`, `X-Forwarded-For` is ignored and the peer is the client;
+* if it is, the header is read **from the right**, skipping addresses that are themselves in
+  `TRUSTED_PROXY_CIDRS`; the first other address is the client. Anything a client puts in the header sits
+  to the left of Azure's entry and is never reached. A non-IP entry fails closed (404).
+
+Empty `TRUSTED_PROXY_CIDRS` (default outside Terraform) = never trust the header. If you put another
+proxy in front (Front Door, Application Gateway, a corporate proxy), add its egress range, or the gate
+sees that proxy's address. Not verified against a live Azure environment yet; use the procedure below.
+
+Every setup request logs one line with addresses only (no headers, no body, no token), logger `aqrem.setup`:
+`setup gate: client_ip=203.0.113.5 via=forwarded peer=10.50.0.4 forwarded_entries=2 allowed=False`.
+`via` is `peer`, `forwarded` or `invalid`.
+
+### Real-deployment test procedure (run once per new environment, before handing out the token)
+Prerequisites: environment deployed, no admin yet, `setup_allowed_cidrs = ["<A>/32"]` where A is the
+public IP of the test machine "allowed" (`curl -s https://api.ipify.org`), and a second machine "other"
+with a different public IP (phone hotspot, cloud shell). `FQDN` = web app FQDN.
+
+1. From **allowed**:
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' https://$FQDN/api/v1/setup/status      # expect 200
+   curl -s https://$FQDN/api/v1/setup/status | python3 -m json.tool                  # expect JSON:
+   # {"deployment_mode": "dedicated", "setup_required": true, "organization_name": "...",
+   #  "setup_token_configured": true, "license_state": ..., "expires_at": "<ISO time>"}
+   ```
+2. From **allowed**, spoof attempt (must still be judged by the real address, i.e. remain 200 for A, and
+   on **other** remain 404):
+   `curl -s -o /dev/null -w '%{http_code}\n' -H 'X-Forwarded-For: 10.0.0.1' https://$FQDN/api/v1/setup/status`
+3. From **other**:
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' https://$FQDN/api/v1/setup/status        # expect 404
+   curl -s https://$FQDN/api/v1/setup/status                                          # expect {"detail":"Not Found"}
+   curl -s -o /dev/null -w '%{http_code}\n' -H 'X-Forwarded-For: 10.0.0.1' https://$FQDN/api/v1/setup/status  # expect 404
+   curl -s -o /dev/null -w '%{http_code}\n' https://$FQDN/api/v1/no-such-route       # expect 404 (same body)
+   ```
+4. Read what the app saw (addresses only):
+   ```bash
+   az containerapp logs show -n <client>-api -g rg-aqrem-<client> --tail 200 | grep 'setup gate:'
+   ```
+   Expect `client_ip=<A> via=forwarded allowed=True` for step 1/2 and `client_ip=<other IP> ... allowed=False`
+   for step 3. If `client_ip` shows a `10.x`/`100.x` address with `via=peer`, the peer is not in
+   `TRUSTED_PROXY_CIDRS` (check the infrastructure subnet); if it shows a private address with
+   `via=forwarded`, an extra proxy hop is in the trusted range — **stop and fix before continuing**.
+5. Do not submit the form during the test (no token is needed for these checks).
+
+### Delivering the setup token to the client admin
+* **Separate channels.** Send the URL by email/ticket; send the token through a different channel: read it
+  out by phone/video call after verifying the person, or a one-time secret link that expires after the
+  first view (e.g. your password manager's one-time share). Never put URL and token in the same message,
+  and never send the token in plain-text email or chat.
+* **Short window.** The token is valid `SETUP_TOKEN_TTL_MINUTES` (60) after the first api start. Schedule the
+  hand-over: deploy, run the test procedure above, then have the admin on the call and complete setup
+  together. If it expires: `python -m app.setup reset --confirm`, deliver the new token the same way.
+* **Narrow network.** Set `setup_allowed_cidrs` to the admin's IP only for the session, then remove it
+  (re-apply) after setup.
+* **Afterwards.** Setup closes for good when the admin is created. The Key Vault secret `setup-token` is
+  useless then; you may disable it (`az keyvault secret set-attributes --enabled false ...`).
+  Confirm `GET /api/v1/setup/status` returns 404.

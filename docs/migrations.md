@@ -28,11 +28,37 @@ tracked in table `aqrem_schema_versions`. Per-tenant BYO databases additionally 
 | rls (CHECK 1) | 3 row-level security: group roles `aqrem_rls_control`, `aqrem_rls_bypass`, NOLOGIN `aqrem_support`; `ix_rls_<table>_org` indexes; policies `aqrem_org_isolation` / `aqrem_control_plane` / `aqrem_platform_audit` / `aqrem_bypass`; `ENABLE` + `FORCE ROW LEVEL SECURITY` on the 36 tables in `backend/app/db/rls.py` | **Not transparent to older images** (they never set `app.current_org`, so a non-superuser role sees no tenant rows). See "Rolling back migration 3" below. |
 | chat guardrails | 4 `organizations.chat_strictness VARCHAR(16) NOT NULL DEFAULT 'balanced'` (additive, `ADD COLUMN IF NOT EXISTS`) | Transparent to older images (they ignore the column). Optional: `ALTER TABLE organizations DROP COLUMN IF EXISTS chat_strictness;` and delete version 4 from `aqrem_schema_versions`. Table is already RLS-covered (control-plane policy). |
 | setup hardening (CHECK 3) | 5 tables `setup_tokens` (hash, issued/consumed/revoked), `setup_attempts` (failed/successful attempts); `REVOKE ALL` from `aqrem_tenant`/`aqrem_support` | Older images ignore both tables (they lose the one-time/expiry/lockout guarantees). Optional, separately reviewed: `DROP TABLE setup_attempts, setup_tokens`. |
+| schema guard | 6 table `aqrem_schema_guard` (`min_image_schema`, `required_features`), written by every migration run, read-only for runtime roles | Images **from this release on** refuse to start (api, worker, beat, migrator) when the DB requires a newer image. Images built **before** it cannot read the marker; see "Rolling back below a guarded migration". Do not drop. |
 
 Because migrations are additive, application rollback = redeploy the previous image tag
 (exception: migration 3, see the RLS row above).
 Database restore from backup is only needed if data written by the new version must be discarded
 (see `docs/operations-dedicated.md`).
+
+## Image/schema compatibility guard (migration 6)
+Migrations that older images must not run against set `requires_image_feature` (currently 3
+`rls_org_isolation`, 5 `setup_tokens_v1`). After each run the migrator writes to `aqrem_schema_guard`:
+`min_image_schema` = highest such migration applied (never lowered) and `required_features` (union).
+At startup the api, the Celery worker/beat and `python -m app.db.migrate` compare this with the image
+(`LATEST_VERSION`, `SUPPORTED_FEATURES`) and **refuse to start** with
+`ImageTooOldError: This image (schema N) is older than the database requires (...)` if the image is older
+or lacks a feature. An unreadable marker also refuses (fail closed). Runtime roles can only `SELECT` the table.
+
+**Honest limit:** images built before migration 6 do not contain this check and will start anyway. The
+guard protects from this release forward; rolling back past it is the manual procedure below.
+
+### Rolling back below a guarded migration
+1. Check what the database requires:
+   `psql "$MIGRATION_DATABASE_URL" -c "SELECT key, value FROM aqrem_schema_guard"`.
+2. Target image schema >= `min_image_schema` and has every `required_features` entry → plain redeploy.
+3. Otherwise you are going back past a guarded migration on purpose. For 3 (RLS) follow "Rolling back
+   migration 3" below first. For 5 (setup tokens) accept that the old image reads `SETUP_TOKEN` directly
+   (no one-time/expiry/lockout) — make sure an admin exists and `SETUP_TOKEN` is unset/rotated.
+   Then, as the migration role, lower the marker deliberately and record why:
+   `UPDATE aqrem_schema_guard SET value='<target schema>' WHERE key='min_image_schema';`
+   `UPDATE aqrem_schema_guard SET value='<features the target supports>' WHERE key='required_features';`
+   Images before migration 6 ignore the marker entirely, so for them only step 3's preparation applies.
+4. Going forward again, the next migration run raises the marker back.
 
 ## Rolling back migration 3 (row-level security)
 Tested on a copy of a seeded database (`createdb -T`): before rollback an unscoped query as `aqrem_app`
