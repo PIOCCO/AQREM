@@ -197,8 +197,9 @@ resource "azurerm_container_app" "web" {
       cpu    = 0.25
       memory = "0.5Gi"
       env {
-        name  = "API_UPSTREAM"
-        value = "http://${var.client}-api"
+        name = "API_UPSTREAM"
+        # Use the certificate-covered ingress FQDN; keep the API internal and HTTPS-only.
+        value = "https://${azurerm_container_app.api.ingress[0].fqdn}"
       }
     }
   }
