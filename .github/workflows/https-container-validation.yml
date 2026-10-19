@@ -1,0 +1,32 @@
+name: HTTPS container validation
+
+on:
+  push:
+    branches: ["fix/https-local-tests"]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [api, worker, web]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build image locally on the runner
+        run: docker build -f "infra/docker/Dockerfile.${{ matrix.component }}" -t "aqrem-https-test:${{ matrix.component }}" .
+      - name: Check API startup imports and container entrypoint
+        if: matrix.component == 'api'
+        run: docker run --rm -e APP_ENV=development -e LLM_PROVIDER=mock aqrem-https-test:api python -c 'import app.main; print("API imports passed")'
+      - name: Check worker startup imports and container entrypoint
+        if: matrix.component == 'worker'
+        run: docker run --rm -e APP_ENV=development -e LLM_PROVIDER=mock aqrem-https-test:worker python -c 'import app.celery_app; print("Worker imports passed")'
+      - name: Check generated Nginx HTTPS configuration and CA bundle
+        if: matrix.component == 'web'
+        run: docker run --rm -e API_UPSTREAM=https://localhost aqrem-https-test:web nginx -t
