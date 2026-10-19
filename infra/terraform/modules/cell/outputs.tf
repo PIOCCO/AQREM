@@ -6,6 +6,10 @@ output "container_app_environment_id" {
   value = azurerm_container_app_environment.this.id
 }
 
+output "container_app_environment_default_domain" {
+  value = azurerm_container_app_environment.this.default_domain
+}
+
 output "vnet_id" {
   value = azurerm_virtual_network.cell.id
 }

@@ -75,8 +75,8 @@ def validate_container_startup(role: str, settings: Settings) -> None:
             ),
             *_model_requirements(settings),
             EnvRequirement(
-                "AZURE_STORAGE_CONNECTION_STRING",
-                _settings_set(settings.azure_storage_connection_string),
+                "AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_URL",
+                _settings_set(settings.azure_storage_connection_string) or _settings_set(settings.azure_storage_account_url),
                 "document storage",
             ),
             EnvRequirement("REDIS_URL", _settings_set(settings.redis_url), "task queue broker"),
@@ -93,8 +93,8 @@ def validate_container_startup(role: str, settings: Settings) -> None:
             EnvRequirement("DATABASE_URL", _settings_set(settings.database_url), "tenant database"),
             EnvRequirement("REDIS_URL", _settings_set(settings.redis_url), "Celery broker"),
             EnvRequirement(
-                "AZURE_STORAGE_CONNECTION_STRING",
-                _settings_set(settings.azure_storage_connection_string),
+                "AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_URL",
+                _settings_set(settings.azure_storage_connection_string) or _settings_set(settings.azure_storage_account_url),
                 "ingestion storage",
             ),
             *_model_requirements(settings),

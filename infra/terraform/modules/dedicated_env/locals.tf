@@ -24,6 +24,11 @@ locals {
   pg_admin       = "aqrem_admin"
   app_role       = "aqrem_app"
 
+  # Derive the public origin from the environment, not the web resource: web depends on api.
+  public_base_url = var.public_base_url != "" ? trimsuffix(var.public_base_url, "/") : (
+    var.container_app_environment_default_domain != "" ? "https://${var.client}-web.${var.container_app_environment_default_domain}" : ""
+  )
+
   tags = merge({ client = var.client, tier = "dedicated", size = var.size, managedBy = "terraform" }, var.tags)
 
   # Non-secret runtime config. Secrets come from Key Vault via managed identity (KEY_VAULT_URL loader).
@@ -60,7 +65,7 @@ locals {
     RUN_MIGRATIONS_ON_STARTUP         = "false"
     DATABASE_REQUIRE_TLS              = "true"
     LOG_FORMAT                        = "json"
-    PUBLIC_BASE_URL                   = var.public_base_url
+    PUBLIC_BASE_URL                   = local.public_base_url
     PRODUCT_V1                        = "true"
   }
 }

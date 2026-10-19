@@ -46,6 +46,12 @@ variable "container_app_environment_id" {
   type = string
 }
 
+variable "container_app_environment_default_domain" {
+  type        = string
+  default     = ""
+  description = "Environment DNS suffix used to derive the public HTTPS origin without depending on the web app."
+}
+
 variable "db_mode" {
   type        = string
   default     = "new"

@@ -1,8 +1,7 @@
 import pytest
-from pydantic import ValidationError
-
 from app.core.config import Settings
 from app.core.container_config import validate_container_startup
+from pydantic import ValidationError
 
 
 def test_production_api_requires_gateway(monkeypatch):
@@ -38,3 +37,43 @@ def test_production_api_passes_with_gateway(monkeypatch):
         app_public_base_url="https://app.example.com",
     )
     validate_container_startup("api", settings)
+
+
+@pytest.mark.parametrize("role", ["api", "worker"])
+def test_production_accepts_managed_identity_blob_storage(monkeypatch, role):
+    monkeypatch.setenv("CONTAINER_ROLE", role)
+    monkeypatch.delenv("LOCAL_PROD_STACK", raising=False)
+    settings = Settings(
+        _env_file=None,
+        app_env="production",
+        llm_provider="gateway",
+        gateway_url="https://gateway.example.test",
+        gateway_api_key="local-test-only-key",
+        secret_key="local-test-only-placeholder-signing-key",
+        database_url="postgresql+psycopg://test:local-test-only@localhost/test",
+        redis_url="redis://localhost:6379/0",
+        azure_storage_connection_string=None,
+        azure_storage_account_url="https://unit-test.blob.core.windows.net",
+        app_public_base_url="https://public.example.test",
+    )
+    validate_container_startup(role, settings)
+
+
+@pytest.mark.parametrize("role", ["api", "worker"])
+def test_production_still_rejects_missing_blob_storage(monkeypatch, role):
+    monkeypatch.setenv("CONTAINER_ROLE", role)
+    monkeypatch.delenv("LOCAL_PROD_STACK", raising=False)
+    with pytest.raises(ValidationError, match="AZURE_STORAGE"):
+        Settings(
+            _env_file=None,
+            app_env="production",
+            llm_provider="gateway",
+            gateway_url="https://gateway.example.test",
+            gateway_api_key="local-test-only-key",
+            secret_key="local-test-only-placeholder-signing-key",
+            database_url="postgresql+psycopg://test:local-test-only@localhost/test",
+            redis_url="redis://localhost:6379/0",
+            azure_storage_connection_string=None,
+            azure_storage_account_url=None,
+            app_public_base_url="https://public.example.test",
+        )

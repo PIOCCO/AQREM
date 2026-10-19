@@ -67,6 +67,12 @@ variable "organization_name" {
   default = ""
 }
 
+variable "public_base_url" {
+  type        = string
+  default     = ""
+  description = "Optional already-bound public HTTPS origin. Empty uses the web app's generated Azure FQDN."
+}
+
 variable "openai_account_id" {
   type     = string
   default  = null
