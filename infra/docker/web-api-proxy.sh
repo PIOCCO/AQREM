@@ -17,6 +17,9 @@ location /api/ {
     proxy_set_header X-Forwarded-Host \$http_host;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
+    # FastAPI sees the internal ingress host/scheme when generating absolute redirects.
+    proxy_redirect http://\$proxy_host/ https://\$http_host/;
+    proxy_redirect https://\$proxy_host/ https://\$http_host/;
     proxy_buffering off;
     proxy_read_timeout 300s;
     client_max_body_size 60m;

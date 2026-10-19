@@ -2,7 +2,8 @@
 
 Scope: dedicated deployment on `enterprise-tenancy`, based on commit `4533da9`.
 The original checkout was inspected read-only. Changes are isolated in the
-temporary repository's `fix/https` branch.
+temporary repository's `fix/https` branch, with the redirect follow-up on
+`fix/https-review`.
 
 ## Request path
 
@@ -36,6 +37,16 @@ It adds SNI and CA/hostname verification to both proxied locations, and overwrit
 `X-Forwarded-Host` with the public request's host for API requests. The upstream
 `Host` still selects the internal API correctly.
 
+The final review added real FastAPI redirect tests and reproduced another failure:
+an automatic trailing-slash redirect returned the internal `http://<api-host>/...`
+URL even when forwarded headers were present. An internal HTTPS redirect used
+Nginx's default redirect rewriting and included its listener port. Neither result
+preserved the browser's public HTTPS origin behind TLS termination. Explicit
+`proxy_redirect` rules now map only HTTP/HTTPS redirects from the configured
+upstream authority to `https://<public-request-host>/...`, preserving path/query.
+Redirects to unrelated external HTTPS hosts remain unchanged. No broader proxy
+trust or application authentication changes were needed.
+
 Nginx continues to listen on port 80 behind Container Apps TLS termination. There
 are no changes to resource names, certificate resources, DNS, public exposure,
 network rules, secret storage, or provider versions. The Terraform change updates
@@ -47,7 +58,8 @@ and [Nginx HTTPS upstream directives](https://nginx.org/en/docs/http/ngx_http_pr
 
 ## Repeat local checks
 
-With Python, `cryptography` (already a backend dependency), Nginx 1.27, and `sh`:
+With Python, backend dependencies (`cryptography`, FastAPI and its TestClient),
+Nginx 1.27, and `sh`:
 
 ```sh
 python -m unittest discover -s tests/infra -p test_web_https.py -v
@@ -59,6 +71,8 @@ them afterwards. HTTPS clients validate the local test CA. The local TLS edge
 models Container Apps termination; it does not verify Azure itself. Tests cover
 SNI, public-host forwarding, request path/query preservation, both proxy locations,
 HTTP compatibility, and rejection of expired, untrusted, and wrong-host certificates.
+They also cover FastAPI slash redirects, internal HTTPS redirects, and preservation
+of external HTTPS redirects.
 
 With Terraform 1.11.4 and the stack's locked providers (AzureRM 4.81.0, Random 3.9.1):
 
@@ -77,12 +91,13 @@ and public ingress forwarding to Nginx on port 80. Windows validation used a
 disposable copy for platform-specific provider lock hashes; tracked lock files
 were preserved.
 
-Results: six Nginx HTTPS integration tests passed; one Terraform plan-only test
+Results: nine Nginx HTTPS integration tests passed; one Terraform plan-only test
 passed; Terraform formatting/validation, shell syntax, and staged/history secret
 scans passed. The original proxy failed four of the initial five integration
 tests before the fix. A Docker image build and the full database-backed
 application suite were not run because the Docker daemon and test database were
 unavailable. The Nginx tests exercise the actual generated proxy configuration.
+Two new redirect tests failed on `4a6cf6b` before the follow-up correction.
 
 ## Checks still required against the deployment
 

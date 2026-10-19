@@ -1,6 +1,6 @@
 """Exercise the generated web proxy against real local HTTP/TLS upstreams.
 
-Requires cryptography (a backend dependency), nginx, and sh. Set AQREM_TEST_NGINX
+Requires backend dependencies, nginx, and sh. Set AQREM_TEST_NGINX
 and AQREM_TEST_SHELL when they are not on PATH. No Azure or database is used.
 """
 
@@ -25,12 +25,28 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
+from fastapi.testclient import TestClient
 
 
 ROOT = Path(__file__).resolve().parents[2]
 NGINX = os.environ.get("AQREM_TEST_NGINX") or shutil.which("nginx")
 SHELL = os.environ.get("AQREM_TEST_SHELL") or shutil.which("sh")
 HIDDEN = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+
+REDIRECT_APP = FastAPI()
+REDIRECT_APP.add_api_route("/api/v1/projects", lambda: {"ok": True})
+
+
+@REDIRECT_APP.get("/api/redirect-https")
+def internal_https_redirect(request: Request):
+    return RedirectResponse(f"https://{request.headers['host']}/api/v1/projects?from=redirect")
+
+
+@REDIRECT_APP.get("/api/redirect-external")
+def external_https_redirect():
+    return RedirectResponse("https://login.example.test/callback")
 
 
 def free_port():
@@ -41,6 +57,16 @@ def free_port():
 
 class Upstream(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.path.startswith(("/api/v1/projects/", "/api/redirect-")):
+            # The internal ingress terminates TLS before FastAPI's HTTP listener.
+            with TestClient(REDIRECT_APP) as client:
+                response = client.get(self.path, headers=dict(self.headers), follow_redirects=False)
+            self.send_response(response.status_code)
+            for name, value in response.headers.items():
+                self.send_header(name, value)
+            self.end_headers()
+            self.wfile.write(response.content)
+            return
         body = json.dumps({"path": self.path, "host": self.headers.get("Host"),
                            "public_host": self.headers.get("X-Forwarded-Host"),
                            "proto": self.headers.get("X-Forwarded-Proto")}).encode()
@@ -166,14 +192,17 @@ class WebHttpsTests(unittest.TestCase):
                     proc.kill()
                     proc.wait(timeout=5)
 
-    def request(self, port, path):
+    def request(self, port, path, *, include_headers=False):
         context = ssl.create_default_context(cafile=str(self.ca_path))
         conn = http.client.HTTPSConnection("localhost", port, timeout=5, context=context)
         try:
             conn.request("GET", path, headers={"Host": "public.example.test",
                          "X-Forwarded-Host": "spoofed.example.test", "X-Forwarded-Proto": "https"})
             response = conn.getresponse()
-            return response.status, response.read()
+            body = response.read()
+            if include_headers:
+                return response.status, body, {name.lower(): value for name, value in response.getheaders()}
+            return response.status, body
         finally:
             conn.close()
 
@@ -214,6 +243,24 @@ class WebHttpsTests(unittest.TestCase):
         with self.upstream(tls=False) as upstream, self.proxy(upstream) as port:
             self.assertEqual(self.request(port, "/api/v1/version")[0], 200)
             self.assertEqual(self.request(port, "/health")[0], 200)
+
+    def test_fastapi_slash_redirect_preserves_public_https_origin(self):
+        with self.upstream() as upstream, self.proxy(upstream) as port:
+            status, _, headers = self.request(port, "/api/v1/projects/?from=redirect", include_headers=True)
+            self.assertEqual(status, 307)
+            self.assertEqual(headers["location"], "https://public.example.test/api/v1/projects?from=redirect")
+
+    def test_internal_https_redirect_preserves_public_origin(self):
+        with self.upstream() as upstream, self.proxy(upstream) as port:
+            status, _, headers = self.request(port, "/api/redirect-https", include_headers=True)
+            self.assertEqual(status, 307)
+            self.assertEqual(headers["location"], "https://public.example.test/api/v1/projects?from=redirect")
+
+    def test_external_https_redirect_is_preserved(self):
+        with self.upstream() as upstream, self.proxy(upstream) as port:
+            status, _, headers = self.request(port, "/api/redirect-external", include_headers=True)
+            self.assertEqual(status, 307)
+            self.assertEqual(headers["location"], "https://login.example.test/callback")
 
 
 if __name__ == "__main__":
