@@ -116,7 +116,7 @@ def test_tenant_user_cannot_call_master_admin(client, db_session):
     assert res.status_code in (401, 403)
 
 
-def test_production_blocks_zero_seat_active_org_sign_in(client, db_session, monkeypatch):
+def test_production_blocks_zero_seat_active_org_sign_in(client, db_session, monkeypatch, production_settings_env):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("SECRET_KEY", "y" * 32)
     monkeypatch.setenv("LICENSING_TEST_MODE", "false")

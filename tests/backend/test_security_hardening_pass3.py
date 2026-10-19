@@ -8,7 +8,7 @@ from app.services.sources.config_safety import sanitize_source_config_for_storag
 from app.services.storage.path_utils import resolve_under_root, safe_archive_member_path, safe_blob_filename
 
 
-def test_create_source_config_strips_inline_tokens(monkeypatch):
+def test_create_source_config_strips_inline_tokens(monkeypatch, production_settings_env):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("SECRET_KEY", "x" * 32)
     from app.core.config import get_settings

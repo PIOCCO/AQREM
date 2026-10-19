@@ -44,7 +44,7 @@ def test_bootstrap_creates_admin_without_logging_password(db_session, monkeypatc
     assert "super-secret-bootstrap-pw" not in logged
 
 
-def test_production_settings_disable_password_sync():
+def test_production_settings_disable_password_sync(production_settings_env):
     prod = Settings(
         app_env="production",
         secret_key="x" * 32,
@@ -53,7 +53,7 @@ def test_production_settings_disable_password_sync():
     assert prod.platform_admin_sync_password is False
 
 
-def test_bootstrap_does_not_reset_existing_password_when_sync_disabled(db_session, monkeypatch):
+def test_bootstrap_does_not_reset_existing_password_when_sync_disabled(db_session, monkeypatch, production_settings_env):
     from app.core.security import hash_password, verify_password
 
     email = "existing-admin@example.com"

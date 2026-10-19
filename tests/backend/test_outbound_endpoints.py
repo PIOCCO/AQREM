@@ -18,7 +18,7 @@ ALLOW = {
 def test_backend_has_no_unconfigurable_public_urls():
     offenders = []
     for path in (ROOT / "backend/app").rglob("*.py"):
-        rel = str(path.relative_to(ROOT))
+        rel = path.relative_to(ROOT).as_posix()
         if rel in ALLOW:
             continue
         for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):

@@ -64,8 +64,11 @@ def test_upload_blocked_when_postgres_not_validated(client: TestClient, db_sessi
     assert res.json()["detail"]["code"] == "DATABASE_NOT_CONFIGURED"
 
 
-def test_upload_blocked_when_storage_not_writable(client: TestClient, db_session, monkeypatch):
-    monkeypatch.setenv("LOCAL_UPLOAD_DIR", "/data/nonwritable-test-dir")
+def test_upload_blocked_when_storage_not_writable(client: TestClient, db_session, monkeypatch, tmp_path):
+    # A file used as the upload directory fails deterministically on every OS.
+    blocked = tmp_path / "not-a-directory"
+    blocked.write_text("occupied")
+    monkeypatch.setenv("LOCAL_UPLOAD_DIR", str(blocked))
     from app.core.config import get_settings
 
     get_settings.cache_clear()

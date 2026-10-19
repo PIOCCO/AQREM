@@ -47,7 +47,7 @@ class TestLicensingRules:
         assert not allowed
         assert "Test license" in reason
 
-    def test_production_never_enables_licensing_test_mode(self):
+    def test_production_never_enables_licensing_test_mode(self, production_settings_env):
         settings = Settings(
             app_env="production",
             licensing_test_mode=True,

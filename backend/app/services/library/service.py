@@ -12,7 +12,10 @@ from app.models.evidence import EvidenceItem
 from app.models.questionnaire import Answer, AnswerEvidenceLink, Question, Questionnaire
 from app.services.access_control.context import UserAccessContext
 from app.services.access_control.library import library_entry_visible
-from app.services.library.validation import evidence_item_in_project_scope, validate_library_evidence
+from app.services.library.validation import (
+    evidence_item_in_project_scope,
+    validate_library_evidence,
+)
 from app.services.llm.factory import get_llm_provider
 from app.services.questionnaire.normalize import normalize_question
 
@@ -33,7 +36,7 @@ class AnswerLibraryService:
         scope = EvidenceScope.PROJECT.value if project_id else EvidenceScope.ORGANIZATION.value
 
         text_value = answer.approved_text or answer.draft_text
-        embedding = (await get_llm_provider(organization_id).embed([question.normalized_text]))[0]
+        embedding = (await get_llm_provider(answer.organization_id).embed([question.normalized_text]))[0]
 
         entry = (
             self.db.query(AnswerLibraryEntry)

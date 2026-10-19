@@ -22,7 +22,7 @@ def _auth_headers(token: str, org_id: str) -> dict[str, str]:
 
 
 @pytest.mark.asyncio
-async def test_project_scope_isolation(db_session, demo_repo_path: str):
+async def test_project_scope_isolation(db_session, demo_repo_path: str, document_acl_mode):
     org = Organization(name="Acme", slug="acme")
     db_session.add(org)
     db_session.flush()

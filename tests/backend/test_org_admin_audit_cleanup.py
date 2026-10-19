@@ -166,10 +166,12 @@ def test_batch_cleanup_many_rows(client: TestClient, db_session, monkeypatch):
 
 
 def test_audit_logs_delete_cors_preflight_allows_x_requested_with(client: TestClient):
+    from app.core.config import get_settings
+
     res = client.options(
         "/api/v1/org-admin/audit-logs?scope=all",
         headers={
-            "Origin": "http://100.80.43.124:5173",
+            "Origin": get_settings().app_public_base_url,
             "Access-Control-Request-Method": "DELETE",
             "Access-Control-Request-Headers": "authorization,content-type,x-organization-id,x-requested-with",
         },

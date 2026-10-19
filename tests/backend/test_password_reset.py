@@ -17,7 +17,12 @@ def test_forgot_password_same_response(client: TestClient, db_session):
     assert again.json()["message"] == msg
 
 
-def test_reset_password_invalidates_sessions(client: TestClient, db_session, caplog):
+def test_reset_password_invalidates_sessions(client: TestClient, db_session, monkeypatch):
+    delivered = []
+    monkeypatch.setattr(
+        "app.services.auth.password_reset.send_password_reset_email",
+        lambda **kwargs: delivered.append(kwargs),
+    )
     org = Organization(name="Reset Co", slug="reset-co", license_limit=5)
     db_session.add(org)
     db_session.flush()
@@ -28,9 +33,10 @@ def test_reset_password_invalidates_sessions(client: TestClient, db_session, cap
     db_session.add(membership)
     db_session.commit()
 
-    with caplog.at_level("INFO"):
-        client.post("/api/v1/auth/forgot-password", json={"email": "reset@example.com"})
-    reset_url = next(r.message for r in caplog.records if "Password reset link" in r.message)
+    response = client.post("/api/v1/auth/forgot-password", json={"email": "reset@example.com"})
+    assert response.status_code == 200
+    assert len(delivered) == 1
+    reset_url = delivered[0]["reset_url"]
     token = reset_url.split("token=")[-1].strip()
 
     old_token = create_access_token(

@@ -250,7 +250,7 @@ def test_s7_two_tenant_isolation(client: TestClient, db_session):
     )
 
 
-def test_l2_telemetry_persisted_for_l1(client: TestClient, db_session, monkeypatch):
+def test_l2_telemetry_persisted_for_l1(client: TestClient, db_session, monkeypatch, reachable_model_gateway):
     monkeypatch.setenv("CLIENT_SECRET_STORE", "memory")
     from app.core.config import get_settings
 

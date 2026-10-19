@@ -18,6 +18,8 @@ from app.services.access_control.groups import ensure_default_access_groups
 from app.services.ingestion.indexer import FilePayload, index_files
 from tests.backend.helpers_acl import employee_token, mark_source_visible_to_all_staff
 
+pytestmark = pytest.mark.usefixtures("document_acl_mode")
+
 
 def _headers(token: str, org_id: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}", "X-Organization-Id": org_id}

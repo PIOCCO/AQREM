@@ -23,8 +23,10 @@ test.describe("login without public registration", () => {
     expect(res.status()).toBe(404);
   });
 
-  test("accept invitation page still loads", async ({ page }) => {
+  test("accept invitation route rejects an invalid token safely", async ({ page }) => {
     await page.goto("/accept-invite?token=test-token");
-    await expect(page.getByRole("heading", { name: /Set your password/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /^Accept invitation$/i })).toBeVisible();
+    await expect(page.getByText("This invitation is not valid.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Activate account$/i })).toBeDisabled();
   });
 });

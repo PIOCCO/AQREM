@@ -12,7 +12,7 @@ from app.core.roles import Role
 from app.core.security import create_access_token, hash_password
 from app.models.invitation import UserInvitation
 from app.models.organization import Organization, OrganizationMembership, User
-from app.services.platform_provisioning import provision_user_invitation
+from app.services.invitations.admin_invitation import provision_admin_invitation
 
 
 def _platform_token(user: User) -> str:
@@ -78,7 +78,9 @@ def test_org_delete_persists_deleted_at_and_list_excludes(client: TestClient, db
         f"/api/v1/admin/organizations/{org.id}",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert get_one.status_code == 404
+    # Platform admins retain detail access during the documented retention queue.
+    assert get_one.status_code == 200
+    assert get_one.json()["purge_scheduled_at"] is not None
 
 
 def test_wrong_confirm_name_leaves_db_unchanged(client: TestClient, db_session):
@@ -133,13 +135,12 @@ def test_invitation_history_delete_removes_row(client: TestClient, db_session):
     org = Organization(name="Inv Persist", slug="inv-persist", license_limit=5, license_status="active", is_active=True)
     db_session.add(org)
     db_session.flush()
-    _user, _m, invitation, _raw, _exp = provision_user_invitation(
+    _user, _m, invitation, _raw, _exp, _sent = provision_admin_invitation(
         db_session,
         admin_user_id=super_user.id,
         organization_id=org.id,
         email="hist@example.com",
         full_name="Hist",
-        role=Role.ORG_ADMIN,
     )
     db_session.commit()
     inv_id = invitation.id

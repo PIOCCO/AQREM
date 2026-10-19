@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import hash_password
-from app.models.organization import OrganizationMembership, User
+from app.models.organization import User
 from app.models.password_reset import PasswordResetToken
 from app.services.auth.session_invalidation import invalidate_user_sessions
 from app.services.email.delivery import send_password_reset_email
@@ -45,7 +45,7 @@ def request_password_reset(db: Session, *, email: str) -> None:
     db.flush()
 
     reset_url = f"{settings.app_public_base_url.rstrip('/')}/reset-password?token={raw}"
-    send_password_reset_email(db, to_email=user.email, reset_url=reset_url, user_id=str(user.id))
+    send_password_reset_email(db=db, to_email=user.email, reset_url=reset_url, user_id=str(user.id))
 
 
 def reset_password_with_token(db: Session, *, token: str, new_password: str) -> None:

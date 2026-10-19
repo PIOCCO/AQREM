@@ -8,6 +8,46 @@ permissions:
   contents: read
 
 jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: aqrem
+          POSTGRES_PASSWORD: aqrem
+          POSTGRES_DB: aqrem_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aqrem -d aqrem_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      APP_ENV: development
+      LLM_PROVIDER: mock
+      DATABASE_URL: postgresql+psycopg://aqrem:aqrem@localhost:5432/aqrem_test
+      TEST_DATABASE_URL: postgresql+psycopg://aqrem:aqrem@localhost:5432/aqrem_test
+      REDIS_URL: redis://localhost:6379/0
+      PUBLIC_BASE_URL: https://testserver
+      SECRET_KEY: local-https-tests-only-placeholder-key
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e 'backend[dev]'
+      - run: python -m pytest tests/backend -c backend/pyproject.toml -p pytest_asyncio.plugin -q --tb=short
+
   build-and-check:
     runs-on: ubuntu-latest
     timeout-minutes: 20

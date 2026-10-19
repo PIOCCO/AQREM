@@ -7,6 +7,7 @@ from __future__ import annotations
 import importlib.util
 import pathlib
 import subprocess
+import sys
 
 import pytest
 
@@ -67,7 +68,7 @@ def test_placeholders_and_dev_values_are_info():
 
 
 def test_repo_and_history_are_clean():
-    r = subprocess.run(["python3", "scripts/check_secrets.py"], cwd=ROOT, capture_output=True, text=True)
+    r = subprocess.run([sys.executable, "scripts/check_secrets.py"], cwd=ROOT, capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
-    r = subprocess.run(["python3", "scripts/check_secrets.py", "--history"], cwd=ROOT, capture_output=True, text=True)
+    r = subprocess.run([sys.executable, "scripts/check_secrets.py", "--history"], cwd=ROOT, capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr

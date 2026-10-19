@@ -63,7 +63,9 @@ def test_tampered_token_rejected(client: TestClient, db_session):
         {"organization_id": str(org.id), "role": Role.EDITOR.value, "auth_version": 1},
         audience=AUD_EMPLOYEE,
     )
-    tampered = token[:-1] + ("a" if token[-1] != "a" else "b")
+    # Alter significant signature bits, not unused base64 padding bits.
+    prefix, signature = token.rsplit(".", 1)
+    tampered = prefix + "." + ("a" if signature[0] != "a" else "b") + signature[1:]
     assert client.get("/api/v1/projects", headers=_headers(tampered, str(org.id))).status_code == 401
 
 

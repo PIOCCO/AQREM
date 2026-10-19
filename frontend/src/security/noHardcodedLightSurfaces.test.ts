@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const SRC = join(import.meta.dirname, "..");
@@ -28,8 +28,8 @@ describe("no hard-coded light surfaces in components", () => {
   it("flags bg-white/slate/gray and common light hex in TS/TSX", () => {
     const violations: string[] = [];
     for (const file of walk(SRC)) {
-      const base = file.split("/").pop() ?? file;
-      if (ALLOW_FILES.has(base) || file.includes("/security/")) continue;
+      const base = basename(file);
+      if (ALLOW_FILES.has(base) || file.includes(`${sep}security${sep}`)) continue;
       if (base.endsWith(".css")) continue;
       const text = readFileSync(file, "utf8");
       for (const re of FORBIDDEN) {

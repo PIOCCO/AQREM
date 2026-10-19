@@ -21,7 +21,6 @@ import binascii
 import json
 import logging
 import os
-import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -216,10 +215,6 @@ def verify_license_text(
     return res
 
 
-_cache: dict[str, tuple[object, str | None]] = {}
-_lock = threading.Lock()
-
-
 def read_license_text(settings: Settings | None = None) -> str | None:
     """Raw license text from LICENSE_KEY or LICENSE_FILE, or None when no license is installed."""
     settings = settings or get_settings()
@@ -233,17 +228,11 @@ def read_license_text(settings: Settings | None = None) -> str | None:
     try:
         if not p.is_file():
             return None
-        st = p.stat()
-        key = (path, st.st_mtime_ns, st.st_size)
-        with _lock:
-            hit = _cache.get("file")
-            if hit and hit[0] == key:
-                return hit[1]
+        # Equal-size replacements can retain the same timestamp. Read the small
+        # signed document each time so an old valid signature cannot stay cached.
         text = p.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return ""  # unreadable -> treated as invalid, not as "missing"
-    with _lock:
-        _cache["file"] = (key, text)
     return text
 
 

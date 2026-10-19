@@ -57,7 +57,7 @@ def test_org_admin_cannot_manage_model_token(client: TestClient, db_session):
         assert "super admin" in res.json()["detail"]["message"].lower()
 
 
-def test_super_admin_model_token_not_in_db_or_audit(client: TestClient, db_session):
+def test_super_admin_model_token_not_in_db_or_audit(client: TestClient, db_session, reachable_model_gateway):
     from app.core.platform_roles import PlatformRole
     from app.core.jwt_audiences import AUD_PLATFORM
 
@@ -128,6 +128,7 @@ def test_master_token_rejected_on_org_admin(client: TestClient, db_session):
 
 
 def test_upload_rejects_eicar(client: TestClient, db_session, monkeypatch, tmp_path):
+    monkeypatch.setattr("app.core.broker_health.assert_broker_available", lambda: None)
     monkeypatch.setenv("LOCAL_UPLOAD_DIR", str(tmp_path / "uploads"))
     from app.core.config import get_settings
 

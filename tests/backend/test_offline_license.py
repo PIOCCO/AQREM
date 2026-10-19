@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
@@ -364,6 +365,17 @@ def test_problem_after_valid_license_gets_grace_then_read_only(ded, breaker):
     assert ded.eval(NOW + timedelta(days=15)).level == le.READ_ONLY
 
 
+def test_equal_size_replacement_with_same_timestamp_is_reverified(ded):
+    ded.write()
+    assert ded.eval(NOW).level == le.OK
+    original = ded.file.stat()
+    _break(ded, "other_key")
+    assert ded.file.stat().st_size == original.st_size
+    os.utime(ded.file, ns=(original.st_atime_ns, original.st_mtime_ns))
+    result = ded.eval(NOW + timedelta(hours=1))
+    assert result.code == ol.INVALID and result.level == le.GRACE
+
+
 def test_switching_problems_does_not_restart_grace(ded):
     ded.write()
     ded.eval(NOW)
@@ -640,7 +652,8 @@ def test_cli_sign_and_verify(tmp_path):
     out = subprocess.run(cli + ["keygen", "--out-dir", str(keys)], capture_output=True, text=True, check=True).stdout
     pub = (keys / "aqrem-license-public.b64").read_text().strip()
     assert pub in out and "PRIVATE KEY" not in out
-    assert (keys / "aqrem-license-private.pem").stat().st_mode & 0o077 == 0
+    if os.name != "nt":  # POSIX mode bits do not describe Windows file ACLs.
+        assert (keys / "aqrem-license-private.pem").stat().st_mode & 0o077 == 0
     lic = tmp_path / "c.license.json"
     subprocess.run(cli + ["sign", "--key", str(keys / "aqrem-license-private.pem"), "--org", "Contoso",
                           "--slug", SLUG, "--environment", ENV, "--seats", "10", "--expires", "2099-12-31",

@@ -1,6 +1,7 @@
 import os
 import sys
 from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -49,7 +50,7 @@ def engine():
 
 
 @pytest.fixture()
-def db_session(engine) -> Generator[Session, None, None]:
+def db_session(engine, monkeypatch) -> Generator[Session, None, None]:
     connection = engine.connect()
     transaction = connection.begin()
     SessionLocal = sessionmaker(bind=connection, join_transaction_mode="create_savepoint")
@@ -63,11 +64,61 @@ def db_session(engine) -> Generator[Session, None, None]:
         if not nested.is_active:
             nested = connection.begin_nested()
 
+    @contextmanager
+    def startup_session():
+        # Lifespan bootstrap must share the test transaction, just like API requests.
+        # Otherwise committed tenants/setup tokens escape rollback into later tests.
+        yield session
+
+    monkeypatch.setattr("app.db.session.SessionLocal", startup_session)
     yield session
 
     session.close()
     transaction.rollback()
     connection.close()
+
+
+@pytest.fixture()
+def production_settings_env(monkeypatch):
+    """Synthetic configuration for tests of production guardrails; no cloud calls."""
+    monkeypatch.setenv("LLM_PROVIDER", "gateway")
+    monkeypatch.setenv("GATEWAY_URL", "https://gateway.example.test")
+    monkeypatch.setenv("GATEWAY_API_KEY", "local-test-only-key")
+    monkeypatch.setenv("AZURE_STORAGE_ACCOUNT_URL", "https://unit-test.blob.core.windows.net")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.fixture()
+def document_acl_mode(monkeypatch):
+    """Exercise the existing group/project ACL mode, separate from PRODUCT_V1."""
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("PRODUCT_V1", "false")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.fixture()
+def reachable_model_gateway(monkeypatch):
+    import httpx
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("GATEWAY_URL", "https://gateway.example.test")
+    get_settings.cache_clear()
+
+    def gateway_health(url, *, headers, timeout):
+        assert url == "https://gateway.example.test/health/live"
+        assert headers["Authorization"].startswith("Bearer sk-test-")
+        return httpx.Response(200)
+
+    monkeypatch.setattr(httpx, "get", gateway_health)
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture()

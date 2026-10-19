@@ -21,6 +21,8 @@ FORBIDDEN_SNIPPETS = (
     "exec_contract",
 )
 
+pytestmark = pytest.mark.usefixtures("document_acl_mode")
+
 
 def _headers(token: str, org_id: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}", "X-Organization-Id": org_id}
