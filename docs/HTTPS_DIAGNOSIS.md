@@ -212,6 +212,67 @@ not run; backend API tests cover authentication and tenant/ACL boundaries with
 synthetic users. The shared-mode setup-status 404 observed in the browser is an
 expected unavailable dedicated-only route, not a TLS failure.
 
+## Follow-up: Windows Docker and complete local container path
+
+After the owner approved a Docker Desktop update and Windows component change,
+Docker Desktop 4.96.0 and the enabled Virtual Machine Platform successfully
+started the Linux engine (29.9.1) following the approved Windows restart. The
+earlier inaccessible Inference/Secrets Engine socket error no longer blocked
+startup. Existing Docker data disks and settings were backed up and disk copies
+hash-verified before the in-place update; no factory reset or prune was used.
+
+All three application images were built locally from a snapshot of the temporary
+repository. The first Windows build exposed a separate portability defect:
+`core.autocrlf=true` converted shell entrypoints in both the checkout and Git
+archive to CRLF, producing a Linux `#!/bin/sh\r` interpreter path and an
+`exec /docker-entrypoint.sh: no such file or directory` failure. The committed
+blobs already used LF. `.gitattributes` now enforces `*.sh text eol=lf` so Windows
+checkouts and archives preserve executable shell syntax. The repaired snapshots
+were checked byte-for-byte for LF before rebuilding and starting successfully.
+The two current Docker shell files were also normalized in the temporary checkout;
+their canonical Git contents did not change.
+
+The isolated Compose test project uses PostgreSQL 16/pgvector, Redis 7, Azurite,
+the real API and Celery worker, and the production web image. No owner `.env`,
+GitHub/Azure credentials, or private QA session files are required. Published
+ports bind only to `127.0.0.1`; existing containers are outside the test project.
+Additional Nginx listeners model public TLS termination and HTTPS internal API
+ingress. Temporary certificates are trusted only by the test client and ephemeral
+test web container, preserving its normal public CA bundle. Nothing is installed
+into the Windows trust store.
+
+Thirteen end-to-end application checks passed over the strictly verified TLS path:
+version, dependency health, frontend delivery, public-origin slash redirect,
+HTTP-to-HTTPS redirect, administrator and employee sign-in, authenticated project
+access, cross-organization denial, upload, real queued worker indexing, evidence
+retrieval, and evidence-backed chat. Database, broker, blob storage and model
+health all report `ok` in this development test profile. Before trusting the test
+internal CA, the actual web container correctly returned 502 for that untrusted
+upstream certificate. All three application images built and ran locally.
+
+The authenticated browser smoke check additionally exposed a development mock
+provider bug. Its extractive answer echoed the trusted outer document fences,
+causing the existing prompt-leak scrubber to replace a legitimate evidence answer
+with a refusal. The mock now extracts only content inside those outer fences.
+The scrubber, document sanitization and production mock-provider prohibition are
+unchanged. New regressions cover raw/wrapped evidence answers and continued
+scrubbing of a genuine prompt fingerprint inside the document. One regression
+failed before the fix; all three pass afterwards. The authenticated employee
+platform-route test now checks the existing secure workspace redirect rather
+than incorrectly requiring a logout.
+
+Fourteen Chromium browser checks passed against the live container stack: eleven
+public checks plus administrator document access, employee streamed evidence
+chat, and employee denial of the platform-admin surface. Browser rendering uses
+the loopback HTTP viewer; strict TLS verification is performed independently on
+the complete public/internal HTTPS path. Private QA walkthroughs remain outside
+this synthetic smoke test.
+
+The initial full backend run against the Docker database and Redis passed all
+680 tests. The final full run including the three new mock regressions passed
+all 683 tests against the isolated Docker PostgreSQL and Redis services. These local results still do not establish live
+Azure DNS, certificate, networking, or existing-state Terraform plan correctness.
+
 ## Checks still required against the deployment
 
 A real Terraform plan needs the intended non-secret configuration, authorized

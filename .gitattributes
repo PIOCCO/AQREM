@@ -1,0 +1,2 @@
+# Linux container entrypoints must retain Unix line endings on Windows checkouts and archives.
+*.sh text eol=lf

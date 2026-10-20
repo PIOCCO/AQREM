@@ -3,6 +3,7 @@ import math
 import re
 
 from app.services.llm.base import AnswerRequest, LLMProvider, StructuredAnswer
+from app.services.llm.guardrails import EVIDENCE_CLOSE, EVIDENCE_OPEN
 
 _STOP = frozenset(
     "a an the is are was were be been being do does did have has had will would could should "
@@ -15,8 +16,17 @@ def _question_terms(question: str) -> set[str]:
     return {t for t in re.findall(r"[a-z0-9]+", question.lower()) if len(t) > 2 and t not in _STOP}
 
 
+def _document_content(block: dict) -> str:
+    content = str(block.get("content", "")).strip()
+    opening, closing = EVIDENCE_OPEN + "\n", "\n" + EVIDENCE_CLOSE
+    if content.startswith(opening) and content.endswith(closing):
+        # These outer delimiters are supplied by the prompt builder, not document text.
+        content = content[len(opening):-len(closing)]
+    return content
+
+
 def _evidence_text(blocks: list[dict]) -> str:
-    return " ".join(str(b.get("content", "")) for b in blocks).lower()
+    return " ".join(_document_content(b) for b in blocks).lower()
 
 
 def _mock_evidence_supports_question(question: str, blocks: list[dict]) -> bool:
@@ -92,7 +102,7 @@ class MockLLMProvider(LLMProvider):
         snippets = []
         for block in request.evidence_blocks[:2]:
             path = block.get("file_path", "evidence")
-            content = str(block.get("content", "")).strip().replace("\n", " ")
+            content = _document_content(block).replace("\n", " ")
             if content:
                 snippets.append(f"{path}: {content[:240]}")
         answer_text = (

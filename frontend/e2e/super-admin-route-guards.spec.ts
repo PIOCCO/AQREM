@@ -17,6 +17,8 @@ test.describe("Super Admin route guards (employee session)", () => {
 
   test("employee cannot access super-admin shell", async ({ page }) => {
     await page.goto("/super-admin/organizations");
-    await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
+    await expect(page.locator("aside.chat-sidebar")).toBeVisible({ timeout: 15_000 });
+    await expect(page).not.toHaveURL(/\/super-admin(?:\/|$)/);
+    await expect(page.getByTestId("super-admin-shell")).toHaveCount(0);
   });
 });
